@@ -1,0 +1,24 @@
+﻿# IdleBrain root repo ignore rules
+
+# Large local data
+Samples/
+data/
+outputs/
+
+# External dependency repo (already has its own git)
+repos/
+
+# Python cache / env
+**/__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Frontend build artifacts
+project/frontend/build/
+project/frontend/dist/
+
+# OS/editor artifacts
+.DS_Store
+Thumbs.db
+.vscode/

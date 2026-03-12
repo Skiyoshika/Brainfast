@@ -1,0 +1,49 @@
+﻿{
+  "project": {"name": "idlebrain", "version": "mvp-1.0"},
+  "input": {
+    "slice_dir": "data/raw_slices",
+    "slice_glob": "*.tif",
+    "sampling_mode": "merge5",
+    "slice_interval_n": 5,
+    "pixel_size_um_xy": "TODO",
+    "slice_spacing_um": "TODO",
+    "bit_depth": 16,
+    "channel_map": {"red": 0, "green": 1, "farred": 2},
+    "active_channel": "red"
+  },
+  "target": {
+    "marker": "TODO",
+    "signal_type": "cyto"
+  },
+  "compute": {
+    "device": "cuda",
+    "gpu_name": "RTX 3070 Ti",
+    "vram_gb": 8
+  },
+  "registration": {
+    "mode": "2d_slice_with_3d_smoothness",
+    "auto_first": true,
+    "fail_score_threshold": 0.65,
+    "landmark_fallback": true,
+    "landmark_max_slices": 5
+  },
+  "detection": {
+    "primary_model": "cellpose_cyto2",
+    "secondary_model": "cellpose_nuclei",
+    "fallback_model": "log_watershed",
+    "auto_switch_on_distortion": true
+  },
+  "dedup": {
+    "enabled": true,
+    "method": "kdtree",
+    "neighbor_slices": 1,
+    "r_xy_um": 6.0,
+    "r_z_rule": "slice_spacing_um*0.5"
+  },
+  "outputs": {
+    "leaf_csv": "outputs/cell_counts_leaf.csv",
+    "hierarchy_csv": "outputs/cell_counts_hierarchy.csv",
+    "qc_dir": "outputs/qc_overlays"
+  }
+}
+

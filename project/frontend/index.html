@@ -1,0 +1,188 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IdleBrain UI</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="guilds">
+      <div class="logo">🧠</div>
+      <button class="guild active">BC</button>
+      <button class="guild">QC</button>
+      <button class="guild">AT</button>
+    </aside>
+
+    <aside class="channels">
+      <div class="title">IdleBrain</div>
+      <div class="section">WORKFLOW</div>
+      <button class="channel active"># run-pipeline</button>
+      <button class="channel"># qc-overlays</button>
+      <button class="channel"># outputs</button>
+      <div class="section">SETTINGS</div>
+      <button class="channel"># channels</button>
+      <button class="channel"># thresholds</button>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <h1># run-pipeline</h1>
+        <div>
+          <span class="version" id="versionText">v0.0.0</span>
+          <span class="status" id="statusBadge">IDLE</span>
+        </div>
+      </header>
+
+      <section class="panel form">
+        <h2>Pipeline Controls</h2>
+        <div class="grid">
+          <label>Input TIFF Folder
+            <input id="inputDir" placeholder="D:\\data\\merged_tiff" />
+          </label>
+          <label>Output Folder
+            <input id="outputDir" placeholder="D:\\IdleBrain\\project\\outputs" />
+          </label>
+          <label>Atlas annotation_25.nii.gz
+            <input id="atlasPath" placeholder="D:\\...\\annotation_25.nii.gz" />
+          </label>
+          <label>Structure Mapping CSV
+            <input id="structPath" placeholder="D:\\...\\1_adult_mouse_brain_graph_mapping.csv" />
+          </label>
+        </div>
+
+        <div class="channel-pills" id="channelPills">
+          <button data-channel="red" class="pill active">Red</button>
+          <button data-channel="green" class="pill">Green</button>
+          <button data-channel="farred" class="pill">FarRed</button>
+          <button id="batchAll" class="pill">Run All Channels</button>
+        </div>
+
+        <div class="grid" style="margin-top:10px;">
+          <label>Overlay Alpha
+            <input id="alphaRange" type="range" min="0" max="100" value="45" />
+          </label>
+          <label>Overlay Mode
+            <select id="overlayMode">
+              <option value="fill">Fill</option>
+              <option value="contour">Contour (all regions)</option>
+              <option value="contour-major">Contour (major + outer boundary)</option>
+            </select>
+          </label>
+          <label>Align Mode
+            <select id="alignMode">
+              <option value="affine">Affine</option>
+              <option value="nonlinear">Nonlinear</option>
+            </select>
+          </label>
+          <label>Max Landmarks
+            <input id="maxPoints" type="number" min="8" max="200" value="30" />
+          </label>
+          <label>Min Distance
+            <input id="minDistance" type="number" min="2" max="50" value="12" />
+          </label>
+          <label>RANSAC Residual
+            <input id="ransacResidual" type="number" min="1" max="40" step="0.5" value="8" />
+          </label>
+          <label>Overlay Mean Threshold
+            <input id="minMeanThreshold" type="number" min="1" max="40" step="0.5" value="8" />
+          </label>
+          <label>Pixel Size (µm)
+            <input id="pixelSizeUm" type="number" min="0.1" max="10.0" step="0.05" value="0.65" />
+          </label>
+          <label>Rotate Atlas (deg)
+            <input id="rotateAtlas" type="number" min="-180" max="180" step="90" value="0" />
+          </label>
+          <label>Flip Atlas
+            <select id="flipAtlas">
+              <option value="none">None</option>
+              <option value="horizontal">Horizontal (LR)</option>
+              <option value="vertical">Vertical (UD)</option>
+            </select>
+          </label>
+          <label>Slicing Plane
+            <select id="slicingPlane">
+              <option value="coronal" selected>Coronal (default)</option>
+              <option value="sagittal">Sagittal</option>
+              <option value="horizontal">Horizontal (Axial)</option>
+            </select>
+          </label>
+          <label>Major Contour Top-K
+            <input id="majorTopK" type="number" min="3" max="60" step="1" value="12" />
+          </label>
+          <label>Fit Mode
+            <select id="fitMode">
+              <option value="contain" selected>Contain (default)</option>
+              <option value="cover">Cover (crop risk)</option>
+              <option value="width-lock">Width-lock</option>
+              <option value="height-lock">Height-lock</option>
+            </select>
+          </label>
+          <label>Real Slice Path (single TIFF for preview)
+            <input id="realSlicePath" placeholder="D:\\...\\slice_xxxx.tif" />
+          </label>
+          <label>Atlas Label Slice Path (single TIFF)
+            <input id="atlasLabelPath" placeholder="D:\\...\\atlas_label_xxxx.tif" />
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="savePreset">Save Preset</button>
+          <button id="loadPreset">Load Preset</button>
+          <button id="refreshBtn">Refresh Outputs</button>
+          <button id="openOutputsBtn">Open Outputs Folder</button>
+          <button id="exportBtn">Export CSV</button>
+          <button id="guideBtn">First-run Guide</button>
+          <button id="refreshPreviewBtn">Refresh Preview</button>
+          <button id="autoPickBtn">Auto-pick Atlas Z</button>
+          <button id="aiAlignBtn">AI Landmark Align</button>
+          <button id="landmarkViewBtn">View Landmarks</button>
+          <button id="cancelBtn">Cancel</button>
+          <button id="runBtn" class="primary">Run Pipeline</button>
+        </div>
+      </section>
+
+      <section class="panel progress">
+        <h2>Progress</h2>
+        <div class="bar"><div id="barFill"></div></div>
+        <div id="stepText">Waiting to start...</div>
+      </section>
+
+      <section class="panel logs">
+        <h2>Live Logs</h2>
+        <pre id="logBox">[ready] frontend initialized</pre>
+      </section>
+
+      <section class="panel outputs">
+        <h2>Output Snapshot</h2>
+        <table>
+          <thead><tr><th>Region</th><th>Target Count</th><th>Confidence</th></tr></thead>
+          <tbody id="resultRows"></tbody>
+        </table>
+      </section>
+
+      <section class="panel outputs">
+        <h2>Channel Compare (Top 5)</h2>
+        <table>
+          <thead><tr><th>Channel</th><th>Total Target Count</th></tr></thead>
+          <tbody id="compareRows"></tbody>
+        </table>
+      </section>
+
+      <section class="panel outputs">
+        <h2>QC Preview</h2>
+        <div id="qcGrid" class="qc-grid"></div>
+      </section>
+
+      <section class="panel outputs">
+        <h2>Run History</h2>
+        <ul id="historyList"></ul>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
+

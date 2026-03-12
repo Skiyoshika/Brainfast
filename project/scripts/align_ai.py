@@ -5,15 +5,14 @@ import numpy as np
 import pandas as pd
 from tifffile import imread, imwrite
 from skimage.transform import estimate_transform, warp
+from scripts.slice_select import select_real_slice_2d, select_label_slice_2d
 
 
 def apply_landmark_affine(real_path: Path, atlas_label_path: Path, pairs_csv: Path, out_path: Path) -> dict:
     real = imread(str(real_path))
     atlas = imread(str(atlas_label_path))
-    if real.ndim == 3:
-        real = real[..., 0]
-    if atlas.ndim == 3:
-        atlas = atlas[..., 0]
+    real, _ = select_real_slice_2d(real, source_path=real_path)
+    atlas, _ = select_label_slice_2d(atlas)
 
     pairs = pd.read_csv(pairs_csv)
     if len(pairs) < 3:

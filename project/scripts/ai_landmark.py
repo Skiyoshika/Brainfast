@@ -9,6 +9,7 @@ from skimage.metrics import structural_similarity as ssim
 from skimage.measure import ransac
 from skimage.transform import AffineTransform
 from skimage.filters import sobel
+from scripts.slice_select import select_real_slice_2d, select_label_slice_2d
 
 
 def detect_landmarks(img: np.ndarray, max_points: int = 30, min_distance: int = 12) -> np.ndarray:
@@ -50,10 +51,8 @@ def score_alignment_edges(a: np.ndarray, b: np.ndarray) -> float:
 def propose_landmarks(real_path: Path, atlas_path: Path, out_csv: Path, max_points: int = 30, min_distance: int = 12, ransac_residual: float = 8.0) -> dict:
     real = imread(str(real_path))
     atl = imread(str(atlas_path))
-    if real.ndim == 3:
-        real = real[..., 0]
-    if atl.ndim == 3:
-        atl = atl[..., 0]
+    real, _ = select_real_slice_2d(real, source_path=real_path)
+    atl, _ = select_label_slice_2d(atl)
 
     rp = detect_landmarks(real, max_points=max_points, min_distance=min_distance)
     ap = detect_landmarks(atl, max_points=max_points, min_distance=min_distance)

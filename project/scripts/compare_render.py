@@ -5,6 +5,7 @@ import numpy as np
 from tifffile import imread, imwrite
 from PIL import Image, ImageDraw
 from skimage.transform import resize
+from scripts.slice_select import select_real_slice_2d, select_label_slice_2d
 
 
 def _norm_u8(img: np.ndarray) -> np.ndarray:
@@ -17,12 +18,9 @@ def render_before_after(real_path: Path, before_label_path: Path, after_label_pa
     b = imread(str(before_label_path))
     a = imread(str(after_label_path))
 
-    if real.ndim == 3:
-        real = real[..., 0]
-    if b.ndim == 3:
-        b = b[..., 0]
-    if a.ndim == 3:
-        a = a[..., 0]
+    real, _ = select_real_slice_2d(real, source_path=real_path)
+    b, _ = select_label_slice_2d(b)
+    a, _ = select_label_slice_2d(a)
 
     # ensure label maps match real slice size
     if b.shape != real.shape:

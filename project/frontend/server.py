@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import sys
@@ -6,6 +6,7 @@ import threading
 import subprocess
 import shutil
 import json
+import datetime
 from pathlib import Path
 import pandas as pd
 from flask import Flask, jsonify, request, send_from_directory
@@ -28,6 +29,7 @@ from scripts.align_ai import apply_landmark_affine
 from scripts.align_nonlinear import apply_landmark_nonlinear
 from scripts.compare_render import render_before_after
 from scripts.atlas_autopick import autopick_best_z
+from scripts.slice_select import select_real_slice_2d, select_label_slice_2d
 from tifffile import imread, imwrite
 import numpy as np
 
@@ -46,6 +48,12 @@ run_state = {
     "history": [],
 }
 
+_HOVER_LABEL_PATH = OUTPUT_DIR / "overlay_label_preview.tif"
+_hover_label_cache: dict = {"path": "", "mtime": 0.0, "img": None}
+_hover_tree_cache: dict | None = None
+_hover_parent_cache: dict = {"csv": "", "mtime": 0.0, "map": {}}
+_last_preview_structure_csv: str = ""
+
 
 def _append_log(line: str):
     run_state["logs"].append(line.rstrip())
@@ -53,8 +61,115 @@ def _append_log(line: str):
         run_state["logs"] = run_state["logs"][-500:]
 
 
-def _runner(config_path: str, input_dir: str, channels: list[str]):
-    run_state.update({"running": True, "done": False, "error": None, "channels": channels, "logs": []})
+def _load_hover_label() -> np.ndarray | None:
+    global _hover_label_cache
+    if not _HOVER_LABEL_PATH.exists():
+        return None
+    mtime = float(_HOVER_LABEL_PATH.stat().st_mtime)
+    if (
+        _hover_label_cache.get("img") is None
+        or _hover_label_cache.get("path") != str(_HOVER_LABEL_PATH)
+        or float(_hover_label_cache.get("mtime", 0.0)) != mtime
+    ):
+        arr = imread(str(_HOVER_LABEL_PATH))
+        if arr.ndim == 3:
+            arr = arr[..., 0]
+        _hover_label_cache = {"path": str(_HOVER_LABEL_PATH), "mtime": mtime, "img": arr}
+    return _hover_label_cache.get("img")
+
+
+def _load_hover_structure_tree() -> dict:
+    global _hover_tree_cache
+    if _hover_tree_cache is not None:
+        return _hover_tree_cache
+    candidates = [
+        PROJECT_ROOT / "configs" / "allen_structure_tree.json",
+        PROJECT_ROOT / "scripts" / "allen_structure_tree.json",
+    ]
+    for p in candidates:
+        if p.exists():
+            try:
+                _hover_tree_cache = json.loads(p.read_text(encoding="utf-8"))
+                return _hover_tree_cache
+            except Exception:
+                continue
+    _hover_tree_cache = {}
+    return _hover_tree_cache
+
+
+def _build_parent_name_map(structure_csv_path: str) -> dict[int, str]:
+    global _hover_parent_cache
+    if not structure_csv_path:
+        return {}
+    p = Path(structure_csv_path)
+    if not p.exists():
+        return {}
+
+    mtime = float(p.stat().st_mtime)
+    if _hover_parent_cache.get("csv") == str(p) and float(_hover_parent_cache.get("mtime", 0.0)) == mtime:
+        return _hover_parent_cache.get("map", {})
+
+    try:
+        df = pd.read_csv(p)
+    except Exception:
+        _hover_parent_cache = {"csv": str(p), "mtime": mtime, "map": {}}
+        return {}
+
+    col_map = {str(c).strip().lower(): str(c) for c in df.columns}
+    id_col = next((col_map[k] for k in ["id", "structure_id", "region_id", "atlas_id"] if k in col_map), None)
+    if id_col is None:
+        _hover_parent_cache = {"csv": str(p), "mtime": mtime, "map": {}}
+        return {}
+
+    parent_name_col = next(
+        (col_map[k] for k in ["parent_name", "parent_region_name", "parent_structure_name"] if k in col_map),
+        None,
+    )
+    parent_id_col = next((col_map[k] for k in ["parent_structure_id", "parent_id", "parent"] if k in col_map), None)
+    name_col = next((col_map[k] for k in ["name", "region_name", "structure_name", "safe_name"] if k in col_map), None)
+
+    out: dict[int, str] = {}
+    try:
+        if parent_name_col is not None:
+            tmp = df[[id_col, parent_name_col]].dropna()
+            for _, r in tmp.iterrows():
+                rid = int(r[id_col])
+                pnm = str(r[parent_name_col]).strip()
+                if pnm:
+                    out[rid] = pnm
+        elif parent_id_col is not None and name_col is not None:
+            name_map = {}
+            for _, r in df[[id_col, name_col]].dropna().iterrows():
+                name_map[int(r[id_col])] = str(r[name_col]).strip()
+            for _, r in df[[id_col, parent_id_col]].dropna().iterrows():
+                rid = int(r[id_col])
+                pid = int(r[parent_id_col])
+                pnm = name_map.get(pid, "")
+                if pnm:
+                    out[rid] = pnm
+    except Exception:
+        out = {}
+
+    _hover_parent_cache = {"csv": str(p), "mtime": mtime, "map": out}
+    return out
+
+
+def _runner(config_path: str, input_dir: str, channels: list[str], run_params=None):
+    ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    run_state.update({"running": True, "done": False, "error": None, "channels": channels, "logs": [], "startTime": ts})
+
+    # Save run params for reproducibility / paper methods section
+    if run_params:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        params_to_save = dict(run_params)
+        params_to_save['timestamp'] = ts
+        params_to_save['channels'] = channels
+        try:
+            (OUTPUT_DIR / f'run_params_{ts}.json').write_text(
+                json.dumps(params_to_save, indent=2, ensure_ascii=False), encoding='utf-8'
+            )
+        except Exception:
+            pass
 
     for ch in channels:
         run_state["current_channel"] = ch
@@ -101,6 +216,7 @@ def _runner(config_path: str, input_dir: str, channels: list[str]):
         "ok": run_state["error"] is None,
         "error": run_state["error"],
         "logCount": len(run_state["logs"]),
+        "timestamp": ts,
     })
     if len(run_state["history"]) > 20:
         run_state["history"] = run_state["history"][-20:]
@@ -151,7 +267,8 @@ def run_pipeline():
     if isinstance(channels, str):
         channels = [channels]
 
-    t = threading.Thread(target=_runner, args=(config, input_dir, channels), daemon=True)
+    run_params = payload.get("params", {})
+    t = threading.Thread(target=_runner, args=(config, input_dir, channels, run_params), daemon=True)
     t.start()
     return jsonify({"ok": True, "started": True})
 
@@ -199,6 +316,8 @@ def atlas_autopick_z():
     real_path = Path(payload.get('realPath', ''))
     annotation_path = Path(payload.get('annotationPath', ''))
     z_step = int(payload.get('zStep', 1))
+    raw_real_z = payload.get('realZIndex', None)
+    real_z_index = None if raw_real_z in (None, "", "null") else int(raw_real_z)
     pixel_size_um = float(payload.get('pixelSizeUm', 0.65))
     slicing_plane = str(payload.get('slicingPlane', 'coronal'))
     roi_mode = str(payload.get('roiMode', 'auto'))
@@ -215,6 +334,7 @@ def atlas_autopick_z():
             pixel_size_um=pixel_size_um,
             slicing_plane=slicing_plane,
             roi_mode=roi_mode,
+            real_z_index=real_z_index,
         )
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
@@ -223,9 +343,14 @@ def atlas_autopick_z():
 
 @app.post('/api/overlay/preview')
 def overlay_preview():
+    global _last_preview_structure_csv
     payload = request.get_json(force=True)
     real_path = Path(payload.get('realPath', ''))
     label_path = Path(payload.get('labelPath', ''))
+    raw_real_z = payload.get('realZIndex', None)
+    raw_label_z = payload.get('labelZIndex', None)
+    real_z_index = None if raw_real_z in (None, "", "null") else int(raw_real_z)
+    label_z_index = None if raw_label_z in (None, "", "null") else int(raw_label_z)
     alpha = float(payload.get('alpha', 0.45))
     mode = payload.get('mode', 'fill')
     structure_csv = Path(payload.get('structureCsv', '')) if payload.get('structureCsv') else None
@@ -233,8 +358,8 @@ def overlay_preview():
     pixel_size_um = float(payload.get('pixelSizeUm', 0.65))
     rotate_deg = float(payload.get('rotateAtlas', 0.0))
     flip_mode = payload.get('flipAtlas', 'none')
-    fit_mode = payload.get('fitMode', 'contain')
-    major_top_k = int(payload.get('majorTopK', 12))
+    fit_mode = payload.get('fitMode', 'cover')
+    major_top_k = int(payload.get('majorTopK', 20))
 
     if not real_path.exists() or not label_path.exists():
         return jsonify({"ok": False, "error": "real or label path not found"}), 400
@@ -255,7 +380,11 @@ def overlay_preview():
             return_meta=True,
             major_top_k=major_top_k,
             fit_mode=fit_mode,
+            warped_label_out=_HOVER_LABEL_PATH,
+            real_z_index=real_z_index,
+            label_z_index=label_z_index,
         )
+        _last_preview_structure_csv = str(structure_csv) if structure_csv and structure_csv.exists() else ""
     except Exception as e:
         fail_dir = OUTPUT_DIR / 'fail_cases'
         fail_dir.mkdir(parents=True, exist_ok=True)
@@ -271,6 +400,8 @@ def overlay_preview():
             'rotateAtlas': rotate_deg,
             'flipAtlas': flip_mode,
             'fitMode': fit_mode,
+            'realZIndex': real_z_index,
+            'labelZIndex': label_z_index,
             'error': str(e)
         }, indent=2), encoding='utf-8')
         return jsonify({"ok": False, "error": str(e), "failCase": str(fail_json)}), 400
@@ -301,6 +432,44 @@ def outputs_overlay_preview():
     return send_from_directory(fp.parent, fp.name)
 
 
+@app.get('/api/overlay/region-at')
+def overlay_region_at():
+    label = _load_hover_label()
+    if label is None:
+        return jsonify({"ok": False, "error": "preview label not available yet"}), 404
+
+    try:
+        x = int(float(request.args.get("x", "-1")))
+        y = int(float(request.args.get("y", "-1")))
+    except Exception:
+        return jsonify({"ok": False, "error": "invalid x/y"}), 400
+
+    h, w = label.shape[:2]
+    if x < 0 or y < 0 or x >= w or y >= h:
+        return jsonify({"ok": True, "inside": False, "region_id": 0, "x": x, "y": y})
+
+    rid = int(label[y, x])
+    if rid <= 0:
+        return jsonify({"ok": True, "inside": False, "region_id": 0, "x": x, "y": y})
+
+    tree = _load_hover_structure_tree()
+    node = tree.get(str(rid), {}) if isinstance(tree, dict) else {}
+    parent_map = _build_parent_name_map(_last_preview_structure_csv)
+    parent_name = str(node.get("parent", "")).strip() or parent_map.get(rid, "")
+
+    return jsonify({
+        "ok": True,
+        "inside": True,
+        "x": int(x),
+        "y": int(y),
+        "region_id": int(rid),
+        "acronym": str(node.get("acronym", "")),
+        "name": str(node.get("name", "")),
+        "parent": str(parent_name),
+        "color": str(node.get("color", "")),
+    })
+
+
 @app.get('/api/outputs/overlay-compare')
 def outputs_overlay_compare():
     fp = OUTPUT_DIR / 'overlay_compare.png'
@@ -326,9 +495,9 @@ def align_nonlinear():
         return jsonify({"ok": False, "error": str(e), "failLog": str(fail_log)}), 400
 
     real = imread(str(real_path)); atlas_before = imread(str(atlas_label_path)); atlas_after = imread(str(out_label))
-    if real.ndim == 3: real = real[..., 0]
-    if atlas_before.ndim == 3: atlas_before = atlas_before[..., 0]
-    if atlas_after.ndim == 3: atlas_after = atlas_after[..., 0]
+    real, _ = select_real_slice_2d(real, source_path=real_path)
+    atlas_before, _ = select_label_slice_2d(atlas_before)
+    atlas_after, _ = select_label_slice_2d(atlas_after)
 
     before = score_alignment(real, atlas_before)
     after = score_alignment(real, atlas_after)
@@ -383,8 +552,8 @@ def align_landmark_preview():
         return jsonify({"ok": False, "error": "missing real/atlas or pairs file"}), 400
 
     real = imread(str(real_path)); atlas = imread(str(atlas_path))
-    if real.ndim == 3: real = real[..., 0]
-    if atlas.ndim == 3: atlas = atlas[..., 0]
+    real, _ = select_real_slice_2d(real, source_path=real_path)
+    atlas, _ = select_label_slice_2d(atlas)
 
     h = min(real.shape[0], atlas.shape[0]); w = min(real.shape[1], atlas.shape[1])
     real = real[:h,:w]; atlas = atlas[:h,:w]
@@ -447,12 +616,9 @@ def align_apply():
     real = imread(str(real_path))
     atlas_before = imread(str(atlas_label_path))
     atlas_after = imread(str(out_label))
-    if real.ndim == 3:
-        real = real[..., 0]
-    if atlas_before.ndim == 3:
-        atlas_before = atlas_before[..., 0]
-    if atlas_after.ndim == 3:
-        atlas_after = atlas_after[..., 0]
+    real, _ = select_real_slice_2d(real, source_path=real_path)
+    atlas_before, _ = select_label_slice_2d(atlas_before)
+    atlas_after, _ = select_label_slice_2d(atlas_after)
 
     before = score_alignment(real, atlas_before)
     after = score_alignment(real, atlas_after)
@@ -471,6 +637,215 @@ def align_apply():
         "compareImage": str(compare_png),
         **meta,
     })
+
+
+@app.get('/api/slice/info')
+def slice_info():
+    path = request.args.get('path', '')
+    if not path or not Path(path).exists():
+        return jsonify({"ok": False, "error": "file not found"}), 400
+    try:
+        from tifffile import TiffFile
+        with TiffFile(path) as tif:
+            shape = list(tif.series[0].shape)
+        ndim = len(shape)
+        return jsonify({"ok": True, "shape": shape, "ndim": ndim, "is3d": ndim >= 3, "z_count": shape[0] if ndim >= 3 else 1})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.post('/api/slice/extract-z')
+def slice_extract_z():
+    payload = request.get_json(force=True)
+    src = Path(payload.get('path', ''))
+    z = int(payload.get('z', 0))
+    if not src.exists():
+        return jsonify({"ok": False, "error": "source file not found"}), 400
+    try:
+        img = imread(str(src))
+        if img.ndim >= 3:
+            z = max(0, min(z, img.shape[0] - 1))
+            slc = img[z]
+        else:
+            slc = img
+        out_path = OUTPUT_DIR / f'extracted_z{z:04d}.tif'
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        imwrite(str(out_path), slc)
+        return jsonify({"ok": True, "path": str(out_path), "z": z, "shape": list(slc.shape), "dtype": str(slc.dtype)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.post('/api/overlay/atlas-layer')
+def overlay_atlas_layer():
+    """Render atlas colormap as RGBA PNG (transparent background) for client-side compositing."""
+    payload = request.get_json(force=True)
+    label_path = Path(payload.get('labelPath', ''))
+    structure_csv = Path(payload.get('structureCsv', '')) if payload.get('structureCsv') else None
+    pixel_size_um = float(payload.get('pixelSizeUm', 0.65))
+    rotate_deg = float(payload.get('rotateAtlas', 0.0))
+    flip_mode = payload.get('flipAtlas', 'none')
+    fit_mode = payload.get('fitMode', 'cover')
+    raw_real_z = payload.get('realZIndex', None)
+    raw_label_z = payload.get('labelZIndex', None)
+    real_z_index = None if raw_real_z in (None, "", "null") else int(raw_real_z)
+    label_z_index = None if raw_label_z in (None, "", "null") else int(raw_label_z)
+    real_path = Path(payload.get('realPath', ''))
+    if not label_path.exists() or not real_path.exists():
+        return jsonify({"ok": False, "error": "label or real path not found"}), 400
+    try:
+        real_img = imread(str(real_path))
+        real_img, _ = select_real_slice_2d(real_img, z_index=real_z_index, source_path=real_path)
+        target_shape = (real_img.shape[0], real_img.shape[1])
+        out = OUTPUT_DIR / 'atlas_layer_rgba.png'
+        _, diagnostic = render_overlay(
+            real_path, label_path, out, alpha=1.0, mode='fill',
+            structure_csv=structure_csv, pixel_size_um=pixel_size_um,
+            rotate_deg=rotate_deg, flip_mode=flip_mode, return_meta=True,
+            major_top_k=20, fit_mode=fit_mode,
+            real_z_index=real_z_index, label_z_index=label_z_index,
+        )
+        return jsonify({"ok": True, "diagnostic": diagnostic})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.get('/api/outputs/atlas-layer')
+def get_atlas_layer():
+    fp = OUTPUT_DIR / 'atlas_layer_rgba.png'
+    if not fp.exists():
+        return jsonify({"ok": False, "error": "atlas layer not rendered yet"}), 404
+    return send_from_directory(str(fp.parent), fp.name)
+
+
+@app.post('/api/align/add-manual-landmarks')
+def add_manual_landmarks():
+    payload = request.get_json(force=True)
+    pairs = payload.get('pairs', [])
+    if not pairs:
+        return jsonify({"ok": False, "error": "no pairs provided"}), 400
+    pairs_csv = OUTPUT_DIR / 'landmark_pairs.csv'
+    new_rows = pd.DataFrame(pairs)
+    if pairs_csv.exists():
+        try:
+            existing = pd.read_csv(pairs_csv)
+            combined = pd.concat([existing, new_rows], ignore_index=True)
+        except Exception:
+            combined = new_rows
+    else:
+        combined = new_rows
+    combined.to_csv(pairs_csv, index=False)
+    return jsonify({"ok": True, "total_pairs": int(len(combined))})
+
+
+@app.get('/api/outputs/file-list')
+def outputs_file_list():
+    if not OUTPUT_DIR.exists():
+        return jsonify({"ok": True, "files": []})
+    files = []
+    for f in sorted(OUTPUT_DIR.iterdir()):
+        if f.is_file():
+            files.append({"name": f.name, "size": f.stat().st_size, "ext": f.suffix.lower()})
+    return jsonify({"ok": True, "files": files, "dir": str(OUTPUT_DIR)})
+
+
+@app.get('/api/outputs/named/<filename>')
+def outputs_named(filename: str):
+    safe = Path(filename).name
+    fp = OUTPUT_DIR / safe
+    if not fp.exists():
+        return jsonify({"ok": False, "error": "file not found"}), 404
+    return send_from_directory(str(OUTPUT_DIR), safe)
+
+
+@app.post('/api/browse/folder')
+def browse_folder():
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.wm_attributes('-topmost', 1)
+        path = filedialog.askdirectory(title='选择文件夹')
+        root.destroy()
+        return jsonify({"ok": True, "path": path or ""})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.post('/api/browse/file')
+def browse_file():
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        payload = request.get_json(force=True) or {}
+        filetypes_raw = payload.get('filetypes', '')
+        if filetypes_raw:
+            exts = [e.strip() for e in filetypes_raw.split(',')]
+            filetypes = [(f'.{e} 文件', f'*.{e}') for e in exts] + [('所有文件', '*.*')]
+        else:
+            filetypes = [('所有文件', '*.*')]
+        root = tk.Tk()
+        root.withdraw()
+        root.wm_attributes('-topmost', 1)
+        path = filedialog.askopenfilename(title='选择文件', filetypes=filetypes)
+        root.destroy()
+        return jsonify({"ok": True, "path": path or ""})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.get('/api/outputs/qc-list')
+def outputs_qc_list():
+    qc_dir = OUTPUT_DIR / 'qc_overlays'
+    if not qc_dir.exists():
+        return jsonify({"ok": True, "files": [], "count": 0})
+    files = sorted(qc_dir.glob('overlay_*.png'))
+    return jsonify({"ok": True, "files": [f.name for f in files], "count": len(files)})
+
+
+@app.get('/api/outputs/qc-file/<filename>')
+def outputs_qc_file(filename: str):
+    qc_dir = OUTPUT_DIR / 'qc_overlays'
+    safe = Path(filename).name
+    return send_from_directory(str(qc_dir), safe)
+
+
+@app.get('/api/export/methods-text')
+def export_methods_text():
+    params_files = sorted(OUTPUT_DIR.glob('run_params_*.json'), reverse=True)
+    params = {}
+    if params_files:
+        try:
+            params = json.loads(params_files[0].read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    align_mode = params.get('alignMode', 'affine')
+    align_cn = '仿射变换 (affine)' if align_mode == 'affine' else '非线性变换 (nonlinear/TPS)'
+    align_en = 'affine' if align_mode == 'affine' else 'nonlinear (thin-plate spline)'
+    pixel_size = params.get('pixelSizeUm', '0.65')
+    channels = params.get('channels', ['red'])
+    ch_str = ', '.join(channels)
+    ts = params.get('timestamp', '—')
+    text_cn = (
+        f"【方法段落参考（中文）】\n"
+        f"脑图谱配准使用 IdleBrain v0.3 完成（运行时间：{ts}）。"
+        f"显微图像分辨率为 {pixel_size} μm/像素。"
+        f"图谱配准参照 Allen 小鼠脑图谱（CCFv3，annotation_25.nii.gz，体素间距 25 μm），"
+        f"采用{align_cn}方法对切片进行空间配准。配准质量通过边缘 SSIM（结构相似性指标）评估。"
+        f"细胞检测采用 Cellpose 算法；去重后按图谱分级脑区统计细胞数量。荧光通道：{ch_str}。"
+    )
+    text_en = (
+        f"\n【Methods paragraph reference (English)】\n"
+        f"Brain atlas registration was performed using IdleBrain v0.3 (run: {ts}). "
+        f"Microscopy images were acquired at {pixel_size} μm/pixel. "
+        f"Section registration was carried out against the Allen Mouse Brain Atlas "
+        f"(CCFv3, annotation_25.nii.gz, 25 μm voxel spacing) using {align_en} transformation. "
+        f"Alignment quality was evaluated by edge-SSIM. "
+        f"Cell detection used the Cellpose algorithm; deduplicated cells were assigned to "
+        f"atlas regions and counts were aggregated hierarchically. Channels: {ch_str}."
+    )
+    return jsonify({"ok": True, "text": text_cn + text_en, "params": params})
 
 
 if __name__ == "__main__":

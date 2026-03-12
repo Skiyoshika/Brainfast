@@ -1,188 +1,543 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IdleBrain UI</title>
+  <title>IdleBrain â?Brain Atlas Registration</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="app">
-    <aside class="guilds">
-      <div class="logo">🧠</div>
-      <button class="guild active">BC</button>
-      <button class="guild">QC</button>
-      <button class="guild">AT</button>
-    </aside>
 
-    <aside class="channels">
-      <div class="title">IdleBrain</div>
-      <div class="section">WORKFLOW</div>
-      <button class="channel active"># run-pipeline</button>
-      <button class="channel"># qc-overlays</button>
-      <button class="channel"># outputs</button>
-      <div class="section">SETTINGS</div>
-      <button class="channel"># channels</button>
-      <button class="channel"># thresholds</button>
-    </aside>
+<!-- ===== TOAST notifications ===== -->
+<div id="toastContainer" class="toast-container"></div>
 
-    <main class="main">
+<!-- ===== Lightbox ===== -->
+<div id="lightbox" class="lightbox hidden">
+  <div class="lightbox-bg" id="lightboxBg"></div>
+  <img id="lightboxImg" alt="preview" />
+  <button class="lightbox-close" id="lightboxClose">â?/button>
+  <div class="lightbox-caption" id="lightboxCaption"></div>
+</div>
+
+<!-- ===== Getting Started Guide modal ===== -->
+<div id="guideModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <button class="modal-close-btn" id="guideModalClose">â?/button>
+    <h2 data-i18n="guide.title">ð Getting Started Guide</h2>
+    <ol>
+      <li data-i18n="guide.step1"><strong>Step 1 â?Configure Paths:</strong> Click "Browse" to select your TIFF folder, Atlas annotation file, and brain region CSV. Fields marked "Required" must be filled in.</li>
+      <li data-i18n="guide.step2"><strong>Step 2 â?Preview Atlas:</strong> Set the slicing plane (usually Coronal), pixel size (default 0.65 Âµm), click "Auto-pick Atlas Slice", then "Refresh Preview" to check the initial overlay.</li>
+      <li data-i18n="guide.step3"><strong>Step 3 â?AI Registration:</strong> Choose the mode (Affine for small deformation; Nonlinear for tears/large warping), then click "AI Landmark Registration". Check the quality panel to confirm SSIM improved.</li>
+      <li data-i18n="guide.step4"><strong>Step 4 â?Run Pipeline:</strong> Select the fluorescence channel, then click "Run Pipeline". After completion, switch to the "Results" tab to view per-region cell counts.</li>
+      <li data-i18n="guide.step5"><strong>Export:</strong> In the Results tab, click "Export CSV" for data. Click "Export Methods Text" to get a pre-written Methods paragraph you can paste directly into your paper.</li>
+    </ol>
+    <p class="guide-tip" data-i18n="guide.tip">ð¡ Tip: All run parameters are automatically saved to outputs/run_params_YYYYMMDD_HHMMSS.json for reproducibility.</p>
+    <div class="modal-footer">
+      <button class="btn-primary" id="guideModalOk" data-i18n="guide.ok">Got it â?Start Using</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Methods paragraph modal ===== -->
+<div id="methodsModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:640px;">
+    <button class="modal-close-btn" id="methodsModalClose">â?/button>
+    <h2 data-i18n="methods.title">ð Methods Paragraph</h2>
+    <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:6px;" data-i18n="methods.desc">The following text is auto-generated from your most recent run parameters. Edit as needed before pasting into your Methods section.</p>
+    <pre id="methodsText" class="methods-pre" data-i18n="methods.loading">Loading...</pre>
+    <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn-secondary" id="methodsCopyBtn" data-i18n="btn.copy">ð Copy to Clipboard</button>
+      <button class="btn-primary"   id="methodsModalClose2" data-i18n="btn.close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">ð§ </span>
+      <span class="logo-text">IdleBrain</span>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-btn active" data-tab="workflow">
+        <span class="nav-icon">âï¸</span>
+        <span data-i18n="nav.workflow">Registration Workflow</span>
+      </button>
+      <button class="nav-btn" data-tab="qc">
+        <span class="nav-icon">ð</span>
+        <span data-i18n="nav.qc">Batch QC Review</span>
+      </button>
+      <button class="nav-btn" data-tab="results">
+        <span class="nav-icon">ð</span>
+        <span data-i18n="nav.results">Results</span>
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="lang-toggle">
+        <button class="lang-btn active" data-lang="en">EN</button>
+        <span class="lang-sep">/</span>
+        <button class="lang-btn" data-lang="zh">ä¸­æ</button>
+      </div>
+      <div class="sidebar-meta">
+        <span class="version" id="versionText">v0.0.0</span>
+        <span class="status-badge" id="statusBadge" data-i18n="status.idle">Idle</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- ================================================
+         TAB 1: Registration Workflow
+    ================================================ -->
+    <div class="tab-content active" id="tab-workflow">
       <header class="topbar">
-        <h1># run-pipeline</h1>
-        <div>
-          <span class="version" id="versionText">v0.0.0</span>
-          <span class="status" id="statusBadge">IDLE</span>
+        <h1 data-i18n="nav.workflow">Registration Workflow</h1>
+        <div class="topbar-actions">
+          <button id="guideBtn" class="btn-ghost" data-i18n="btn.guide">ð Guide</button>
         </div>
       </header>
 
-      <section class="panel form">
-        <h2>Pipeline Controls</h2>
-        <div class="grid">
-          <label>Input TIFF Folder
-            <input id="inputDir" placeholder="D:\\data\\merged_tiff" />
+      <!-- Step 1: File Paths -->
+      <section class="step-card" id="step1">
+        <div class="step-header">
+          <span class="step-badge">1</span>
+          <div>
+            <h2 data-i18n="step1.title">Configure File Paths</h2>
+            <p class="step-desc" data-i18n="step1.desc">Specify your slice image folder, atlas annotation file, and output directory</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <label class="field-label">
+            <span><span data-i18n="label.inputDir">Input TIFF Folder</span> <em class="required" data-i18n="required">Required</em></span>
+            <div class="input-browse">
+              <input id="inputDir" placeholder="D:\data\merged_tiff" />
+              <button class="btn-browse" data-target="inputDir" data-type="folder" data-i18n="btn.browse">Browse</button>
+            </div>
           </label>
-          <label>Output Folder
-            <input id="outputDir" placeholder="D:\\IdleBrain\\project\\outputs" />
+          <label class="field-label">
+            <span data-i18n="label.outputDir">Output Folder</span>
+            <div class="input-browse">
+              <input id="outputDir" data-i18n-ph="ph.outputDir" placeholder="(default: outputs/)" />
+              <button class="btn-browse" data-target="outputDir" data-type="folder" data-i18n="btn.browse">Browse</button>
+            </div>
           </label>
-          <label>Atlas annotation_25.nii.gz
-            <input id="atlasPath" placeholder="D:\\...\\annotation_25.nii.gz" />
+          <label class="field-label">
+            <span><span data-i18n="label.atlasPath">Atlas Annotation File (annotation_25.nii.gz)</span> <em class="required" data-i18n="required">Required</em></span>
+            <div class="input-browse">
+              <input id="atlasPath" placeholder="D:\...\annotation_25.nii.gz" />
+              <button class="btn-browse" data-target="atlasPath" data-type="file" data-filetypes="gz,nii" data-i18n="btn.browse">Browse</button>
+            </div>
           </label>
-          <label>Structure Mapping CSV
-            <input id="structPath" placeholder="D:\\...\\1_adult_mouse_brain_graph_mapping.csv" />
+          <label class="field-label">
+            <span><span data-i18n="label.structPath">Brain Region Mapping CSV</span> <em class="required" data-i18n="required">Required</em></span>
+            <div class="input-browse">
+              <input id="structPath" placeholder="D:\...\1_adult_mouse_brain_graph_mapping.csv" />
+              <button class="btn-browse" data-target="structPath" data-type="file" data-filetypes="csv" data-i18n="btn.browse">Browse</button>
+            </div>
+          </label>
+          <label class="field-label">
+            <span data-i18n="label.realSlicePath">Single Real Slice (preview / registration)</span>
+            <div class="input-browse">
+              <input id="realSlicePath" placeholder="D:\...\slice_xxxx.tif" />
+              <button class="btn-browse" data-target="realSlicePath" data-type="file" data-filetypes="tif,tiff" data-i18n="btn.browse">Browse</button>
+            </div>
+            <!-- 3D stack Z-slicer: auto-shown when 3D TIFF detected -->
+            <div id="zSlicerBox" class="z-slicer-box hidden">
+              <span class="z-slicer-label" id="zSlicerLabel">3D stack detected â?Z: <strong id="zValDisplay">0</strong> / <span id="zMaxDisplay">0</span></span>
+              <div class="z-slicer-row">
+                <input id="zSlider" type="range" min="0" max="645" value="300" step="1" />
+                <input id="zNumInput" type="number" min="0" max="645" value="300" style="width:64px;" />
+                <button id="zExtractBtn" class="btn-secondary" style="flex-shrink:0;" data-i18n="btn.extractSlice">Extract This Slice</button>
+              </div>
+              <span class="field-hint" id="zExtractStatus"></span>
+            </div>
+          </label>
+          <label class="field-label">
+            <span data-i18n="label.atlasLabelPath">Single Atlas Slice (auto-generated by Auto-pick)</span>
+            <div class="input-browse">
+              <input id="atlasLabelPath" data-i18n-ph="ph.atlasLabelPath" placeholder="(auto-filled by Auto-pick)" />
+              <button class="btn-browse" data-target="atlasLabelPath" data-type="file" data-filetypes="tif,tiff" data-i18n="btn.browse">Browse</button>
+            </div>
           </label>
         </div>
 
-        <div class="channel-pills" id="channelPills">
-          <button data-channel="red" class="pill active">Red</button>
-          <button data-channel="green" class="pill">Green</button>
-          <button data-channel="farred" class="pill">FarRed</button>
-          <button id="batchAll" class="pill">Run All Channels</button>
+        <div class="actions-row">
+          <button id="savePreset" class="btn-secondary" data-i18n="btn.savePreset">ð¾ Save Config</button>
+          <button id="loadPreset" class="btn-secondary" data-i18n="btn.loadPreset">ð Load Config</button>
+          <span id="validateStatus" class="validate-status"></span>
+        </div>
+      </section>
+
+      <!-- Step 2: Atlas Preview -->
+      <section class="step-card" id="step2">
+        <div class="step-header">
+          <span class="step-badge">2</span>
+          <div>
+            <h2 data-i18n="step2.title">Atlas Preview &amp; Adjustment</h2>
+            <p class="step-desc" data-i18n="step2.desc">Verify atlas orientation and slice level before running registration</p>
+          </div>
         </div>
 
-        <div class="grid" style="margin-top:10px;">
-          <label>Overlay Alpha
-            <input id="alphaRange" type="range" min="0" max="100" value="45" />
-          </label>
-          <label>Overlay Mode
-            <select id="overlayMode">
-              <option value="fill">Fill</option>
-              <option value="contour">Contour (all regions)</option>
-              <option value="contour-major">Contour (major + outer boundary)</option>
-            </select>
-          </label>
-          <label>Align Mode
-            <select id="alignMode">
-              <option value="affine">Affine</option>
-              <option value="nonlinear">Nonlinear</option>
-            </select>
-          </label>
-          <label>Max Landmarks
-            <input id="maxPoints" type="number" min="8" max="200" value="30" />
-          </label>
-          <label>Min Distance
-            <input id="minDistance" type="number" min="2" max="50" value="12" />
-          </label>
-          <label>RANSAC Residual
-            <input id="ransacResidual" type="number" min="1" max="40" step="0.5" value="8" />
-          </label>
-          <label>Overlay Mean Threshold
-            <input id="minMeanThreshold" type="number" min="1" max="40" step="0.5" value="8" />
-          </label>
-          <label>Pixel Size (µm)
+        <div class="grid-3">
+          <label class="field-label">
+            <span data-i18n="label.pixelSizeUm">Pixel Size (Âµm/pixel)</span>
             <input id="pixelSizeUm" type="number" min="0.1" max="10.0" step="0.05" value="0.65" />
+            <span class="field-hint" data-i18n="hint.pixelSizeUm">Fluorescence microscopy: typically ~0.65 Âµm</span>
           </label>
-          <label>Rotate Atlas (deg)
-            <input id="rotateAtlas" type="number" min="-180" max="180" step="90" value="0" />
-          </label>
-          <label>Flip Atlas
-            <select id="flipAtlas">
-              <option value="none">None</option>
-              <option value="horizontal">Horizontal (LR)</option>
-              <option value="vertical">Vertical (UD)</option>
-            </select>
-          </label>
-          <label>Slicing Plane
+          <label class="field-label">
+            <span data-i18n="label.slicingPlane">Slicing Plane</span>
             <select id="slicingPlane">
-              <option value="coronal" selected>Coronal (default)</option>
-              <option value="sagittal">Sagittal</option>
-              <option value="horizontal">Horizontal (Axial)</option>
+              <option value="coronal"    selected data-i18n="opt.coronal">Coronal (default)</option>
+              <option value="sagittal"           data-i18n="opt.sagittal">Sagittal</option>
+              <option value="horizontal"         data-i18n="opt.horizontal.plane">Horizontal (Axial)</option>
             </select>
           </label>
-          <label>Major Contour Top-K
-            <input id="majorTopK" type="number" min="3" max="60" step="1" value="12" />
+          <label class="field-label">
+            <span data-i18n="label.rotateAtlas">Rotate Atlas (Â°)</span>
+            <input id="rotateAtlas" type="number" min="-180" max="180" step="90" value="0" />
+            <span class="field-hint" data-i18n="hint.rotateAtlas">Try 180Â° if atlas appears upside down</span>
           </label>
-          <label>Fit Mode
-            <select id="fitMode">
-              <option value="contain" selected>Contain (default)</option>
-              <option value="cover">Cover (crop risk)</option>
-              <option value="width-lock">Width-lock</option>
-              <option value="height-lock">Height-lock</option>
+          <label class="field-label">
+            <span data-i18n="label.flipAtlas">Flip Atlas</span>
+            <select id="flipAtlas">
+              <option value="none"       data-i18n="opt.noflip">No flip</option>
+              <option value="horizontal" data-i18n="opt.flipH">Horizontal (L-R mirror)</option>
+              <option value="vertical"   data-i18n="opt.flipV">Vertical (U-D mirror)</option>
             </select>
           </label>
-          <label>Real Slice Path (single TIFF for preview)
-            <input id="realSlicePath" placeholder="D:\\...\\slice_xxxx.tif" />
+          <label class="field-label">
+            <span data-i18n="label.alphaRange">Overlay Alpha</span>
+            <div class="range-row">
+              <input id="alphaRange" type="range" min="0" max="100" value="45" />
+              <span id="alphaValue">45%</span>
+            </div>
           </label>
-          <label>Atlas Label Slice Path (single TIFF)
-            <input id="atlasLabelPath" placeholder="D:\\...\\atlas_label_xxxx.tif" />
+          <label class="field-label">
+            <span data-i18n="label.overlayMode">Overlay Mode</span>
+            <select id="overlayMode">
+              <option value="fill"           data-i18n="opt.fill">Fill (colored regions)</option>
+              <option value="contour"        data-i18n="opt.contour">Contour (all boundaries)</option>
+              <option value="contour-major"  data-i18n="opt.contourMajor">Contour (major boundaries)</option>
+            </select>
           </label>
         </div>
 
-        <div class="actions">
-          <button id="savePreset">Save Preset</button>
-          <button id="loadPreset">Load Preset</button>
-          <button id="refreshBtn">Refresh Outputs</button>
-          <button id="openOutputsBtn">Open Outputs Folder</button>
-          <button id="exportBtn">Export CSV</button>
-          <button id="guideBtn">First-run Guide</button>
-          <button id="refreshPreviewBtn">Refresh Preview</button>
-          <button id="autoPickBtn">Auto-pick Atlas Z</button>
-          <button id="aiAlignBtn">AI Landmark Align</button>
-          <button id="landmarkViewBtn">View Landmarks</button>
-          <button id="cancelBtn">Cancel</button>
-          <button id="runBtn" class="primary">Run Pipeline</button>
+        <details class="advanced-details">
+          <summary data-i18n="adv.options">Advanced Options â?/summary>
+          <div class="grid-3 advanced-grid">
+            <label class="field-label">
+              <span data-i18n="label.fitMode">Fit Mode</span>
+              <select id="fitMode">
+                <option value="contain"             data-i18n="opt.contain">Contain (default, preserve aspect ratio)</option>
+                <option value="cover"       selected data-i18n="opt.cover">Cover (crop risk)</option>
+                <option value="width-lock"          data-i18n="opt.widthLock">Width-lock</option>
+                <option value="height-lock"         data-i18n="opt.heightLock">Height-lock</option>
+              </select>
+            </label>
+            <label class="field-label">
+              <span data-i18n="label.majorTopK">Major Contour Count (Top-K)</span>
+              <input id="majorTopK" type="number" min="3" max="60" step="1" value="20" />
+            </label>
+            <label class="field-label">
+              <span data-i18n="label.minMeanThreshold">Min Mean Threshold</span>
+              <input id="minMeanThreshold" type="number" min="1" max="40" step="0.5" value="8" />
+            </label>
+          </div>
+        </details>
+
+        <div class="actions-row">
+          <button id="autoPickBtn"       class="btn-secondary" data-i18n="btn.autoPick">ð¯ Auto-pick Atlas Slice</button>
+          <button id="refreshPreviewBtn" class="btn-primary"   data-i18n="btn.refreshPreview">ðï¸?Refresh Preview</button>
+        </div>
+
+        <!-- Canvas editor (replaces static img) -->
+        <div class="canvas-editor" id="canvasEditor">
+          <!-- Drawing toolbar (shown after preview loads) -->
+          <div class="draw-toolbar hidden" id="drawToolbar">
+            <div class="toolbar-group">
+              <span class="toolbar-label" data-i18n="toolbar.tools">Tools:</span>
+              <button class="tool-btn active" data-tool="select" title="Select / Pan">â¬?/button>
+              <button class="tool-btn" data-tool="line"     title="Draw Line">â?/button>
+              <button class="tool-btn" data-tool="arrow"    title="Draw Arrow">â?/button>
+              <button class="tool-btn" data-tool="scalebar" title="Scale Bar" data-i18n="btn.scalebar">â?Scale</button>
+              <button class="tool-btn" data-tool="text"     title="Add Text">T</button>
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label" style="display:flex;align-items:center;gap:6px;">
+                <span data-i18n="toolbar.color">Color:</span>
+                <input type="color" id="drawColor" value="#ffffff" style="width:30px;height:26px;padding:0;border:none;background:none;cursor:pointer;" />
+              </label>
+              <label class="toolbar-label" style="display:flex;align-items:center;gap:6px;">
+                <span data-i18n="toolbar.lineWidth">Width:</span>
+                <input type="number" id="drawLineWidth" value="2" min="1" max="20" style="width:48px;" />
+              </label>
+            </div>
+            <div class="toolbar-group">
+              <button id="undoAnnotationBtn"  class="btn-secondary" data-i18n="btn.undo">â?Undo</button>
+              <button id="clearAnnotationsBtn" class="btn-secondary" data-i18n="btn.clearAnnotations">ð Clear All</button>
+              <button id="exportCanvasBtn"     class="btn-primary"   data-i18n="btn.exportFigure">â¬?Export Figure</button>
+            </div>
+          </div>
+          <!-- Canvas placeholder -->
+          <div class="preview-area" id="previewArea">
+            <div class="preview-placeholder" id="previewPlaceholder">
+              <span data-i18n="preview.placeholder">Click "Refresh Preview" to see the overlay</span>
+            </div>
+            <div class="canvas-wrap hidden" id="canvasWrap">
+              <!-- Base overlay PNG (loaded from server) -->
+              <img id="previewImg" class="preview-img" alt="overlay preview" style="display:none;" />
+              <!-- Drawing canvas on top -->
+              <canvas id="drawCanvas" class="draw-canvas"></canvas>
+              <div id="regionHoverTooltip" class="region-hover-tooltip hidden"></div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section class="panel progress">
-        <h2>Progress</h2>
-        <div class="bar"><div id="barFill"></div></div>
-        <div id="stepText">Waiting to start...</div>
+      <!-- Step 3: AI Registration -->
+      <section class="step-card" id="step3">
+        <div class="step-header">
+          <span class="step-badge">3</span>
+          <div>
+            <h2 data-i18n="step3.title">AI Registration</h2>
+            <p class="step-desc" data-i18n="step3.desc">AI automatically extracts landmarks to align the atlas to your real slice</p>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <label class="field-label">
+            <span data-i18n="label.alignMode">Registration Mode</span>
+            <select id="alignMode">
+              <option value="affine"     data-i18n="opt.affine">Affine (small deformation)</option>
+              <option value="nonlinear"  data-i18n="opt.nonlinear">Nonlinear (severe deformation / tissue tears)</option>
+            </select>
+          </label>
+        </div>
+
+        <details class="advanced-details">
+          <summary data-i18n="adv.params">Advanced Parameters â?/summary>
+          <div class="grid-3 advanced-grid">
+            <label class="field-label">
+              <span data-i18n="label.maxPoints">Max Landmark Points</span>
+              <input id="maxPoints" type="number" min="8" max="200" value="30" />
+              <span class="field-hint" data-i18n="hint.maxPoints">Recommended: 20~60 (more = slower)</span>
+            </label>
+            <label class="field-label">
+              <span data-i18n="label.minDistance">Min Distance (px)</span>
+              <input id="minDistance" type="number" min="2" max="50" value="12" />
+              <span class="field-hint" data-i18n="hint.minDistance">Recommended: 8~15</span>
+            </label>
+            <label class="field-label">
+              <span data-i18n="label.ransacResidual">RANSAC Residual</span>
+              <input id="ransacResidual" type="number" min="1" max="40" step="0.5" value="8" />
+              <span class="field-hint" data-i18n="hint.ransacResidual">Smaller = stricter, recommended: 6~10</span>
+            </label>
+          </div>
+        </details>
+
+        <div class="actions-row">
+          <button id="aiAlignBtn"      class="btn-primary"   data-i18n="btn.aiAlign">ð¤ AI Landmark Registration</button>
+          <button id="landmarkViewBtn" class="btn-secondary" data-i18n="btn.landmarkView">ðºï¸?View Landmark Map</button>
+        </div>
+
+        <!-- Alignment quality panel -->
+        <div id="alignQualityPanel" class="quality-panel hidden">
+          <h3 data-i18n="quality.title">Alignment Quality (Edge SSIM)</h3>
+          <div class="quality-row">
+            <span class="quality-label" data-i18n="quality.before">Before</span>
+            <div class="quality-bar-wrap"><div class="quality-bar" id="scoreBefore"></div></div>
+            <span class="quality-num" id="scoreBeforeNum">â?/span>
+          </div>
+          <div class="quality-row">
+            <span class="quality-label" data-i18n="quality.after">After</span>
+            <div class="quality-bar-wrap"><div class="quality-bar" id="scoreAfter"></div></div>
+            <span class="quality-num" id="scoreAfterNum">â?/span>
+          </div>
+          <div class="quality-verdict" id="qualityVerdict"></div>
+        </div>
+
+        <!-- Registration comparison image -->
+        <div class="preview-area" id="alignPreviewArea">
+          <div class="preview-placeholder" id="alignPreviewPlaceholder">
+            <span data-i18n="align.placeholder">Comparison chart shown here after registration</span>
+          </div>
+          <img id="alignPreviewImg" class="preview-img hidden" alt="registration comparison" title="Click to enlarge" />
+        </div>
+
+        <!-- Manual Landmark Correction Panel -->
+        <div class="manual-panel" id="manualPanel">
+          <div class="manual-panel-header">
+            <h3 data-i18n="manual.title">âï¸ Manual Landmark Correction</h3>
+            <p class="step-desc" data-i18n="manual.desc">Click a point on the <strong>Real Slice</strong>, then click the corresponding point on the <strong>Atlas Slice</strong> to add a manual landmark pair.</p>
+            <div class="actions-row" style="margin-top:10px;">
+              <button id="manualModeBtn" class="btn-secondary" data-i18n="btn.startManual">ð Enter Manual Mode</button>
+              <button id="applyManualBtn" class="btn-primary hidden" data-i18n="btn.applyManual">â?Apply Manual Landmarks &amp; Realign</button>
+              <button id="clearManualBtn" class="btn-danger  hidden" data-i18n="btn.clearManual">ð Clear Manual Points</button>
+            </div>
+          </div>
+          <!-- Side-by-side canvases (shown in manual mode) -->
+          <div class="manual-canvases hidden" id="manualCanvases">
+            <div class="manual-side">
+              <div class="manual-side-title" data-i18n="manual.realSide">Real Slice â?click to mark point</div>
+              <div class="manual-canvas-wrap">
+                <img id="manualRealImg" class="manual-base-img" alt="real slice" />
+                <canvas id="manualRealCanvas" class="manual-canvas"></canvas>
+              </div>
+            </div>
+            <div class="manual-side">
+              <div class="manual-side-title" data-i18n="manual.atlasSide">Atlas Slice â?click corresponding point</div>
+              <div class="manual-canvas-wrap">
+                <img id="manualAtlasImg" class="manual-base-img" alt="atlas slice" />
+                <canvas id="manualAtlasCanvas" class="manual-canvas"></canvas>
+              </div>
+            </div>
+          </div>
+          <!-- Pending point status -->
+          <div id="manualStatus" class="manual-status hidden"></div>
+          <!-- Landmarks list table -->
+          <div id="manualPairsWrap" class="hidden" style="margin-top:12px;">
+            <table class="manual-pairs-table">
+              <thead><tr>
+                <th>#</th>
+                <th data-i18n="manual.th.real">Real (x, y)</th>
+                <th data-i18n="manual.th.atlas">Atlas (x, y)</th>
+                <th></th>
+              </tr></thead>
+              <tbody id="manualPairsBody"></tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
-      <section class="panel logs">
-        <h2>Live Logs</h2>
-        <pre id="logBox">[ready] frontend initialized</pre>
-      </section>
+      <!-- Step 4: Run Pipeline -->
+      <section class="step-card" id="step4">
+        <div class="step-header">
+          <span class="step-badge">4</span>
+          <div>
+            <h2 data-i18n="step4.title">Run Cell Counting Pipeline</h2>
+            <p class="step-desc" data-i18n="step4.desc">Batch process all slices and count labeled cells per brain region</p>
+          </div>
+        </div>
 
-      <section class="panel outputs">
-        <h2>Output Snapshot</h2>
-        <table>
-          <thead><tr><th>Region</th><th>Target Count</th><th>Confidence</th></tr></thead>
+        <div class="channel-section">
+          <label class="field-label"><span data-i18n="label.channels">Fluorescence Channel</span></label>
+          <div class="channel-pills" id="channelPills">
+            <button data-channel="red"    class="pill active" data-i18n="ch.red">ð´ Red</button>
+            <button data-channel="green"  class="pill"        data-i18n="ch.green">ð¢ Green</button>
+            <button data-channel="farred" class="pill"        data-i18n="ch.farred">ð£ Far-Red</button>
+            <button id="batchAll"         class="pill"        data-i18n="ch.all">â?All Channels</button>
+          </div>
+        </div>
+
+        <div class="progress-section">
+          <div class="progress-header">
+            <span id="stepText" data-i18n="progress.waiting">Waiting to start...</span>
+            <span id="progressPct">0%</span>
+          </div>
+          <div class="bar"><div id="barFill"></div></div>
+          <div id="sliceProgress" class="slice-progress hidden"></div>
+        </div>
+
+        <div class="actions-row">
+          <button id="runBtn"        class="btn-run"    data-i18n="btn.run">â?Run Pipeline</button>
+          <button id="cancelBtn"     class="btn-danger" data-i18n="btn.cancel">â?Cancel</button>
+          <button id="openOutputsBtn" class="btn-ghost" data-i18n="btn.openOutputs">ð Open Output Folder</button>
+        </div>
+
+        <details class="log-details" open style="margin-top:14px;">
+          <summary data-i18n="log.title">Live Logs â?/summary>
+          <pre id="logBox" class="log-box" data-i18n="log.ready">[ready] Frontend initialized</pre>
+        </details>
+      </section>
+    </div><!-- /tab-workflow -->
+
+
+    <!-- ================================================
+         TAB 2: Batch QC Review
+    ================================================ -->
+    <div class="tab-content" id="tab-qc">
+      <header class="topbar">
+        <h1 data-i18n="tab.qc.title">Batch QC Review</h1>
+        <div class="topbar-actions">
+          <span id="qcAllCount" class="qc-count-badge"></span>
+          <button id="refreshQcAllBtn" class="btn-secondary" data-i18n="btn.refreshQc">ð Refresh</button>
+        </div>
+      </header>
+      <section class="panel">
+        <p class="hint-text" data-i18n="qc.hint">Click any image to enlarge. Generated after running the pipeline.</p>
+        <div id="qcAllGrid" class="qc-grid-large"></div>
+        <div id="qcEmpty" class="empty-hint" data-i18n="qc.empty">No QC images yet. Please run the pipeline in the Registration Workflow tab first.</div>
+      </section>
+    </div><!-- /tab-qc -->
+
+
+    <!-- ================================================
+         TAB 3: Results
+    ================================================ -->
+    <div class="tab-content" id="tab-results">
+      <header class="topbar">
+        <h1 data-i18n="tab.results.title">Results</h1>
+        <div class="topbar-actions">
+          <button id="refreshBtn"       class="btn-secondary" data-i18n="btn.refreshResults">ð Refresh</button>
+          <button id="exportBtn"        class="btn-secondary" data-i18n="btn.exportCsv">â¬ï¸ Export CSV</button>
+          <button id="exportMethodsBtn" class="btn-secondary" data-i18n="btn.exportMethods">ð Export Methods Text</button>
+        </div>
+      </header>
+
+      <section class="panel">
+        <div class="results-toolbar">
+          <h2 data-i18n="results.title">Cell Counts by Brain Region</h2>
+          <input id="regionSearch" class="search-input" data-i18n-ph="ph.regionSearch" placeholder="ð Search region name..." />
+        </div>
+        <table id="resultsTable">
+          <thead>
+            <tr>
+              <th data-i18n="th.region">Region Name</th>
+              <th data-i18n="th.count">Cell Count</th>
+              <th data-i18n="th.confidence">Confidence</th>
+            </tr>
+          </thead>
           <tbody id="resultRows"></tbody>
         </table>
+        <div id="resultsMeta" class="results-meta"></div>
       </section>
 
-      <section class="panel outputs">
-        <h2>Channel Compare (Top 5)</h2>
+      <section class="panel">
+        <h2 data-i18n="compare.title">Channel Comparison (Total Cell Count)</h2>
         <table>
-          <thead><tr><th>Channel</th><th>Total Target Count</th></tr></thead>
+          <thead>
+            <tr>
+              <th data-i18n="th.channel">Channel</th>
+              <th data-i18n="th.total">Total Count</th>
+            </tr>
+          </thead>
           <tbody id="compareRows"></tbody>
         </table>
       </section>
 
-      <section class="panel outputs">
-        <h2>QC Preview</h2>
-        <div id="qcGrid" class="qc-grid"></div>
+      <section class="panel">
+        <h2 data-i18n="history.title">Run History</h2>
+        <ul id="historyList" class="history-list"></ul>
       </section>
 
-      <section class="panel outputs">
-        <h2>Run History</h2>
-        <ul id="historyList"></ul>
+      <section class="panel">
+        <div class="results-toolbar">
+          <h2 data-i18n="outputs.title">Output Files</h2>
+          <button id="refreshFileListBtn" class="btn-secondary" data-i18n="btn.refreshResults">ð Refresh</button>
+        </div>
+        <p class="hint-text" data-i18n="outputs.hint">Click a PNG to preview Â· Click CSV/JSON to view content</p>
+        <div id="outputFileGrid" class="output-file-grid"></div>
+        <div id="outputFileEmpty" class="empty-hint" data-i18n="outputs.empty">No output files yet</div>
       </section>
-    </main>
-  </div>
+    </div><!-- /tab-results -->
 
-  <script src="./app.js"></script>
+  </main>
+</div><!-- /app -->
+
+<script src="./app.js"></script>
 </body>
 </html>
-

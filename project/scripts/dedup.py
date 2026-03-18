@@ -6,14 +6,16 @@ import pandas as pd
 from scipy.spatial import cKDTree
 
 
-def _ensure_um_columns(cells: pd.DataFrame, pixel_size_um: float) -> pd.DataFrame:
+def _ensure_um_columns(
+    cells: pd.DataFrame, pixel_size_um: float, slice_spacing_um: float = 1.0
+) -> pd.DataFrame:
     out = cells.copy()
     if "x_um" not in out.columns:
         out["x_um"] = out["x"] * pixel_size_um
     if "y_um" not in out.columns:
         out["y_um"] = out["y"] * pixel_size_um
     if "z_um" not in out.columns:
-        out["z_um"] = out["slice_id"] * 1.0
+        out["z_um"] = out["slice_id"] * slice_spacing_um
     return out
 
 
@@ -49,7 +51,7 @@ def apply_dedup_kdtree(
         return cells.copy(), stats
 
     r_z_um = slice_spacing_um * 0.5
-    df = _ensure_um_columns(cells, pixel_size_um)
+    df = _ensure_um_columns(cells, pixel_size_um, slice_spacing_um)
 
     order = df["score"].fillna(0).sort_values(ascending=False).index.to_list()
     coords = df[["x_um", "y_um", "z_um"]].to_numpy(dtype=float)

@@ -1,5 +1,5 @@
 """
-IdleBrain Desktop Launcher
+Brainfast Desktop Launcher
 - System tray icon with right-click menu
 - Splash screen while backend starts
 - Browser auto-open
@@ -24,14 +24,14 @@ if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
 else:
     FRONTEND = Path(__file__).resolve().parent
 
-os.environ["IDLEBRAIN_FRONTEND"] = str(FRONTEND)
+os.environ["BRAINFAST_FRONTEND"] = str(FRONTEND)
 
 from server import app  # noqa: E402 — import after env set
 
 HOST      = "127.0.0.1"
 PORT      = 8787
 LOCK_PORT = 18787
-APP_NAME  = "IdleBrain"
+APP_NAME  = "Brainfast"
 
 
 # ── Tray icon image (drawn with PIL, no external file needed) ────────────────
@@ -66,7 +66,7 @@ def _show_splash() -> "Tk":
 
     tk.Label(root, text="🧠", font=("Segoe UI", 36),
              bg="#181a1f", fg="#4c72f5").pack(pady=(18, 4))
-    tk.Label(root, text="IdleBrain", font=("Segoe UI", 15, "bold"),
+    tk.Label(root, text="Brainfast", font=("Segoe UI", 15, "bold"),
              bg="#181a1f", fg="#dde1e9").pack()
     status = tk.Label(root, text="Starting backend…",
                       font=("Segoe UI", 10), bg="#181a1f", fg="#878e9e")
@@ -136,7 +136,7 @@ def main():
 
     # Start Flask in background
     flask_thread = threading.Thread(
-        target=lambda: app.run(host=HOST, port=PORT, debug=False, use_reloader=False),
+        target=lambda: app.run(host=HOST, port=PORT, debug=False, use_reloader=False, threaded=True),
         daemon=True,
     )
     flask_thread.start()

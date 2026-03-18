@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 from pathlib import Path
-import json
+import time
 import numpy as np
 from tifffile import imread, imwrite
 from skimage.transform import rescale, rotate, resize, SimilarityTransform, warp as skwarp
@@ -12,28 +12,12 @@ from skimage.registration import optical_flow_tvl1
 from skimage.segmentation import find_boundaries
 from scipy.ndimage import gaussian_filter, map_coordinates, distance_transform_edt, laplace
 from scipy.interpolate import Rbf
-from scripts.allen_colors import load_allen_color_map
+from scripts.overlay_assets import colorize_label, load_structure_tree
+from scripts.overlay_postprocess import finalize_registered_label
 from scripts.slice_select import select_real_slice_2d, select_label_slice_2d
 
-# 鈹€鈹€ Allen structure tree (region names + official colors) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-_STRUCTURE_TREE: dict | None = None
-
 def _load_structure_tree() -> dict:
-    global _STRUCTURE_TREE
-    if _STRUCTURE_TREE is not None:
-        return _STRUCTURE_TREE
-    # Try project configs, then same dir as this file
-    candidates = [
-        Path(__file__).resolve().parent.parent / "configs" / "allen_structure_tree.json",
-        Path(__file__).resolve().parent / "allen_structure_tree.json",
-    ]
-    for p in candidates:
-        if p.exists():
-            with open(p, encoding="utf-8") as f:
-                _STRUCTURE_TREE = json.load(f)
-            return _STRUCTURE_TREE
-    _STRUCTURE_TREE = {}
-    return _STRUCTURE_TREE
+    return load_structure_tree()
 
 
 # 鈹€鈹€ Utilities 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
@@ -357,6 +341,263 @@ def _apply_warp(
         order=0, preserve_range=True, mode="constant", cval=0.0,
     )
     return warped.astype(np.int32)
+
+
+_ALLEN_THUMB_UM_PX = 67.008   # Allen thumbnail resolution (µm per pixel at downsample=6)
+_ALLEN_REF_CACHE = Path(__file__).resolve().parent.parent / "configs" / "allen_ref_cache"
+
+
+_ALLEN_NISSL_VOL_CACHE: dict[str, np.ndarray] = {}   # path → loaded volume
+_ALLEN_NISSL_25_PATH = Path(__file__).resolve().parent.parent / "configs" / "ara_nissl_25.nrrd"
+_ALLEN_NISSL_10_PATH = Path(__file__).resolve().parent.parent / "configs" / "ara_nissl_10.nrrd"
+
+
+def _load_nissl_slice(atlas_z: int) -> np.ndarray | None:
+    """Load 2D Nissl reference slice from ara_nissl volume (25 or 10 µm).
+
+    The volume is in CCFv3 space (same as annotation), so atlas_z directly
+    indexes the correct coronal section.  Volume is cached in memory after
+    first load.  Returns float32 [0,1] gray slice, or None if unavailable.
+    """
+    nissl_path = _ALLEN_NISSL_25_PATH if _ALLEN_NISSL_25_PATH.exists() else (
+        _ALLEN_NISSL_10_PATH if _ALLEN_NISSL_10_PATH.exists() else None
+    )
+    if nissl_path is None:
+        return None
+    key = str(nissl_path)
+    if key not in _ALLEN_NISSL_VOL_CACHE:
+        try:
+            import nrrd
+            data, _ = nrrd.read(str(nissl_path))
+            # NRRD axis order for Allen CCF: (AP, DV, ML) — same as annotation NIfTI
+            _ALLEN_NISSL_VOL_CACHE[key] = data.astype(np.float32)
+        except Exception:
+            return None
+    vol = _ALLEN_NISSL_VOL_CACHE[key]
+    az = int(np.clip(atlas_z, 0, vol.shape[0] - 1))
+    slc = vol[az].astype(np.float32)
+    lo, hi = float(np.percentile(slc, 1)), float(np.percentile(slc, 99))
+    if hi > lo:
+        slc = np.clip((slc - lo) / (hi - lo), 0.0, 1.0)
+    else:
+        slc = np.zeros_like(slc)
+    return slc
+
+
+def _load_placed_allen_ref(
+    atlas_z: int,
+    total_scale: float,
+    angle_rad: float,
+    dx: float,
+    dy: float,
+    out_shape: tuple[int, int],
+    hemisphere: str = "right_flipped",
+    cache_dir: Path | None = None,
+) -> np.ndarray | None:
+    """Load Allen Nissl reference for atlas_z and place it in image coordinates.
+
+    Preferred source: ara_nissl_25.nrrd / ara_nissl_10.nrrd volume slice (same
+    CCFv3 coordinate space as annotation, so atlas_z indexes directly).
+    Fallback: 67µm/px thumbnail from cache.
+
+    Returns float32 [0,1] image (dark background, bright tissue).
+    Nissl is inverted so white-matter fibers (dark in Nissl) become BRIGHT,
+    matching how fiber tracts appear in cleared-brain fluorescence images.
+    """
+    nissl_slc = _load_nissl_slice(atlas_z)
+    if nissl_slc is not None:
+        # Nissl volume: background is dark (0), tissue/cells are bright.
+        # White-matter tracts are DARKER than cell-dense regions in Nissl.
+        # Cleared-brain fluorescence: background dark, labeled cells bright,
+        # fiber tracts relatively dark.  So we use Nissl directly (no inversion)
+        # and then extract "fiber-like" features via local contrast enhancement.
+        gray = nissl_slc   # already [0,1], dark background
+        # Hemisphere crop (volume ML axis = axis 1)
+        vw = gray.shape[1]
+        if hemisphere in ("right", "right_flipped"):
+            gray = gray[:, vw // 2:]           # right half of coronal section
+        elif hemisphere == "left":
+            gray = gray[:, :vw // 2]
+        if hemisphere == "right_flipped":
+            gray = np.fliplr(gray)             # lateral at LEFT, medial at RIGHT
+        # Place in image space at atlas voxel scale (same scale as label)
+        nissl_um = 25.0 if _ALLEN_NISSL_25_PATH.exists() else 10.0
+        ref_scale = total_scale * (nissl_um / 25.0)   # = total_scale for 25µm vol
+        fwd = SimilarityTransform(scale=ref_scale, rotation=angle_rad, translation=(dx, dy))
+        placed = skwarp(
+            gray,
+            fwd.inverse,
+            output_shape=out_shape,
+            order=1, preserve_range=True, mode="constant", cval=0.0,
+        ).astype(np.float32)
+        return placed
+
+    # ── Fallback: low-res thumbnail ───────────────────────────────────────────
+    cache_dir = cache_dir or _ALLEN_REF_CACHE
+    thumb_path = cache_dir / f"thumb_z{atlas_z:04d}.jpg"
+    if not thumb_path.exists():
+        return None
+    try:
+        from PIL import Image as _PILImage
+        img_pil = _PILImage.open(str(thumb_path)).convert("RGB")
+        img = np.array(img_pil, dtype=np.float32)
+        gray = img[..., :3].mean(axis=-1)
+        th, tw = gray.shape
+        if hemisphere in ("right", "right_flipped"):
+            gray = gray[:, tw // 2:]
+        elif hemisphere == "left":
+            gray = gray[:, :tw // 2]
+        if hemisphere == "right_flipped":
+            gray = np.fliplr(gray)
+        gray = 255.0 - gray   # invert: thumbnail has bright background
+        lo, hi = float(np.percentile(gray, 2)), float(np.percentile(gray, 98))
+        if hi > lo:
+            gray = np.clip((gray - lo) / (hi - lo), 0.0, 1.0)
+        else:
+            gray = np.zeros_like(gray)
+        thumb_scale = total_scale * (_ALLEN_THUMB_UM_PX / 25.0)
+        fwd = SimilarityTransform(scale=thumb_scale, rotation=angle_rad, translation=(dx, dy))
+        placed = skwarp(
+            gray, fwd.inverse,
+            output_shape=out_shape,
+            order=1, preserve_range=True, mode="constant", cval=0.0,
+        ).astype(np.float32)
+        return placed
+    except Exception:
+        return None
+
+
+def _structure_feature_map(img: np.ndarray) -> np.ndarray:
+    """Convert a grayscale image to a structure-feature map for cross-modal registration.
+
+    Highlights boundaries and dark structures (fiber tracts, ventricles) that are
+    visible in BOTH Nissl and cleared-brain fluorescence images:
+      - Local contrast (Sobel edges)
+      - Dark-region map (inverted, so fiber tracts become bright peaks)
+    Returns float32 [0,1].
+    """
+    from scipy.ndimage import gaussian_filter as _gf
+    f = img.astype(np.float32)
+    # Normalise
+    lo, hi = float(np.percentile(f[f > 0], 5)) if f.max() > 0 else (0.0, 1.0), float(np.percentile(f, 95))
+    if isinstance(lo, tuple):
+        lo = lo[0]
+    if hi > lo:
+        f = np.clip((f - lo) / (hi - lo), 0.0, 1.0)
+    # Edge component (Sobel magnitude)
+    from skimage.filters import sobel as _sobel
+    edges = _sobel(f)
+    emx = float(edges.max())
+    if emx > 0:
+        edges /= emx
+    # Dark-region component: local minimum contrast (captures fiber tracts & ventricles)
+    smooth = _gf(f, sigma=3.0)
+    dark = 1.0 - smooth   # bright where tissue is dark
+    # Combine: edges + dark regions, both normalised
+    feat = 0.6 * edges + 0.4 * dark
+    mx = float(feat.max())
+    return (feat / mx).astype(np.float32) if mx > 0 else feat.astype(np.float32)
+
+
+def _sitk_nonlinear_register(
+    placed_ref: np.ndarray,
+    real_u8: np.ndarray,
+    tissue_mask: np.ndarray | None = None,
+    max_dim: int = 512,
+    mi_bins: int = 32,
+    max_iter: int = 80,
+    mesh_size: int = 6,
+    max_disp_frac: float = 0.15,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Register placed Allen reference image to lightsheet image using SimpleITK BSpline.
+
+    Both images are converted to structure-feature maps (edges + dark regions)
+    before registration so that cross-modal intensity differences don't interfere.
+    Returns (flow_v, flow_u) displacement in full-resolution pixels, or None on failure.
+    """
+    try:
+        import SimpleITK as sitk
+        h, w = real_u8.shape[:2]
+        ds = max(1, max(h, w) // max_dim)
+        h_ds, w_ds = h // ds, w // ds
+
+        # Convert both to structure-feature maps before registration
+        real_f32 = real_u8.astype(np.float32) / 255.0
+        fixed_feat  = _structure_feature_map(real_f32)
+        moving_feat = _structure_feature_map(placed_ref)
+
+        fixed_arr  = fixed_feat[:h_ds * ds:ds, :w_ds * ds:ds]
+        moving_arr = moving_feat[:h_ds * ds:ds, :w_ds * ds:ds]
+
+        # Mask: zero out moving image pixels with no tissue (prevents background MI pollution)
+        if tissue_mask is not None:
+            tmask_ds = tissue_mask[:h_ds * ds:ds, :w_ds * ds:ds].astype(bool)
+            moving_arr = moving_arr * tmask_ds.astype(np.float32)
+
+        fixed_sitk  = sitk.GetImageFromArray(fixed_arr)
+        moving_sitk = sitk.GetImageFromArray(moving_arr)
+        spacing_mm = (25.0 * ds / 1000.0, 25.0 * ds / 1000.0)   # coarse enough to be scale-agnostic
+        fixed_sitk.SetSpacing(spacing_mm)
+        moving_sitk.SetSpacing(spacing_mm)
+
+        reg = sitk.ImageRegistrationMethod()
+        reg.SetMetricAsMattesMutualInformation(numberOfHistogramBins=mi_bins)
+        reg.SetMetricSamplingStrategy(sitk.ImageRegistrationMethod.RANDOM)
+        reg.SetMetricSamplingPercentage(0.20, seed=42)
+        reg.SetInterpolator(sitk.sitkLinear)
+
+        tx = sitk.BSplineTransformInitializer(
+            fixed_sitk,
+            transformDomainMeshSize=[mesh_size, mesh_size],
+            order=3,
+        )
+        reg.SetInitialTransform(tx, inPlace=True)
+        reg.SetOptimizerAsLBFGSB(
+            gradientConvergenceTolerance=1e-5,
+            numberOfIterations=max_iter,
+            maximumNumberOfCorrections=5,
+            maximumNumberOfFunctionEvaluations=1000,
+            costFunctionConvergenceFactor=1e7,
+        )
+        reg.SetShrinkFactorsPerLevel([4, 2, 1])
+        reg.SetSmoothingSigmasPerLevel([2.0, 1.0, 0.0])
+        reg.SmoothingSigmasAreSpecifiedInPhysicalUnitsOff()
+
+        tx_final = reg.Execute(fixed_sitk, moving_sitk)
+
+        # Convert BSpline transform → dense displacement field
+        disp_img = sitk.TransformToDisplacementField(
+            tx_final,
+            sitk.sitkVectorFloat32,
+            size=[w_ds, h_ds],
+            outputSpacing=spacing_mm,
+        )
+        disp = sitk.GetArrayFromImage(disp_img)   # (h_ds, w_ds, 2): [y-disp, x-disp] in mm
+
+        # Convert from mm → full-resolution pixels
+        mm_to_px = ds / (25.0 * ds / 1000.0) / 1000.0   # simplifies to 1/25 * 1000 … keep explicit
+        mm_to_fullpx = 1000.0 / 25.0   # 1 mm / (25µm/vox) = 40 vox; but atlas scale to image = total_scale
+        # Simpler: disp in mm → ds-pixels → full pixels
+        # 1 ds-pixel corresponds to ds real pixels; spacing = 25*ds/1000 mm/px_ds
+        px_per_mm_ds = 1000.0 / (25.0 * ds)
+        flow_v_ds = disp[..., 0] * px_per_mm_ds * ds   # → full-res pixels (y)
+        flow_u_ds = disp[..., 1] * px_per_mm_ds * ds   # → full-res pixels (x)
+
+        # Upsample to full resolution
+        from skimage.transform import resize as sk_resize
+        flow_v = sk_resize(flow_v_ds, (h, w), order=1, anti_aliasing=False, preserve_range=True).astype(np.float32)
+        flow_u = sk_resize(flow_u_ds, (h, w), order=1, anti_aliasing=False, preserve_range=True).astype(np.float32)
+
+        # Clamp excessive displacement
+        max_disp_px = max_disp_frac * min(h, w)
+        mag = np.sqrt(flow_v ** 2 + flow_u ** 2)
+        scale_clamp = np.where(mag > max_disp_px, max_disp_px / (mag + 1e-6), 1.0)
+        flow_v *= scale_clamp
+        flow_u *= scale_clamp
+
+        return flow_v, flow_u
+    except Exception as _e:
+        return None
 
 
 def _atlas_boundary_feature(label: np.ndarray) -> np.ndarray:
@@ -1579,6 +1820,297 @@ def _refine_warp_liquify_candidate(
     }
 
 
+def _silhouette_conform_warp(
+    label: np.ndarray,
+    real_u8: np.ndarray,
+    tissue_mask: np.ndarray | None = None,
+    ds_size: int = 512,
+    fill_radius: int = 30,
+    flow_attachment: float = 12.0,
+    max_disp_ratio: float = 0.10,
+    max_disp_min_px: float = 20.0,
+) -> tuple[np.ndarray, dict]:
+    """Warp atlas to match brain silhouette using TV-L1 optical flow on distance transforms.
+
+    Registration target: signed distance transform of filled brain silhouette vs
+    atlas silhouette. Shape-based (not intensity-based) → works for sparse
+    cleared-brain data where fluorescent signal is sparse cells, not solid tissue.
+
+    TV-L1 flow has built-in Total-Variation regularisation that prevents tearing.
+    max_disp_ratio=0.10 limits displacement to 10% of image → conservative, safe.
+    """
+    from scipy.ndimage import distance_transform_edt
+
+    h, w = label.shape
+    if int(np.sum(label > 0)) < 100:
+        return label, {"ok": False, "reason": "empty_label"}
+
+    ds = float(ds_size) / float(max(h, w))
+    dh = max(64, int(round(h * ds)))
+    dw = max(64, int(round(w * ds)))
+    fill_r = max(4, int(round(fill_radius * ds)))
+
+    # ── Brain silhouette (low-threshold fill → solid outline) ────────────
+    real_small = resize(real_u8.astype(np.float32), (dh, dw),
+                        order=1, preserve_range=True, anti_aliasing=True)
+    nz = real_small[real_small > 3]
+    thr_low = float(np.percentile(nz, 10)) if nz.size > 50 else 10.0
+    brain_rough = real_small > thr_low
+    brain_filled = morphology.closing(brain_rough, morphology.disk(fill_r))
+    lbl_t = measure.label(brain_filled)
+    if lbl_t.max() > 1:
+        areas = {r.label: r.area for r in measure.regionprops(lbl_t)}
+        brain_filled = (lbl_t == max(areas, key=areas.__getitem__))
+    # Restrict to hemisphere region if tissue hint provided
+    if tissue_mask is not None and int(np.sum(tissue_mask)) > 100:
+        hemi_s = resize(tissue_mask.astype(np.float32), (dh, dw), order=0) > 0.5
+        brain_filled = brain_filled & morphology.dilation(hemi_s, morphology.disk(max(3, fill_r)))
+
+    if int(np.sum(brain_filled)) < 50:
+        return label, {"ok": False, "reason": "brain_silhouette_empty"}
+
+    # ── Atlas silhouette ──────────────────────────────────────────────────
+    atlas_small = resize((label > 0).astype(np.float32), (dh, dw), order=0) > 0.5
+    lbl_a = measure.label(atlas_small)
+    if lbl_a.max() > 1:
+        areas_a = {r.label: r.area for r in measure.regionprops(lbl_a)}
+        atlas_small = (lbl_a == max(areas_a, key=areas_a.__getitem__))
+
+    # ── Distance transforms → smooth registration target ─────────────────
+    brain_dt = distance_transform_edt(brain_filled).astype(np.float32)
+    atlas_dt = distance_transform_edt(atlas_small).astype(np.float32)
+    brain_dt /= max(float(brain_dt.max()), 1e-6)
+    atlas_dt /= max(float(atlas_dt.max()), 1e-6)
+
+    # ── TV-L1 optical flow: atlas_dt → brain_dt ──────────────────────────
+    try:
+        fv, fu = optical_flow_tvl1(
+            brain_dt, atlas_dt,
+            attachment=float(flow_attachment),
+            tightness=0.3,
+            num_warp=6,
+            num_iter=40,
+            tol=1e-3,
+            prefilter=False,
+            dtype=np.float32,
+        )
+    except Exception as e:
+        return label, {"ok": False, "reason": f"flow_failed: {e}"}
+
+    # Scale flow back to full resolution
+    max_disp = float(max(max_disp_min_px, min(h, w) * max_disp_ratio))
+    flow_v = resize(fv * (float(h) / dh), (h, w), order=1,
+                    preserve_range=True, anti_aliasing=True).astype(np.float32)
+    flow_u = resize(fu * (float(w) / dw), (h, w), order=1,
+                    preserve_range=True, anti_aliasing=True).astype(np.float32)
+    flow_v = gaussian_filter(flow_v, sigma=3.0).astype(np.float32)
+    flow_u = gaussian_filter(flow_u, sigma=3.0).astype(np.float32)
+
+    flow_mag = np.sqrt(flow_v ** 2 + flow_u ** 2)
+    over = flow_mag > max_disp
+    if np.any(over):
+        sc = max_disp / (flow_mag[over] + 1e-6)
+        flow_v[over] *= sc
+        flow_u[over] *= sc
+
+    # ── Apply warp ────────────────────────────────────────────────────────
+    warped = _warp_label_with_flow(label, flow_v, flow_u)
+
+    # Clip to dilated brain region (gentle — large dilation to not over-clip)
+    clip_small = morphology.dilation(brain_filled, morphology.disk(max(3, fill_r))).astype(bool)
+    clip_full = resize(clip_small.astype(np.float32), (h, w), order=0) > 0.5
+    warped = np.where(clip_full, warped, 0).astype(np.int32)
+
+    return warped, {
+        "ok": True,
+        "method": "silhouette_tvl1_flow",
+        "max_disp_px": float(max_disp),
+        "ds_size": int(ds_size),
+    }
+
+
+def _contour_conform_warp(
+    label: np.ndarray,
+    real_u8: np.ndarray,
+    tissue_mask: np.ndarray | None = None,
+    n_contour_pts: int = 72,
+    tps_smooth: float = 4.0,
+    max_disp_ratio: float = 0.22,
+    max_disp_min_px: float = 30.0,
+    fill_radius: int = 30,
+    ds_size: int = 320,
+) -> tuple[np.ndarray, dict]:
+    """Boundary-conforming warp: fit atlas outer boundary to tissue contour via TPS.
+
+    Designed for sparse cleared-brain data where intensity-based registration fails.
+    Derives the brain outline from real_u8 using a low global threshold + morphological
+    closing, which captures the full brain boundary even when fluorescent signal is sparse
+    or when the tissue_mask only covers a narrow bright strip.
+
+    All morphological operations run on a downsampled image (ds_size px longest side)
+    to keep runtime fast; contour points are scaled back to full resolution before TPS.
+    """
+    h, w = label.shape
+    if int(np.sum(label > 0)) < 100:
+        return label, {"ok": False, "reason": "empty_label"}
+
+    # ── Downsample scale for fast morphology ─────────────────────────────
+    ds = float(ds_size) / float(max(h, w))
+    dh = max(32, int(round(h * ds)))
+    dw = max(32, int(round(w * ds)))
+
+    def _ds_bin(arr: np.ndarray) -> np.ndarray:
+        return resize(arr.astype(np.float32), (dh, dw),
+                      order=0, preserve_range=True, anti_aliasing=False) > 0.5
+
+    # ── Build brain outline from real image (low-threshold → fill gaps) ──
+    # Use real_u8 with a low global threshold to capture the full brain silhouette,
+    # not just the bright fluorescent spots that the tissue_mask contains.
+    real_small = resize(real_u8.astype(np.float32), (dh, dw),
+                        order=1, preserve_range=True, anti_aliasing=True)
+    # Low threshold: 10th percentile of non-zero pixels (captures full brain outline)
+    nz = real_small[real_small > 3]
+    thr_low = float(np.percentile(nz, 10)) if nz.size > 50 else float(np.percentile(real_small, 10))
+    brain_rough = real_small > thr_low
+    # Fill with large closing disk to get a solid brain silhouette
+    fill_r_ds = max(4, int(round(fill_radius * ds)))
+    tissue_filled = morphology.closing(brain_rough, morphology.disk(fill_r_ds))
+    tissue_filled = morphology.dilation(tissue_filled, morphology.disk(max(2, fill_r_ds // 4)))
+    lbl_t = measure.label(tissue_filled)
+    if lbl_t.max() > 1:
+        areas = {r.label: r.area for r in measure.regionprops(lbl_t)}
+        tissue_filled = (lbl_t == max(areas, key=areas.__getitem__))
+
+    # If we have a tissue_mask hint, use it to restrict to the correct hemisphere
+    if tissue_mask is not None and int(np.sum(tissue_mask)) > 100:
+        hemi_small = _ds_bin(tissue_mask)
+        # Dilate hint mask to get the hemisphere region, intersect with brain silhouette
+        hemi_dilated = morphology.dilation(hemi_small, morphology.disk(max(3, fill_r_ds)))
+        tissue_filled = tissue_filled & hemi_dilated
+
+    # Always use the real-image derived silhouette (hemisphere-restricted if hint provided).
+    # Do NOT fall back to the sparse tissue_mask here — for cleared brain the mask only
+    # covers bright cell spots, not the full brain outline.
+    tissue_small = tissue_filled
+    label_small  = _ds_bin(label > 0)
+
+    # ── 1. Filled tissue contour (on small image) ─────────────────────────
+    # fill_radius in pixels at downsampled scale
+    fill_r_ds = max(3, int(round(fill_radius * ds)))
+    tissue_filled = morphology.closing(tissue_small, morphology.disk(fill_r_ds))
+    tissue_filled = morphology.dilation(tissue_filled, morphology.disk(max(2, fill_r_ds // 5)))
+    lbl_t = measure.label(tissue_filled)
+    if lbl_t.max() > 1:
+        areas = {r.label: r.area for r in measure.regionprops(lbl_t)}
+        tissue_filled = (lbl_t == max(areas, key=areas.__getitem__))
+    t_contour = find_boundaries(tissue_filled, mode="outer", connectivity=2)
+    t_pts_ds = np.column_stack(np.where(t_contour))   # [row_ds, col_ds]
+    if len(t_pts_ds) < 20:
+        return label, {"ok": False, "reason": "too_few_tissue_contour_pts"}
+
+    # ── 2. Atlas outer boundary (on small image) ──────────────────────────
+    atlas_filled = morphology.dilation(label_small, morphology.disk(max(1, int(round(3 * ds)))))
+    lbl_a = measure.label(atlas_filled)
+    if lbl_a.max() > 1:
+        areas_a = {r.label: r.area for r in measure.regionprops(lbl_a)}
+        atlas_filled = (lbl_a == max(areas_a, key=areas_a.__getitem__))
+    a_contour = find_boundaries(atlas_filled, mode="outer", connectivity=2)
+    a_pts_ds = np.column_stack(np.where(a_contour))   # [row_ds, col_ds]
+    if len(a_pts_ds) < 20:
+        return label, {"ok": False, "reason": "too_few_atlas_contour_pts"}
+
+    # Scale contour points back to full resolution
+    scale_r = float(h) / float(dh)
+    scale_c = float(w) / float(dw)
+    t_pts = t_pts_ds.astype(np.float32) * np.array([scale_r, scale_c], dtype=np.float32)
+    a_pts = a_pts_ds.astype(np.float32) * np.array([scale_r, scale_c], dtype=np.float32)
+
+    # ── 3. Angular parameterisation → matched contour pairs ──────────────
+    t_cy = float(t_pts[:, 0].mean()); t_cx = float(t_pts[:, 1].mean())
+    a_cy = float(a_pts[:, 0].mean()); a_cx = float(a_pts[:, 1].mean())
+    t_angles = np.arctan2(t_pts[:, 0] - t_cy, t_pts[:, 1] - t_cx)
+    a_angles = np.arctan2(a_pts[:, 0] - a_cy, a_pts[:, 1] - a_cx)
+
+    sample_angles = np.linspace(-np.pi, np.pi, n_contour_pts, endpoint=False)
+    src_rc: list[np.ndarray] = []
+    dst_rc: list[np.ndarray] = []
+    for ang in sample_angles:
+        a_diff = np.abs(((a_angles - ang + np.pi) % (2 * np.pi)) - np.pi)
+        t_diff = np.abs(((t_angles - ang + np.pi) % (2 * np.pi)) - np.pi)
+        src_rc.append(a_pts[int(np.argmin(a_diff))])
+        dst_rc.append(t_pts[int(np.argmin(t_diff))])
+
+    src_rc_arr = np.array(src_rc, dtype=np.float32)
+    dst_rc_arr = np.array(dst_rc, dtype=np.float32)
+
+    # Remove near-duplicates (at downsampled precision)
+    pair_key = np.round(np.concatenate([src_rc_arr, dst_rc_arr], axis=1) * ds, 0)
+    _, uniq_idx = np.unique(pair_key, axis=0, return_index=True)
+    src_rc_arr = src_rc_arr[np.sort(uniq_idx)]
+    dst_rc_arr = dst_rc_arr[np.sort(uniq_idx)]
+    if len(src_rc_arr) < 8:
+        return label, {"ok": False, "reason": "too_few_contour_pairs"}
+
+    # ── 4. TPS displacement field (RBF thin-plate) ───────────────────────
+    du = (dst_rc_arr[:, 1] - src_rc_arr[:, 1]).astype(np.float64)
+    dv = (dst_rc_arr[:, 0] - src_rc_arr[:, 0]).astype(np.float64)
+
+    max_disp = float(max(max_disp_min_px, min(h, w) * max_disp_ratio))
+    mag = np.sqrt(du ** 2 + dv ** 2)
+    clip_mask_arr = mag > max_disp
+    if np.any(clip_mask_arr):
+        sc0 = max_disp / (mag[clip_mask_arr] + 1e-6)
+        du[clip_mask_arr] *= sc0
+        dv[clip_mask_arr] *= sc0
+
+    # RBF is evaluated on a coarse grid (speed), then upsampled
+    grid_step = max(8, min(h, w) // 60)
+    gy = np.arange(0, h, grid_step, dtype=np.float32)
+    gx = np.arange(0, w, grid_step, dtype=np.float32)
+    grid_x, grid_y = np.meshgrid(gx, gy)
+    try:
+        rbf_u = Rbf(src_rc_arr[:, 1], src_rc_arr[:, 0], du,
+                    function="thin_plate", smooth=float(tps_smooth))
+        rbf_v = Rbf(src_rc_arr[:, 1], src_rc_arr[:, 0], dv,
+                    function="thin_plate", smooth=float(tps_smooth))
+    except Exception as e:
+        return label, {"ok": False, "reason": f"rbf_failed: {e}"}
+
+    du_coarse = rbf_u(grid_x, grid_y).astype(np.float32)
+    dv_coarse = rbf_v(grid_x, grid_y).astype(np.float32)
+    flow_u = resize(du_coarse, (h, w), order=1, preserve_range=True,
+                    anti_aliasing=True).astype(np.float32)
+    flow_v = resize(dv_coarse, (h, w), order=1, preserve_range=True,
+                    anti_aliasing=True).astype(np.float32)
+    flow_u = gaussian_filter(flow_u, sigma=3.0).astype(np.float32)
+    flow_v = gaussian_filter(flow_v, sigma=3.0).astype(np.float32)
+
+    flow_mag = np.sqrt(flow_u ** 2 + flow_v ** 2)
+    over = flow_mag > max_disp
+    if np.any(over):
+        sc2 = max_disp / (flow_mag[over] + 1e-6)
+        flow_u[over] *= sc2
+        flow_v[over] *= sc2
+
+    # ── 5. Apply warp → clip to tissue ───────────────────────────────────
+    warped = _warp_label_with_flow(label, flow_v, flow_u)
+    # Dilate tissue mask slightly so atlas isn't over-clipped at boundaries
+    clip_disk = morphology.disk(max(2, int(round(20 * ds))))
+    clip_region = morphology.dilation(
+        tissue_small.astype(np.uint8), clip_disk
+    ).astype(bool)
+    clip_region_full = resize(clip_region.astype(np.float32), (h, w),
+                              order=0, preserve_range=True) > 0.5
+    warped = np.where(clip_region_full, warped, 0).astype(np.int32)
+
+    return warped, {
+        "ok": True,
+        "method": "contour_conform_tps",
+        "n_ctrl_pts": int(len(src_rc_arr)),
+        "max_disp_px": float(max_disp),
+    }
+
+
 def _refine_warp_nonlinear(
     real_u8: np.ndarray,
     label: np.ndarray,
@@ -1867,6 +2399,11 @@ def _tissue_guided_warp(
     rh, rw = real.shape[:2]
     real_u8 = _norm_u8_robust(real)
     phys_scale = float(atlas_res_um) / float(real_res_um)
+    # tissue_shrink_factor < 1.0 makes the atlas smaller to compensate for
+    # tissue shrinkage during clearing (e.g. iDISCO+: ~10-15% linear shrinkage → 0.85-0.90)
+    _shrink = float(_warp_param(warp_params, "tissue_shrink_factor", 1.0))
+    if _shrink != 1.0:
+        phys_scale = phys_scale * float(np.clip(_shrink, 0.5, 1.5))
     edge_inner_weight = float(_warp_param(warp_params, "edge_inner_weight", 1.00))
     edge_outer_weight = float(_warp_param(warp_params, "edge_outer_weight", 0.55))
     mask_dice_weight = float(_warp_param(warp_params, "mask_dice_weight", 0.35))
@@ -1878,16 +2415,80 @@ def _tissue_guided_warp(
     opt_iter_secondary = int(_warp_param(warp_params, "linear_opt_maxiter_secondary", max(45, int(opt_maxiter * 0.72))))
     keep_margin = float(_warp_param(warp_params, "linear_opt_keep_margin", -0.003))
 
-    info = _detect_tissue(real)
-    if not info["ok"]:
-        out, _fitted = _align_shape_physical(label, (rh, rw), atlas_res_um, real_res_um, fit_mode)
-        return out.astype(np.int32), {"method": "fallback_center"}
-
-    t_cy, t_cx = info["centroid"]
-    t_h, t_w = info["hw"]
-    tissue_aspect = t_h / max(t_w, 1)
-    tissue_orientation = info.get("orientation", 0.0)
-    tissue_mask = info.get("mask", None)
+    # If force_hemisphere is set, compute tissue centroid from the correct image half
+    # using a robust high-percentile threshold (ignores background noise).
+    # This fixes sparse cleared-brain data where _detect_tissue picks up the whole image.
+    # NOTE: "right" hemisphere atlas is placed in original (non-mirrored) orientation with
+    # medial face at image center and lateral face to the RIGHT of center.
+    # "left" hemisphere: medial at center, lateral to the LEFT.
+    force_hemi_for_tissue = str(_warp_param(warp_params, "force_hemisphere", "")).lower().strip()
+    if force_hemi_for_tissue in ("right", "right_flipped"):
+        # Right hemisphere → look at RIGHT half of image (brain is on right side)
+        _half = real[:, rw // 2:].astype(np.float32)
+        _thr = float(np.percentile(_half, 85))
+        _mask_half = _half > _thr
+        _ys, _xs = np.where(_mask_half)
+        if len(_ys) > 50:
+            t_cy = float(np.mean(_ys))
+            t_cx = float(np.mean(_xs)) + rw // 2   # shift back to full image coords
+            t_h = int(_ys.max() - _ys.min() + 1)
+            t_w = int(_xs.max() - _xs.min() + 1)
+        else:
+            t_cy, t_cx = rh / 2, rw * 3 / 4
+            t_h, t_w = rh, rw // 2
+        tissue_aspect = t_h / max(t_w, 1)
+        tissue_orientation = 0.0
+        _full_mask = np.zeros((rh, rw), dtype=bool)
+        _full_mask[:, rw // 2:] = (real[:, rw // 2:].astype(np.float32) > _thr)
+        tissue_mask = _full_mask
+    elif force_hemi_for_tissue == "right_mirrored":
+        # right_mirrored: brain on LEFT (legacy/radiological convention)
+        _half = real[:, :rw // 2].astype(np.float32)
+        _thr = float(np.percentile(_half, 85))
+        _mask_half = _half > _thr
+        _ys, _xs = np.where(_mask_half)
+        if len(_ys) > 50:
+            t_cy = float(np.mean(_ys))
+            t_cx = float(np.mean(_xs))
+            t_h = int(_ys.max() - _ys.min() + 1)
+            t_w = int(_xs.max() - _xs.min() + 1)
+        else:
+            t_cy, t_cx = rh / 2, rw / 4
+            t_h, t_w = rh, rw // 2
+        tissue_aspect = t_h / max(t_w, 1)
+        tissue_orientation = 0.0
+        _full_mask = np.zeros((rh, rw), dtype=bool)
+        _full_mask[:, :rw // 2] = (real[:, :rw // 2].astype(np.float32) > _thr)
+        tissue_mask = _full_mask
+    elif force_hemi_for_tissue == "left":
+        # Left hemisphere → look at RIGHT half of image
+        _half = real[:, rw // 2:].astype(np.float32)
+        _thr = float(np.percentile(_half, 85))
+        _mask_half = _half > _thr
+        _ys, _xs = np.where(_mask_half)
+        if len(_ys) > 50:
+            t_cy = float(np.mean(_ys))
+            t_cx = float(np.mean(_xs)) + rw // 2  # shift back to full image coords
+            t_h = int(_ys.max() - _ys.min() + 1)
+            t_w = int(_xs.max() - _xs.min() + 1)
+        else:
+            t_cy, t_cx = rh / 2, rw * 3 / 4
+            t_h, t_w = rh, rw // 2
+        tissue_aspect = t_h / max(t_w, 1)
+        tissue_orientation = 0.0
+        _full_mask = np.zeros((rh, rw), dtype=bool)
+        _full_mask[:, rw // 2:] = (real[:, rw // 2:].astype(np.float32) > _thr)
+        tissue_mask = _full_mask
+    else:
+        info = _detect_tissue(real)
+        if not info["ok"]:
+            out, _fitted = _align_shape_physical(label, (rh, rw), atlas_res_um, real_res_um, fit_mode)
+            return out.astype(np.int32), {"method": "fallback_center"}
+        t_cy, t_cx = info["centroid"]
+        t_h, t_w = info["hw"]
+        tissue_aspect = t_h / max(t_w, 1)
+        tissue_orientation = info.get("orientation", 0.0)
+        tissue_mask = info.get("mask", None)
 
     ay0, ax0, ay1, ax1 = _atlas_bbox(label)
     a_h = float(ay1 - ay0)
@@ -1915,11 +2516,165 @@ def _tissue_guided_warp(
     left_label[:, a_mid_x:] = 0
     right_label = np.fliplr(label.astype(np.int32).copy())
     right_label[:, a_mid_x:] = 0
-    raw_candidates = [
+    # right_orig: right hemisphere in ORIGINAL (non-flipped) orientation
+    # x increases from medial (a_mid_x) to lateral (a_w-1).
+    # This places medial at image center and lateral to the RIGHT — correct for
+    # a right hemisphere that appears on the right side of the light-sheet image.
+    right_orig_label = label.astype(np.int32).copy()
+    right_orig_label[:, :a_mid_x] = 0
+    # right_flipped: right hemisphere LR-flipped so lateral is at LEFT, medial at RIGHT.
+    # Use when the brain is on the RIGHT of the image but with lateral surface facing
+    # inward (left) and medial cut surface facing outward (right).
+    right_flipped_label = np.fliplr(right_orig_label.copy())
+    all_candidates = [
         ("full", full_label, False, "full"),
         ("left", left_label, True, "left"),
         ("right_mirrored", right_label, True, "right_mirrored"),
+        ("right_orig", right_orig_label, True, "right_orig"),
+        ("right_flipped", right_flipped_label, True, "right_flipped"),
     ]
+    # If caller specifies hemisphere, skip the irrelevant candidates entirely
+    # (avoids the scoring competition that always favours full-brain on sparse tissue)
+    force_hemi = str(_warp_param(warp_params, "force_hemisphere", "")).lower().strip()
+    if force_hemi == "left":
+        raw_candidates = [c for c in all_candidates if c[0] == "left"]
+    elif force_hemi == "right":
+        raw_candidates = [c for c in all_candidates if c[0] == "right_orig"]
+    elif force_hemi == "right_mirrored":
+        raw_candidates = [c for c in all_candidates if c[0] == "right_mirrored"]
+    elif force_hemi == "right_flipped":
+        raw_candidates = [c for c in all_candidates if c[0] == "right_flipped"]
+    else:
+        raw_candidates = all_candidates
+
+    # Save tissue mask from detection block for boundary-conforming warp later.
+    # The physical placement block below sets tissue_mask=None for candidate scoring,
+    # but we want the detected mask for _contour_conform_warp.
+    _detected_tissue_mask = tissue_mask
+
+    # For forced hemisphere, set atlas physical size (t_h/t_w) from atlas voxel scale.
+    # For "right": t_cx comes from the tissue-detection block above (right-half centroid).
+    # For "right_mirrored"/"left": t_cx is formula-based (legacy).
+    # t_cy = image vertical center; tissue_mask = None (use all atlas voxels for scoring).
+    if force_hemi in ("right", "right_flipped", "right_mirrored", "left"):
+        # Atlas bbox in voxels → image pixels at physical scale
+        cand_label_for_size = raw_candidates[0][1]
+        cb0y, cb0x, cb1y, cb1x = _atlas_bbox(cand_label_for_size)
+        atlas_h_px = float(cb1y - cb0y) * phys_scale
+        atlas_w_px = float(cb1x - cb0x) * phys_scale
+        t_cy = float(rh) / 2.0
+        t_h = atlas_h_px
+        t_w = atlas_w_px
+        tissue_aspect = atlas_h_px / max(atlas_w_px, 1.0)
+        tissue_mask = None
+
+        if force_hemi == "right":
+            # right_orig: align atlas MEDIAL edge (cb0x) with brain's LEFT edge (medial cut).
+            # Brain's left edge = robust leftmost extent of brain tissue in full image.
+            # t_cx = x_brain_left + atlas_w_px/2  (places cb0x at x_brain_left exactly)
+            _img_f = real.astype(np.float32)
+            _nz_f = _img_f[_img_f > 5]
+            _thr_full = float(np.percentile(_nz_f, 15)) if len(_nz_f) > 500 else 50.0
+            _bmask_full = _img_f > _thr_full
+            try:
+                _bmask_full = morphology.closing(_bmask_full, morphology.disk(8))
+            except Exception:
+                pass
+            _bcols = np.where(_bmask_full.any(axis=0))[0]
+            if len(_bcols) > 100:
+                x_brain_left = float(np.percentile(_bcols, 3))
+                t_cx = x_brain_left + atlas_w_px / 2.0
+        elif force_hemi == "right_flipped":
+            # right_flipped: single right hemisphere, lateral at LEFT, medial at RIGHT.
+            # Detect the actual brain bounding box and scale atlas to cover it directly.
+            # This handles the case where the tissue size differs from the atlas size
+            # (e.g. due to clearing-induced expansion/shrinkage or pixel-size uncertainty).
+            _img_f = real.astype(np.float32)
+            _nz_f = _img_f[_img_f > 5]
+            _thr_full = float(np.percentile(_nz_f, 30)) if len(_nz_f) > 500 else 80.0
+            _bmask_full = _img_f > _thr_full
+            try:
+                # Large closing disk to fill interior holes; then keep only the largest blob
+                _bmask_full = morphology.closing(_bmask_full, morphology.disk(40))
+                from skimage import measure as _skm
+                _labeled = _skm.label(_bmask_full)
+                if _labeled.max() > 0:
+                    _sizes = np.bincount(_labeled.ravel())
+                    _sizes[0] = 0
+                    _bmask_full = (_labeled == _sizes.argmax())
+            except Exception:
+                pass
+            _bcols = np.where(_bmask_full.any(axis=0))[0]
+            _brows = np.where(_bmask_full.any(axis=1))[0]
+            if len(_bcols) > 100 and len(_brows) > 100:
+                x_brain_left = float(np.percentile(_bcols, 2))
+                x_brain_right = float(np.percentile(_bcols, 98))
+                y_brain_top = float(np.percentile(_brows, 2))
+                y_brain_bot = float(np.percentile(_brows, 98))
+                t_cy = (y_brain_bot + y_brain_top) / 2.0
+                tissue_aspect = (y_brain_bot - y_brain_top) / max(x_brain_right - x_brain_left, 1.0)
+
+                # Compute accurate tissue mask using 4-sigma corner-background threshold.
+                # This is far more precise than _bmask_full (30th percentile) and is used for:
+                #   (a) area-adaptive atlas scaling
+                #   (b) tissue_mask passed to finalize_registered_label
+                _b = 80
+                _corners_flat = np.concatenate([
+                    _img_f[:_b, :_b].ravel(), _img_f[:_b, -_b:].ravel(),
+                    _img_f[-_b:, :_b].ravel(), _img_f[-_b:, -_b:].ravel()])
+                _bg_thr4s = float(np.mean(_corners_flat) + 4.0 * np.std(_corners_flat))
+                _tissue_accurate_4sig = _img_f > _bg_thr4s
+                try:
+                    _tissue_accurate_4sig = morphology.closing(
+                        _tissue_accurate_4sig, morphology.disk(30))
+                    from skimage import measure as _skm2
+                    _lbl2 = _skm2.label(_tissue_accurate_4sig)
+                    if _lbl2.max() > 0:
+                        _sz2 = np.bincount(_lbl2.ravel())
+                        _sz2[0] = 0
+                        _tissue_accurate_4sig = (_lbl2 == _sz2.argmax())
+                except Exception:
+                    pass
+                _bmask_area = float(_tissue_accurate_4sig.sum())
+                # Area-adaptive scaling: scale atlas so its footprint area matches
+                # the detected tissue area. This prevents the atlas from overflowing
+                # tissue boundaries when the atlas cross-section at this AP is larger
+                # than the actual cleared tissue (common for anterior/posterior slices).
+                _atlas_count = float((cand_label_for_size > 0).sum())
+                _cb_bh = float(max(1, cb1y - cb0y))
+                _cb_bw = float(max(1, cb1x - cb0x))
+                if _atlas_count > 100 and _bmask_area > 100:
+                    _area_scale = float(np.sqrt(_bmask_area / max(_atlas_count * phys_scale ** 2, 1.0)))
+                    _area_scale = float(np.clip(_area_scale, 0.5, 1.5))
+                else:
+                    _area_scale = 1.0
+                # Override t_h/t_w to encode the area scale: fit_h = fit_w = _area_scale.
+                # Anchor atlas medial edge (right side of flipped atlas) to x_brain_right.
+                t_w = _cb_bw * phys_scale * _area_scale
+                t_h = _cb_bh * phys_scale * _area_scale
+                t_cx = x_brain_right - t_w / 2.0
+        elif force_hemi == "right_mirrored":
+            # Flipped atlas: x=0=lateral, x=a_mid_x=medial. Keep legacy formula.
+            full_brain_px = a_w * phys_scale
+            t_cx = float(rw) / 2.0 - full_brain_px / 4.0
+        else:  # left
+            full_brain_px = a_w * phys_scale
+            t_cx = float(rw) / 2.0 + full_brain_px / 4.0
+
+        # For right_flipped: restore tissue_mask from the brain silhouette we detected above,
+        # so that finalize_registered_label clips the atlas to the actual brain boundary.
+        # Use the 4-sigma corners mask (_tissue_accurate_4sig) if available — it is much more
+        # precise than _bmask_full (30th-percentile), which includes too much background and
+        # causes _fill_outer_missing_tissue_nearest to expand the atlas beyond true tissue.
+        if force_hemi == "right_flipped":
+            if "_tissue_accurate_4sig" in dir():
+                tissue_mask = _tissue_accurate_4sig
+            elif "_bmask_full" in dir():
+                tissue_mask = _bmask_full
+
+    # Determine whether to skip optimizer before the candidate loop (used inside it)
+    skip_linear_opt = force_hemi in ("right", "right_flipped", "right_mirrored", "left") and \
+        bool(_warp_param(warp_params, "physical_placement_skip_opt", True))
 
     candidates: list[dict] = []
     for name, cand_label, is_half, hemi in raw_candidates:
@@ -1942,7 +2697,9 @@ def _tissue_guided_warp(
             fit_mode,
             (rh, rw),
         )
-        if name == "full":
+        if name == "full" or skip_linear_opt:
+            # For physical placement (skip_linear_opt), use zero rotation:
+            # any rotation shifts the centroid away from t_cx due to the off-axis DV extent.
             init_angle = 0.0
         else:
             init_angle = _clamp_angle(float(tissue_orientation - _atlas_orientation(cand_label)))
@@ -1985,12 +2742,25 @@ def _tissue_guided_warp(
             }
         )
 
+    # skip_linear_opt was computed above (before candidate loop).
+    # For physical placement (force_hemisphere), disable intensity-based nonlinear
+    # (it gets confused by sparse cell signals) and use contour-conform instead.
+    if skip_linear_opt:
+        enable_nonlinear = False
+    _enable_contour_conform = (
+        skip_linear_opt
+        and _detected_tissue_mask is not None
+        and bool(_warp_param(warp_params, "enable_silhouette_conform", True))
+    )
+
     ranked_idx = sorted(range(len(candidates)), key=lambda i: candidates[i]["init"]["objective"], reverse=True)
     for rank, idx in enumerate(ranked_idx):
         c = candidates[idx]
         c["best"] = dict(c["init"])
         c["best"]["state"] = "initial"
         if rank >= int(candidate_top_n):
+            continue
+        if skip_linear_opt:
             continue
         try:
             maxiter_local = int(opt_iter_primary if rank == 0 else opt_iter_secondary)
@@ -2088,7 +2858,35 @@ def _tissue_guided_warp(
     chosen_dx = float(chosen["best"]["dx"])
     chosen_dy = float(chosen["best"]["dy"])
 
-    if enable_nonlinear:
+    if _enable_contour_conform:
+        # Contour-conforming TPS warp: fit atlas boundary to tissue outline.
+        # Use atlas bbox + generous padding as hint so tissue silhouette detection
+        # covers the real brain boundary around the atlas (not just the atlas footprint).
+        # Padding is 20% of min(rh,rw) so the hint extends well beyond the atlas edge.
+        _hemi_hint: np.ndarray | None = None
+        try:
+            _ay0, _ax0, _ay1, _ax1 = _atlas_bbox(warped)
+            _pad = max(80, int(0.20 * min(rh, rw)))
+            _hemi_hint = np.zeros((rh, rw), dtype=bool)
+            _hemi_hint[
+                max(0, _ay0 - _pad): min(rh, _ay1 + _pad),
+                max(0, _ax0 - _pad): min(rw, _ax1 + _pad),
+            ] = True
+        except Exception:
+            _hemi_hint = None
+
+        warped, nl_meta = _contour_conform_warp(
+            warped,
+            real_u8,
+            tissue_mask=_hemi_hint,
+            n_contour_pts=int(_warp_param(warp_params, "contour_n_pts", 72)),
+            tps_smooth=float(_warp_param(warp_params, "contour_tps_smooth", 4.0)),
+            max_disp_ratio=float(_warp_param(warp_params, "contour_max_disp_ratio", 0.12)),
+            max_disp_min_px=float(_warp_param(warp_params, "contour_max_disp_min_px", 40.0)),
+            fill_radius=int(_warp_param(warp_params, "contour_fill_radius", 40)),
+            ds_size=int(_warp_param(warp_params, "contour_ds_size", 320)),
+        )
+    elif enable_nonlinear:
         warped, nl_meta = _refine_warp_nonlinear(
             real_u8,
             warped,
@@ -2189,19 +2987,29 @@ def _paint_boundaries(canvas: np.ndarray, mask: np.ndarray, color) -> None:
     canvas[bd] = color
 
 
-def _paint_contours_smooth(canvas: np.ndarray, mask: np.ndarray, color) -> None:
-    """Draw anti-aliased contours if cv2 is available; fallback to boundary raster."""
+def _paint_contours_smooth(canvas: np.ndarray, mask: np.ndarray, color,
+                           thickness: int = 2) -> None:
+    """Draw smooth anti-aliased contours.
+
+    The mask is Gaussian-blurred before contour detection so that block-scaled
+    atlas pixels produce smooth curves instead of staircase edges.
+    """
     try:
         import cv2 as _cv2
-        arr = (mask > 0).astype(np.uint8)
-        contours, _ = _cv2.findContours(arr, _cv2.RETR_EXTERNAL, _cv2.CHAIN_APPROX_NONE)
+        arr = (mask > 0).astype(np.uint8) * 255
+        # Blur radius must be larger than the atlas voxel size in pixels to smooth staircase edges.
+        # Atlas voxels are ~5-8px wide at typical scales; use ~3x that as sigma → ksize ≈ 25-45px.
+        ksize = max(21, int(min(canvas.shape[:2]) * 0.025) | 1)  # odd number
+        blurred = _cv2.GaussianBlur(arr, (ksize, ksize), 0)
+        _, binary = _cv2.threshold(blurred, 127, 255, _cv2.THRESH_BINARY)
+        contours, _ = _cv2.findContours(binary, _cv2.RETR_EXTERNAL, _cv2.CHAIN_APPROX_TC89_KCOS)
         if contours:
             _cv2.drawContours(
                 canvas,
                 contours,
                 contourIdx=-1,
                 color=tuple(int(c) for c in color),
-                thickness=1,
+                thickness=thickness,
                 lineType=_cv2.LINE_AA,
             )
         return
@@ -2211,9 +3019,41 @@ def _paint_contours_smooth(canvas: np.ndarray, mask: np.ndarray, color) -> None:
 
 
 def draw_contours(label_img: np.ndarray, color=(255, 255, 255)) -> np.ndarray:
+    """Draw all inter-region boundaries (internal + outer) from a label map.
+
+    Uses find_boundaries for a single-pass boundary extraction, then smooths
+    each connected contour curve using moving-average point smoothing via cv2.
+    """
+    from skimage.segmentation import find_boundaries
     h, w = label_img.shape
     canvas = np.zeros((h, w, 3), dtype=np.uint8)
-    _paint_contours_smooth(canvas, label_img, color)
+    # Single-pass: all region boundaries at once
+    boundary = find_boundaries(label_img, mode='inner', connectivity=2).astype(np.uint8) * 255
+    try:
+        import cv2 as _cv2
+        # Find individual contour curves
+        contours, _ = _cv2.findContours(boundary, _cv2.RETR_LIST, _cv2.CHAIN_APPROX_NONE)
+        smoothed = []
+        win = max(5, int(min(h, w) * 0.012))   # moving-average window ~1.2% of image
+        for cnt in contours:
+            if len(cnt) < 6:
+                smoothed.append(cnt)
+                continue
+            pts = cnt[:, 0, :].astype(np.float32)   # (N, 2)
+            n = len(pts)
+            # Circular moving average on x and y
+            tiled = np.tile(pts, (3, 1))
+            sx = np.convolve(tiled[:, 0], np.ones(win) / win, 'valid')[n: 2 * n]
+            sy = np.convolve(tiled[:, 1], np.ones(win) / win, 'valid')[n: 2 * n]
+            smooth_cnt = np.round(np.column_stack([sx, sy])).astype(np.int32)
+            smoothed.append(smooth_cnt.reshape(-1, 1, 2))
+        color_bgr = tuple(int(c) for c in color)
+        _cv2.polylines(canvas, smoothed, isClosed=True, color=color_bgr,
+                       thickness=1, lineType=_cv2.LINE_AA)
+    except Exception:
+        # Fallback: just paint the raw boundary pixels
+        mask = boundary > 0
+        canvas[mask] = color
     return canvas
 
 
@@ -2266,7 +3106,12 @@ def render_overlay(
     edge_smooth_iter: int = 1,
     warp_params: dict | None = None,
     prewarped_label: bool = False,
+    display_gamma: float = 1.0,
 ):
+    render_t0 = time.perf_counter()
+    timings_ms: dict[str, float | dict[str, float]] = {}
+
+    t0 = time.perf_counter()
     real_raw = imread(str(real_slice_path))
     label_raw = imread(str(label_slice_path))
     real, real_slice_meta = select_real_slice_2d(
@@ -2278,6 +3123,7 @@ def render_overlay(
         label_raw,
         z_index=label_z_index,
     )
+    timings_ms["load_inputs"] = float((time.perf_counter() - t0) * 1000.0)
 
     label_shape_before = tuple(int(x) for x in label.shape)
     real_shape = tuple(int(x) for x in real.shape)
@@ -2292,6 +3138,7 @@ def render_overlay(
         label = np.flipud(label)
 
     # 鈹€鈹€ Tissue-guided registration 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    t0 = time.perf_counter()
     if bool(prewarped_label):
         # Manual-calibration path: label is already in real-image coordinates.
         if label.shape != real.shape:
@@ -2319,44 +3166,62 @@ def render_overlay(
             warp_params=warp_params,
         )
 
-    # 鈹€鈹€ Clip atlas to actual tissue footprint 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-    # Reuse tissue mask from registration (avoids second _detect_tissue call).
-    try:
-        tight = warp_meta.get("tissue_mask")
-        if tight is not None:
-            # 3px dilation: enough to keep atlas at tissue boundary, won't let it far outside
-            tissue_clip = morphology.dilation(tight.astype(np.uint8), morphology.disk(3)).astype(bool)
-            label = np.where(tissue_clip, label, 0).astype(np.int32)
-    except Exception:
-        pass
-    try:
-        cleanup_params = dict(warp_params or {})
-        if str(mode or "fill").lower() != "fill":
-            cleanup_params["cleanup_fill_outer_missing"] = False
-        label = _cleanup_label_topology(
-            label.astype(np.int32),
-            tissue_mask=warp_meta.get("tissue_mask"),
-            warp_params=cleanup_params,
-        )
-    except Exception:
-        pass
-    try:
-        label = _smooth_label_edges(
-            label.astype(np.int32),
-            tissue_mask=warp_meta.get("tissue_mask"),
-            iterations=max(0, int(edge_smooth_iter)),
-        )
-    except Exception:
-        pass
-    try:
-        if str(mode or "fill").lower() in ("fill",):
-            label = _gaussian_vote_boundary_smooth(
-                label.astype(np.int32),
-                tissue_mask=warp_meta.get("tissue_mask"),
-                warp_params=warp_params,
+        # ── SimpleITK nonlinear refinement via Allen reference image ──────────
+        # Uses the Allen Nissl thumbnail at this AP slice as a moving image,
+        # registers it to the lightsheet image, and applies the same displacement
+        # to the label map.  Only runs when enable_sitk_ref_refine=True.
+        if bool(_warp_param(warp_params, "enable_sitk_ref_refine", False)) and label_z_index is not None:
+            t0_sitk = time.perf_counter()
+            _total_scale = float(warp_meta.get("total_scale", 1.0))
+            _angle_rad   = float(np.deg2rad(warp_meta.get("angle_deg", 0.0)))
+            _tx, _ty     = warp_meta.get("translation", [0.0, 0.0])
+            _hemi        = str(warp_meta.get("hemisphere_chosen", "right_flipped"))
+            _placed_ref  = _load_placed_allen_ref(
+                atlas_z=int(label_z_index),
+                total_scale=_total_scale,
+                angle_rad=_angle_rad,
+                dx=float(_tx), dy=float(_ty),
+                out_shape=(real.shape[0], real.shape[1]),
+                hemisphere=_hemi,
             )
+            _sitk_meta: dict = {"applied": False}
+            if _placed_ref is not None and _placed_ref.max() > 0.01:
+                real_u8_for_sitk = _norm_u8_robust(real)
+                _flow = _sitk_nonlinear_register(
+                    placed_ref=_placed_ref,
+                    real_u8=real_u8_for_sitk,
+                    tissue_mask=warp_meta.get("tissue_mask"),
+                    max_dim=int(_warp_param(warp_params, "sitk_max_dim", 512)),
+                    mi_bins=int(_warp_param(warp_params, "sitk_mi_bins", 32)),
+                    max_iter=int(_warp_param(warp_params, "sitk_max_iter", 60)),
+                    mesh_size=int(_warp_param(warp_params, "sitk_mesh_size", 8)),
+                    max_disp_frac=float(_warp_param(warp_params, "sitk_max_disp_frac", 0.12)),
+                )
+                if _flow is not None:
+                    label = _warp_label_with_flow(label, _flow[0], _flow[1])
+                    _sitk_meta = {"applied": True, "time_ms": float((time.perf_counter() - t0_sitk) * 1000)}
+            warp_meta["sitk_refine"] = _sitk_meta
+
+    timings_ms["registration"] = float((time.perf_counter() - t0) * 1000.0)
+
+    t0 = time.perf_counter()
+    try:
+        label, postprocess_timings = finalize_registered_label(
+            label.astype(np.int32),
+            tissue_mask=warp_meta.get("tissue_mask"),
+            mode=mode,
+            edge_smooth_iter=edge_smooth_iter,
+            warp_params=warp_params,
+            cleanup_label_topology=_cleanup_label_topology,
+            smooth_label_edges=_smooth_label_edges,
+            gaussian_vote_boundary_smooth=_gaussian_vote_boundary_smooth,
+        )
     except Exception:
-        pass
+        postprocess_timings = {}
+    timings_ms["postprocess"] = {
+        **({k: float(v) for k, v in postprocess_timings.items()} if isinstance(postprocess_timings, dict) else {}),
+        "wall": float((time.perf_counter() - t0) * 1000.0),
+    }
     # 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     label_shape_after = tuple(int(x) for x in label.shape)
@@ -2366,53 +3231,35 @@ def render_overlay(
     cy_full = float(ry + rh2 / 2.0)
 
     real_u8 = _norm_u8_robust(real)
+    # Gamma correction for display: values < 1.0 brighten dim cleared-tissue images.
+    # Applied after robust stretch so the correction operates on the full 0-255 range.
+    if display_gamma != 1.0:
+        _g = float(np.clip(display_gamma, 0.2, 3.0))
+        real_u8 = (255.0 * (real_u8.astype(np.float32) / 255.0) ** _g).astype(np.uint8)
 
-    # 鈹€鈹€ Coloring: Allen official colors (hex) 鈫?prefer over CSV / LUT 鈹€鈹€鈹€鈹€鈹€鈹€
-    tree = _load_structure_tree()
-    colored = None
-
-    if tree:
-        colored = np.zeros((*label.shape, 3), dtype=np.uint8)
-        for rid in np.unique(label.astype(np.int32)):
-            if rid == 0:
-                continue
-            info = tree.get(str(rid))
-            if info and info.get("color") and len(info["color"]) == 6:
-                hx = info["color"]
-                r = int(hx[0:2], 16); g = int(hx[2:4], 16); b = int(hx[4:6], 16)
-                colored[label == rid] = (r, g, b)
-            else:
-                # Fallback deterministic color
-                rng = (int(rid) * 2654435761) & 0xFFFFFF
-                colored[label == rid] = ((rng >> 16) & 0xFF, (rng >> 8) & 0xFF, rng & 0xFF)
-    elif structure_csv is not None:
-        cmap = load_allen_color_map(structure_csv)
-        if cmap:
-            colored = np.zeros((*label.shape, 3), dtype=np.uint8)
-            for rid in np.unique(label.astype(np.int32)):
-                if rid == 0:
-                    continue
-                color = cmap.get(int(rid))
-                if color is not None:
-                    colored[label == rid] = np.array(color, dtype=np.uint8)
-
-    if colored is None:
-        lut = np.array([
-            [20, 20, 20], [0, 200, 255], [0, 255, 120], [255, 120, 180],
-            [255, 70, 70], [220, 220, 80], [160, 120, 255], [255, 180, 70],
-        ], dtype=np.uint8)
-        colored = lut[(label.astype(np.int32) % len(lut))]
+    t0 = time.perf_counter()
+    colored = colorize_label(label.astype(np.int32), structure_csv=structure_csv)
+    timings_ms["colorize"] = float((time.perf_counter() - t0) * 1000.0)
 
     # Retrieve tissue mask for outer boundary (cached from registration)
     _tissue_mask_for_contour = warp_meta.get("tissue_mask")
 
+    t0 = time.perf_counter()
     if mode == "contour":
         colored = draw_contours(label)
     elif mode == "contour-major":
         colored = draw_contours_major(label, top_k=major_top_k,
                                       tissue_mask=_tissue_mask_for_contour)
+    elif mode == "fill+contour":
+        # Filled regions + boundary lines on top (no clip artifacts)
+        lines = draw_contours(label)
+        line_mask = lines.any(axis=2)
+        colored[line_mask] = lines[line_mask]
+    timings_ms["render_mode"] = float((time.perf_counter() - t0) * 1000.0)
 
+    t0 = time.perf_counter()
     overlay = alpha_blend(real_u8, colored, alpha)
+    timings_ms["alpha_blend"] = float((time.perf_counter() - t0) * 1000.0)
 
     # Quality guard (lower threshold for contour modes which are mostly black)
     effective_thr = min_mean_threshold if mode == "fill" else min(float(min_mean_threshold) * 0.25, 2.0)
@@ -2423,15 +3270,57 @@ def render_overlay(
         )
 
     # 鈹€鈹€ Region labels 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    t0 = time.perf_counter()
     if mode in ("fill",):
         overlay = draw_region_labels(overlay, label)
+    timings_ms["draw_region_labels"] = float((time.perf_counter() - t0) * 1000.0)
 
+    # ── Hard tissue boundary constraint ──────────────────────────────────────
+    # Atlas must never overflow the real brain boundary.  We clip the final
+    # overlay with a feathered tissue mask (12-px fade) so there are no
+    # hard-edge "hedgehog" spikes and no coloured regions outside the tissue.
+    _hard_tissue = _tissue_mask_for_contour
+    if _hard_tissue is None or _hard_tissue.shape != overlay.shape[:2]:
+        # Fallback: recompute from raw image using 4-sigma corner-background threshold.
+        _b2 = 80
+        _rf = real.astype(np.float32)
+        _c2 = np.concatenate([
+            _rf[:_b2, :_b2].ravel(), _rf[:_b2, -_b2:].ravel(),
+            _rf[-_b2:, :_b2].ravel(), _rf[-_b2:, -_b2:].ravel(),
+        ])
+        _thr2 = float(np.mean(_c2) + 4.0 * np.std(_c2))
+        _hard_tissue = _rf > _thr2
+        try:
+            _hard_tissue = morphology.closing(_hard_tissue, morphology.disk(30))
+            from skimage import measure as _skm3
+            _lbl3 = _skm3.label(_hard_tissue)
+            if _lbl3.max() > 0:
+                _sz3 = np.bincount(_lbl3.ravel())
+                _sz3[0] = 0
+                _hard_tissue = (_lbl3 == _sz3.argmax())
+        except Exception:
+            pass
+    if _hard_tissue is not None and _hard_tissue.shape == overlay.shape[:2]:
+        # Distance from tissue interior: 0 at boundary, grows inward.
+        _dist_in = distance_transform_edt(_hard_tissue.astype(np.uint8))
+        # Feather: 0→1 over 12 px, so the edge fades smoothly to background.
+        _edge_alpha = np.clip(_dist_in / 12.0, 0.0, 1.0).astype(np.float32)
+        _raw_rgb = np.stack([real_u8, real_u8, real_u8], axis=-1).astype(np.float32)
+        _ea3 = _edge_alpha[:, :, np.newaxis]
+        overlay = np.clip(
+            overlay.astype(np.float32) * _ea3 + _raw_rgb * (1.0 - _ea3),
+            0, 255,
+        ).astype(np.uint8)
+
+    t0 = time.perf_counter()
     out_png.parent.mkdir(parents=True, exist_ok=True)
     imwrite(str(out_png), overlay)
 
     if warped_label_out is not None:
         warped_label_out.parent.mkdir(parents=True, exist_ok=True)
         imwrite(str(warped_label_out), label.astype(np.int32))
+    timings_ms["save_outputs"] = float((time.perf_counter() - t0) * 1000.0)
+    timings_ms["total"] = float((time.perf_counter() - render_t0) * 1000.0)
 
     # Strip non-serializable internals from warp_meta before returning
     warp_meta.pop("tissue_mask", None)
@@ -2457,6 +3346,7 @@ def render_overlay(
             "roi_center_full": [cx_full, cy_full],
             "roi_roundtrip_error": 0.0,
             "warped_label_path": str(warped_label_out) if warped_label_out is not None else "",
+            "timings_ms": timings_ms,
             "warp": warp_meta,
         }
 

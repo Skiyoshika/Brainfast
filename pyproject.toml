@@ -1,0 +1,63 @@
+[project]
+name = "brainfast"
+description = "Brain atlas registration and cell counting for cleared-tissue microscopy"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dynamic = ["version"]
+
+dependencies = [
+    "flask>=3.0",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pillow>=10.0",
+    "scipy>=1.12",
+    "scikit-image>=0.22",
+    "tifffile>=2024.2",
+    "nibabel>=5.2",
+    "tqdm>=4.66",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+# pip install -e ".[advanced]"  — enables CellPose GPU detection
+advanced = [
+    "SimpleITK>=2.3",
+    "cellpose>=2.2",
+]
+# pip install -e ".[desktop]"  — for building a Windows EXE
+desktop = [
+    "pyinstaller>=6.0",
+]
+# pip install -e ".[dev]"  — developer tools
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "pytest-mock",
+    "pre-commit",
+    "ruff",
+]
+
+[project.scripts]
+brainfast-server   = "project.frontend.server:main"
+brainfast-pipeline = "project.scripts.main:main"
+
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["project*"]
+
+[tool.pytest.ini_options]
+testpaths = ["project/tests"]
+markers = [
+    "unit: fast tests — no atlas file or real images required",
+    "integration: tests that require annotation_25.nii.gz or real slice data",
+    "slow: tests that take >10s",
+]
+addopts = "-v"
+
+[tool.ruff]
+# Settings kept in ruff.toml at repo root

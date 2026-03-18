@@ -1,0 +1,84 @@
+{
+  "project": {
+    "name": "sample_35_demo",
+    "version": "demo-1.0"
+  },
+  "input": {
+    "slice_dir": "data/35_C0_demo",
+    "slice_glob": "z*.tif",
+    "sampling_mode": "single",
+    "slice_interval_n": 1,
+    "pixel_size_um_xy": 5.0,
+    "slice_spacing_um": 25.0,
+    "bit_depth": 16,
+    "channel_map": {
+      "red": 0
+    },
+    "active_channel": "red"
+  },
+  "target": {
+    "marker": "neurons",
+    "signal_type": "cyto"
+  },
+  "compute": {
+    "device": "cpu",
+    "gpu_name": "RTX 3070 Ti",
+    "vram_gb": 8
+  },
+  "registration": {
+    "mode": "2d_slice_with_3d_smoothness",
+    "auto_first": true,
+    "fail_score_threshold": 0.1,
+    "landmark_fallback": true,
+    "landmark_max_slices": 5,
+    "atlas_z_range": [0, 400],
+    "atlas_z_from_filename": true,
+    "atlas_z_z_scale": 0.2,
+    "atlas_z_offset": 150,
+    "atlas_hemisphere": "right_flipped",
+    "atlas_z_refine_range": 0,
+    "tissue_shrink_factor": 0.88,
+    "display_gamma": 0.65,
+    "ap_method": "formula",
+    "deepslice_max_deviation": 25,
+    "enable_silhouette_conform": false,
+    "enable_sitk_ref_refine": true,
+    "sitk_max_dim": 512,
+    "sitk_mi_bins": 32,
+    "sitk_max_iter": 60,
+    "sitk_mesh_size": 8,
+    "sitk_max_disp_frac": 0.12
+  },
+  "detection": {
+    "primary_model": "fallback",
+    "secondary_model": "none",
+    "merge_primary_secondary": false,
+    "cellpose_gpu": false,
+    "cellpose_diameter_um": 12.0,
+    "cellpose_channels": [0, 0],
+    "cellpose_flow_threshold": 0.4,
+    "cellpose_cellprob_threshold": 0.0,
+    "cellpose_min_size_px": 8,
+    "within_slice_dedup_px": 4.0,
+    "fallback_model": "log",
+    "fallback_log_min_sigma": 1.0,
+    "fallback_log_max_sigma": 4.0,
+    "fallback_log_num_sigma": 8,
+    "fallback_log_threshold_rel": 0.015,
+    "fallback_min_distance": 6,
+    "fallback_threshold": 150.0,
+    "auto_switch_on_distortion": true
+  },
+  "dedup": {
+    "enabled": true,
+    "method": "kdtree",
+    "neighbor_slices": 1,
+    "r_xy_um": 8.0,
+    "r_z_rule": "slice_spacing_um*0.5"
+  },
+  "outputs": {
+    "leaf_csv": "outputs/35_leaf.csv",
+    "hierarchy_csv": "outputs/35_hierarchy.csv",
+    "qc_dir": "outputs/35_qc"
+  }
+}

@@ -1,0 +1,26 @@
+# Ruff configuration for Brainfast
+target-version = "py310"
+line-length = 100
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+]
+ignore = [
+    "E501",  # line too long — ruff-format handles this
+    "B008",  # function call in default args (needed for Path defaults)
+    "UP007", # X | Y union type — keep for 3.10 compatibility
+]
+
+[lint.per-file-ignores]
+"project/tests/*" = ["F401", "F811"]  # tests may re-import for fixture setup
+"project/frontend/server.py" = ["E402"]  # sys.path manipulation before imports
+
+[format]
+quote-style = "double"
+indent-style = "space"

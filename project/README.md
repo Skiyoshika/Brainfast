@@ -1,224 +1,306 @@
-﻿# IdleBrain / IdleBrain 脑图谱配准与细胞计数工具
+# Brainfast / 脑图谱配准、人工校准与细胞计数工具
 
-## Overview / 项目简介
-IdleBrain is a practical workflow for atlas alignment, manual correction, and whole-brain cell counting from microscopy TIFF data.
+## Overview / 项目定位
 
-IdleBrain 是一个面向真实实验流程的工具链，用于显微切片的图谱配准、人工微调校准以及全脑细胞计数统计。
+Brainfast 解决的是一个很具体的问题：
+把真实显微切片和 Allen atlas 对齐，并在“能人工复审、能持续学习、能产出统计表”的前提下完成整套工作流。
 
-This repository currently contains an MVP + iterative improvements focused on better atlas fitting quality (especially internal boundaries) and reproducible outputs.
+如果你只想快速跑起来，看下面的“3 分钟开始”。
 
-当前仓库包含 MVP 与持续迭代版本，重点是提升图谱贴合质量（尤其内部边界）并保证结果可复现。
+如果你准备继续开发，看“架构图”“项目结构”“当前边界”这几个部分。
 
-## Key Features / 主要功能
-- Allen atlas slice auto-pick from annotation volume (`annotation_25.nii.gz`).
-- Tissue-guided initial registration with full/half-brain candidate competition.
-- Nonlinear refinement (flow, liquify-like field, optional ANTs candidate with safety guardrails).
-- Fill/contour overlay rendering with region hover query (acronym, parent, ID, color).
-- Manual landmark correction and re-alignment.
-- Liquify-style drag correction in preview mode.
-- Save calibration samples and auto-learn tuned parameters from train set.
-- Multi-channel cell counting pipeline with QC exports.
+Brainfast is a practical workflow for atlas alignment, manual correction, calibration learning, and whole-brain cell counting from microscopy TIFF data.
 
-- 从 Allen 标注体中自动选择最合适的切片。
-- 组织掩膜引导的初始配准，支持全脑/半脑候选竞争。
-- 非线性细化（光流、液化式场、可选 ANTs 候选与安全约束）。
-- 色块/轮廓叠加与鼠标悬停脑区信息查询（缩写、父级、ID、颜色）。
-- 手动地标纠偏并重新配准。
-- 预览区液化式拖拽微调。
-- 保存人工校准样本，并基于训练集自动学习参数。
-- 多通道细胞计数与 QC 结果导出。
+## Why This Repo Exists / 这个仓库是干什么的
 
-## Workflow Modes / 两套流程模式
-### One-Click Mode (Recommended) / 一键模式（推荐）
-- Select source TIFF.
-- Choose registration scope:
-  - `Single-layer`: includes an extra Z-layer selection step for 3D TIFF.
-  - `Whole-brain`: runs a stronger default alignment path and then enters review.
-- Click start.
-- System auto-runs: atlas auto-pick -> preview registration -> AI alignment.
-- Enter manual review/calibration stage.
-- Export preview/result in scientific image formats (`png`, `tif`, `jpg`, `bmp`).
+- 不只是做一张叠加图，而是要把结果走到 `CSV + QC + 可复核样本`
+- 不只追求“看起来对齐”，还要让脑区映射和层级统计尽量可信
+- 不把人工修正浪费掉，而是沉淀成训练样本继续改进参数
 
-- 选择源 TIFF。
-- 选择配准范围：
-  - `Single-layer`：3D TIFF 会多一步 Z 层选择。
-  - `Whole-brain`：默认走更强的配准路径后进入复审。
-- 点击开始。
-- 系统自动执行：图谱自动选层 -> 预配准预览 -> AI 配准。
-- 进入人工复审/校准阶段。
-- 可导出常用科学图像格式（`png`、`tif`、`jpg`、`bmp`）。
+## Architecture / 新架构图
 
-### Professional Mode / 专业模式
-- Full control of atlas file path, registration parameters, overlay options, and alignment strategy.
-- Supports custom tuning and manual intervention at every stage.
-
-- 可在流程开始前修改图谱文件、配准参数、叠加参数与配准策略。
-- 支持每个阶段的细粒度调优与人工干预。
-
-## Architecture Diagram (EN)
 ```mermaid
-flowchart TD
-  A[User UI: One-Click / Pro] --> B[Flask API Layer]
-  B --> C[Atlas Auto-Pick]
-  B --> D[Registration Engine]
-  D --> D1[Linear Candidate Selection]
-  D --> D2[Nonlinear Refinement: Flow/Liquify/ANTs]
-  D --> E[Overlay Renderer + Hover Metadata]
-  E --> F[Manual Review]
-  F --> G[Liquify / Landmark Correction]
-  G --> H[Calibration Finalize]
-  H --> I[train_data_set: Ori/Show pairs]
-  I --> J[learn_from_trainset.py]
-  J --> K[tuned params JSON]
-  K --> D
-  B --> L[Cell Counting Pipeline]
-  L --> M[CSV + QC + Exported Images]
+flowchart LR
+  subgraph UI["Interaction Layer / 交互层"]
+    A["One-Click / Pro UI<br/>一键模式 / 专业模式 / 人工复审"]
+  end
+
+  subgraph APP["Application Layer / 应用层"]
+    B["Flask API + Job Workspace<br/>参数校验 / 文件编排 / 任务隔离"]
+    C["Config + Env Validation<br/>配置与环境检查"]
+  end
+
+  subgraph REG["Registration Core / 配准核心"]
+    D["Atlas Auto-Pick<br/>自动选层"]
+    E["Tissue-Guided Warp<br/>组织引导线性与非线性配准"]
+    F["Registered Label Postprocess<br/>裁剪 / 拓扑清理 / 边界平滑"]
+    G["Overlay Renderer + Hover Query<br/>叠加渲染 / 鼠标悬停脑区信息"]
+  end
+
+  subgraph LEARN["Calibration Learning Loop / 校准学习闭环"]
+    H["Manual Review<br/>人工复审"]
+    I["Liquify / Manual Landmarks<br/>液化拖拽 / 手动地标"]
+    J["Training Sample Pack<br/>Ori + Label + Show"]
+    K["learn_from_trainset.py"]
+    L["Tuned Params JSON"]
+  end
+
+  subgraph COUNT["Counting & Quantification / 计数与量化"]
+    M["Cell Detection"]
+    N["Cross-slice Dedup"]
+    O["Map Cells to Registered Label"]
+    P["Structure Tree Aggregation"]
+    Q["QC Export"]
+  end
+
+  subgraph OUT["Artifacts / 输出"]
+    R["Preview PNG / Registered Label / CSV / QC / Tuned Params"]
+  end
+
+  A --> B
+  B --> C
+  C --> D --> E --> F --> G --> R
+  G --> H --> I --> J --> K --> L --> E
+  C --> M --> N --> O --> P --> Q --> R
 ```
 
-## 架构图（中文）
-```mermaid
-flowchart TD
-  A[用户界面：一键模式 / 专业模式] --> B[Flask 接口层]
-  B --> C[图谱自动选层]
-  B --> D[配准引擎]
-  D --> D1[线性候选筛选]
-  D --> D2[非线性细化：Flow/Liquify/ANTs]
-  D --> E[叠加渲染与悬停脑区信息]
-  E --> F[人工复审]
-  F --> G[液化拖拽 / 手动地标校准]
-  G --> H[校准结果固化]
-  H --> I[train_data_set 样本库: Ori/Show]
-  I --> J[learn_from_trainset.py 自动学习]
-  J --> K[调优参数 JSON]
-  K --> D
-  B --> L[细胞计数主流程]
-  L --> M[CSV + QC + 图像导出]
-```
+## How To Read This Architecture / 这张图该怎么理解
 
-## Repository Layout / 仓库结构
-- `project/configs/`: run configs and atlas structure metadata.
-- `project/scripts/`: core processing, registration, rendering, evaluation scripts.
-- `project/frontend/`: Flask backend + browser UI + desktop packaging assets.
-- `project/outputs/`: generated overlays, labels, CSVs, tuning results.
-- `project/train_data_set/`: paired samples used for registration parameter learning (`*_Ori.png`, `*_Show.png`).
+- 左边是你看到的界面。你点按钮，不是直接改算法，而是先进入 Flask 服务层。
+- 中间是两条主链路：
+  - 配准链：自动选层 -> 配准 -> 标签清理 -> 叠加预览
+  - 计数链：检测 -> 去重 -> 映射 -> 聚合 -> QC
+- 上面那条回路是“人工修正不会白做”的核心：
+  - 你液化或手动打点修正后的结果，会保存成 `Ori + Label + Show`
+  - 后续训练脚本优先用 `Label.tif` 学习，而不是学 UI 颜色线条
+- 输出层不只是一张图，而是整套可追溯结果：预览图、注册标签、统计表、QC、调参结果
 
-## Quick Start (UI) / 图形界面快速开始
-### Option A: Desktop EXE / 桌面版
-- Run `project/frontend/dist/IdleBrainUI.exe`.
+## 3-Minute Start / 3 分钟开始
 
-### Option B: Dev mode / 开发模式
+### A. 推荐：先做环境检查
+
 ```bash
-cd project/frontend
+cd project
+python scripts/check_env.py --config configs/run_config.template.json
+```
+
+如果你准备跑真实批处理，可以加：
+
+```bash
+python scripts/check_env.py --config configs/run_config.template.json --require-input-dir
+```
+
+### B. 启动图形界面
+
+```bash
+cd frontend
 python server.py
 ```
-Open `http://127.0.0.1:8787`.
 
-## Quick Start (CLI) / 命令行快速开始
+浏览器打开：`http://127.0.0.1:8787`
+
+### C. 命令行最小跑通
+
 ```bash
 cd project
 python scripts/main.py --config configs/run_config.template.json --make-sample-tiff outputs/sample_input
-python scripts/main.py --config configs/run_config.template.json --init-registration
 python scripts/main.py --config configs/run_config.template.json --run-real-input outputs/sample_input
 ```
 
-## UI Workflow / 推荐操作流程
-1. Fill required paths (`Input TIFF Folder`, atlas annotation, structure CSV, real slice path, atlas label path).
-2. Click `Refresh Preview` to inspect initial overlay.
-3. Run `AI Landmark Registration` (Affine or Nonlinear).
-4. Optional manual correction:
-   - Manual landmark mode, or
-   - Liquify drag in preview canvas for boundary micro-adjustment.
-5. Click `Save Calibration + Learn` to store corrected sample and launch auto-learning.
-6. Run pipeline for single channel or all channels.
-7. Review CSV + QC outputs in `project/outputs`.
+## Which Mode Should I Use? / 我该选哪种模式
 
-1. 填写必要路径（输入 TIFF 文件夹、atlas annotation、结构映射 CSV、真实切片路径、图谱切片路径）。
-2. 点击 `Refresh Preview` 检查初始叠加效果。
-3. 执行 `AI Landmark Registration`（Affine 或 Nonlinear）。
-4. 如需人工微调：
-   - 使用手动地标模式，或
-   - 在预览画布使用 Liquify 拖拽做边界局部修正。
-5. 点击 `Save Calibration + Learn` 保存校准样本并启动自动学习。
-6. 运行单通道或全通道计数流程。
-7. 在 `project/outputs` 查看 CSV 与 QC 输出。
+| 场景 | 推荐模式 | 为什么 |
+| --- | --- | --- |
+| 第一次接触项目，只想先把流程跑通 | 一键模式 | 参数少，能更快看到结果 |
+| 已经知道 atlas、切片、配准策略要怎么调 | 专业模式 | 可以完整控制路径、参数和显示方式 |
+| 自动配准接近正确，但边界还有局部偏差 | 人工复审 + Liquify | 修局部边界最快 |
+| 关键脑区边界偏差明显，需要明确控制对应点 | 手动地标 | 比液化更适合结构级纠偏 |
+
+## Typical Workflow / 推荐操作流程
+
+### 如果你是实验使用者
+
+1. 先填 `real slice`、`atlas annotation`、`structure CSV`
+2. 点击 `Auto Pick`，让系统先找到最可能的 atlas 切片
+3. 点击 `Refresh Preview`，看初始叠加效果
+4. 如果自动结果还行，直接做 `AI Landmark Registration`
+5. 如果边界局部不顺，进入人工复审：
+   - 小范围边界修正，用 `Liquify`
+   - 明确对应点修正，用 `Manual Landmarks`
+6. 点击 `Save Calibration + Learn`
+7. 跑整批计数，最后看 `cell_counts_leaf.csv`、`cell_counts_hierarchy.csv`、`slice_registration_qc.csv`
+
+### 如果你是开发者
+
+1. 先跑环境检查
+2. 用 UI 或 CLI 复现一个最小样例
+3. 先看 `outputs/slice_registration_qc.csv`
+4. 再看注册标签和统计表有没有偏差
+5. 改算法后跑回归测试，避免把现有链路打坏
+
+## What Each Important Button Does / 几个关键按钮到底在做什么
+
+| 按钮 | 背后做的事 |
+| --- | --- |
+| `Auto Pick` | 在 `annotation_25.nii.gz` 里挑最接近当前真实切片的 atlas 层 |
+| `Refresh Preview` | 读取真实切片和 atlas 标签，完成配准、标签后处理、叠加渲染 |
+| `AI Landmark Registration` | 基于自动或手动点对做进一步对齐 |
+| `Liquify` | 直接在当前已对齐标签上做局部形变微调 |
+| `Save Calibration + Learn` | 把人工修正固化成训练样本，并触发自动调参 |
+| `Run Pipeline` | 跑整套检测、去重、脑区映射、层级聚合和 QC 导出 |
 
 ## Calibration Learning Loop / 校准学习闭环
-### Input pair format / 训练样本格式
-- `N_Ori.png`: original real slice (grayscale/RGB view).
-- `N_Show.png`: manually corrected overlay target.
 
-### Default self-learning and sample cap / 默认自学习与样本库阈值
-- Manual calibration finalize uses auto-learning by default (`Auto-learn` enabled).
-- Each accepted calibration can append one `Ori/Show` pair to `train_data_set`.
-- To avoid unbounded growth, the server enforces a sample cap:
-  - env: `IDLEBRAIN_MAX_CALIB_SAMPLES`
-  - default: `180`
-  - old pairs are pruned automatically when the cap is exceeded.
+### Training Sample Format / 训练样本格式
 
-- 人工校准固化后默认启用自动学习（`Auto-learn` 默认开启）。
-- 每次确认的校准结果会新增一组 `Ori/Show` 样本到 `train_data_set`。
-- 为防止样本库无限增长，服务端有阈值保护：
-  - 环境变量：`IDLEBRAIN_MAX_CALIB_SAMPLES`
-  - 默认值：`180`
-  - 超阈值时自动裁剪旧样本。
+- `N_Ori.png`
+  - 原始真实切片的显示图
+- `N_Label.tif`
+  - 人工确认后的真实标签真值
+- `N_Show.png`
+  - 给人看的预览叠加图，主要用于兼容旧样本和人工检查
 
-### Tuning script / 调参脚本
+### Why This Matters / 为什么要这样设计
+
+旧做法容易学到 UI 颜色和边界线，而不是学到“真实修正后的标签”。
+
+现在训练器会优先读取 `Label.tif`，只有旧样本没有标签时才回退到 `Show.png`。
+
+### Tuning Command / 调参命令
+
 ```bash
 cd project
-python scripts/learn_from_trainset.py \
-  --train-dir train_data_set \
-  --annotation annotation_25.nii.gz \
-  --out-json outputs/trainset_tuned_params.json
+python scripts/learn_from_trainset.py --train-dir train_data_set --annotation annotation_25.nii.gz --out-json outputs/trainset_tuned_params.json
 ```
 
-### Use tuned params in batch tests / 使用调优参数跑测试
+如果参数很多，也可以在 PowerShell 里自行换行。
+
+## Main Outputs / 你最关心的输出
+
+| 文件 | 用途 |
+| --- | --- |
+| `outputs/overlay_preview.png` | 当前预览叠加图 |
+| `outputs/overlay_label_preview.tif` | 当前预览对应的注册标签 |
+| `outputs/cells_detected.csv` | 原始检测结果 |
+| `outputs/cells_dedup.csv` | 去重后的细胞结果 |
+| `outputs/cells_mapped.csv` | 带脑区映射信息的细胞结果 |
+| `outputs/cell_counts_leaf.csv` | 叶子脑区统计 |
+| `outputs/cell_counts_hierarchy.csv` | 层级脑区统计 |
+| `outputs/slice_qc.csv` | 切片级基础 QC |
+| `outputs/slice_registration_qc.csv` | 每张切片的自动选层 / 配准质量 / 耗时记录 |
+| `outputs/trainset_tuned_params.json` | 自动学习得到的参数 |
+| `outputs/manual_calibration/` | 手工校准历史样本 |
+
+### About Job Isolation / 关于 job 隔离
+
+预览、液化、人工校准相关输出已经支持按 `jobId` 写入：
+
+- 默认仍可使用 `outputs/`
+- 当 UI 带上 `jobId` 时，会写到 `outputs/jobs/<jobId>/`
+
+这样至少能避免多个预览会话互相覆盖同一张 `overlay_preview.png`。
+
+## Repository Layout / 仓库结构
+
+| 路径 | 说明 |
+| --- | --- |
+| `configs/` | 运行配置、Allen 结构树与结构元数据 |
+| `scripts/` | 配准、渲染、映射、聚合、训练、测试脚本 |
+| `frontend/` | Flask 服务、网页 UI、桌面打包 |
+| `outputs/` | 运行结果、调参结果、QC 导出 |
+| `train_data_set/` | 用于自动学习的样本库 |
+| `tests/` | 当前最小回归测试集 |
+
+## Validation & Regression Tests / 验证与回归
+
+### 环境检查
+
 ```bash
 cd project
-python -m scripts.run_overlay_test \
-  --real "<real_c1.tif>" \
-  --real "<real_c0.tif>" \
-  --annotation "annotation_25.nii.gz" \
-  --outputs-root "outputs" \
-  --tuned-params-json "outputs/trainset_tuned_params.json"
+python scripts/check_env.py --config configs/run_config.template.json
 ```
 
-## Main Outputs / 主要输出文件
-- `outputs/overlay_preview.png`
-- `outputs/overlay_compare.png`
-- `outputs/overlay_compare_nonlinear.png`
-- `outputs/overlay_label_preview.tif`
-- `outputs/cells_detected.csv`
-- `outputs/cells_dedup.csv`
-- `outputs/cells_mapped.csv`
-- `outputs/cell_counts_leaf.csv`
-- `outputs/cell_counts_hierarchy.csv`
-- `outputs/slice_qc.csv`
-- `outputs/qc_overlays/*.png`
-- `outputs/trainset_tuned_params.json`
-- `outputs/manual_calibration/*`
+### 最小回归测试
+
+```bash
+cd project
+python -m unittest discover -s tests -v
+```
+
+### 调参后批量对比测试
+
+```bash
+cd project
+python -m scripts.run_overlay_test --real "<real_c1.tif>" --real "<real_c0.tif>" --annotation "annotation_25.nii.gz" --outputs-root "outputs" --tuned-params-json "outputs/trainset_tuned_params.json"
+```
+
+## Current Boundaries / 当前边界与诚实说明
+
+这部分很重要，避免你把它误判成“已经完全云端化的成熟产品”。
+
+### 当前已经比较可靠的部分
+
+- 配准预览主链路
+- 注册后标签直接映射到脑区
+- 基于 Allen 真实结构树的层级聚合
+- `Label.tif` 优先的训练闭环
+- 最小回归测试与切片级耗时记录
+
+### 当前仍然偏弱的部分
+
+- Flask 服务层仍然偏大，`server.py` 还需要进一步拆分
+- `overlay_render.py` 已拆出一部分，但注册核心仍然不够轻
+- 批处理运行状态和自动学习状态还不是正式 job queue
+- 目前更适合单机研究工作流，不建议直接当成完整云端多用户系统
 
 ## Troubleshooting / 常见问题
-- Preview fails: check that real slice and atlas label paths are valid and readable.
-- Poor alignment: try nonlinear mode, increase landmarks, or reduce RANSAC residual.
-- Fill mode too rough at boundary: use liquify drag micro-correction and save calibration.
-- Learning not improving: inspect `train_data_set` sample quality and class balance.
 
-- 预览失败：确认真实切片与图谱切片路径存在且可读。
-- 配准较差：尝试非线性模式、增加地标数量、降低 RANSAC 残差。
-- 色块边界粗糙：使用 Liquify 拖拽局部微调后再保存校准。
-- 学习效果不稳定：检查 `train_data_set` 样本质量与覆盖多样性。
+### 1. 预览失败
+
+先检查：
+
+- `realPath` 是否存在
+- `labelPath` 或 `annotation_25.nii.gz` 是否存在
+- `structure CSV` 是否可读
+- `python scripts/check_env.py --config ...` 是否通过
+
+### 2. 自动选层结果不理想
+
+- 确认 `pixel_size_um_xy` 是否正确
+- 先尝试切换切片面或检查真实切片是否选对 Z
+- 看 `slice_registration_qc.csv` 里的 `best_score`
+
+### 3. 叠加图“看着还行”，但统计不放心
+
+不要只看 PNG。
+
+请同时检查：
+
+- `overlay_label_preview.tif`
+- `cells_mapped.csv`
+- `cell_counts_leaf.csv`
+- `cell_counts_hierarchy.csv`
+
+### 4. 学习效果不稳定
+
+- 先确认训练样本里有没有 `*_Label.tif`
+- 检查样本是不是都集中在同一种切片形态
+- 不要把明显失败的人工校准结果直接收进训练集
 
 ## Additional Docs / 其他文档
-- `ATLAS_OVERLAY_GUIDE.md`: concise operation checklist.
-- `USER_MANUAL.md`: detailed Chinese user manual.
-- `frontend/README.md`: frontend/backend bridge details.
+
+- [frontend/README.md](frontend/README.md): 前端启动与桌面打包说明
+- `ATLAS_OVERLAY_GUIDE.md`: 简洁操作清单
+- `USER_MANUAL.md`: 更详细的中文使用手册
 
 ## License / 许可证
-IdleBrain is released under GNU AGPL-3.0.
 
-IdleBrain 采用 GNU AGPL-3.0 许可证发布。
+Brainfast is released under GNU AGPL-3.0.
+
+Brainfast 采用 GNU AGPL-3.0 许可证发布。
 
 See [`../LICENSE`](../LICENSE) for full text.
 
 ---
+
 Last updated / 最后更新: 2026-03-13

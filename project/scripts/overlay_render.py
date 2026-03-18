@@ -2008,7 +2008,7 @@ def _silhouette_conform_warp(
 
     # Clip to dilated brain region (gentle — large dilation to not over-clip)
     clip_small = morphology.dilation(brain_filled, morphology.disk(max(3, fill_r))).astype(bool)
-    clip_full = resize(clip_small.astype(np.float32), (h, w), order=0) > 0.5
+    clip_full = resize(clip_small.astype(np.float32), (h, w), order=1, preserve_range=True) > 0.5
     warped = np.where(clip_full, warped, 0).astype(np.int32)
 
     return warped, {
@@ -2204,10 +2204,19 @@ def _contour_conform_warp(
     # Dilate tissue mask slightly so atlas isn't over-clipped at boundaries
     clip_disk = morphology.disk(max(2, int(round(20 * ds))))
     clip_region = morphology.dilation(tissue_small.astype(np.uint8), clip_disk).astype(bool)
+    # Use bilinear (order=1) upscale so downsampled mask boundary is smooth,
+    # not blocky like nearest-neighbour (order=0) would produce.
     clip_region_full = (
-        resize(clip_region.astype(np.float32), (h, w), order=0, preserve_range=True) > 0.5
+        resize(clip_region.astype(np.float32), (h, w), order=1, preserve_range=True) > 0.5
     )
     warped = np.where(clip_region_full, warped, 0).astype(np.int32)
+
+    # binary_opening removes small protrusions that survive the clip
+    # (TPS aliasing + any tissue-mask noise). Disk ≈ 0.7% image height.
+    _open_r = max(4, h // 150)
+    _outer = warped > 0
+    _outer_smooth = morphology.binary_opening(_outer, morphology.disk(_open_r))
+    warped = np.where(_outer_smooth, warped, 0).astype(np.int32)
 
     return warped, {
         "ok": True,

@@ -1,11 +1,11 @@
 {
   "project": {
-    "name": "sample_35_demo",
+    "name": "sample_35_quick",
     "version": "demo-1.0"
   },
   "input": {
     "slice_dir": "data/35_C0_demo",
-    "slice_glob": "z*.tif",
+    "slice_glob": "z01[0-9]*.tif",
     "sampling_mode": "single",
     "slice_interval_n": 1,
     "pixel_size_um_xy": 5.0,
@@ -86,8 +86,8 @@
     "r_z_rule": "slice_spacing_um*0.5"
   },
   "outputs": {
-    "leaf_csv": "outputs/35_leaf.csv",
-    "hierarchy_csv": "outputs/35_hierarchy.csv",
-    "qc_dir": "outputs/35_qc"
+    "leaf_csv": "outputs/35_quick_leaf.csv",
+    "hierarchy_csv": "outputs/35_quick_hierarchy.csv",
+    "qc_dir": "outputs/35_quick_qc"
   }
 }

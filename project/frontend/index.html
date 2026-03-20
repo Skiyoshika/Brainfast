@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Brainfast — Brain Atlas Registration</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23181a1f'/%3E%3Cpath d='M22 14c-7 0-12 6-12 14 0 7 4 12 9 14 1 8 7 14 15 14 8 0 14-6 15-14 5-2 9-7 9-14 0-8-5-14-12-14-4 0-7 1-10 4-3-3-6-4-10-4Z' fill='%234c72f5'/%3E%3Cpath d='M32 18v28' stroke='%23181a1f' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -15,14 +16,14 @@
 <div id="lightbox" class="lightbox hidden">
   <div class="lightbox-bg" id="lightboxBg"></div>
   <img id="lightboxImg" alt="preview" />
-  <button class="lightbox-close" id="lightboxClose">✕?/button>
+  <button class="lightbox-close" id="lightboxClose" type="button" aria-label="Close lightbox"><span aria-hidden="true">&times;</span></button>
   <div class="lightbox-caption" id="lightboxCaption"></div>
 </div>
 
 <!-- ===== Getting Started Guide modal ===== -->
 <div id="guideModal" class="modal-overlay hidden">
   <div class="modal-box">
-    <button class="modal-close-btn" id="guideModalClose">✕?/button>
+    <button class="modal-close-btn" id="guideModalClose" type="button" aria-label="Close guide">&times;</button>
     <h2 data-i18n="guide.title">📖 Getting Started Guide</h2>
     <ol>
       <li data-i18n="guide.step1"><strong>Step 1 →?Configure Paths:</strong> Click "Browse" to select your TIFF folder, Atlas annotation file, and brain region CSV. Fields marked "Required" must be filled in.</li>
@@ -60,9 +61,9 @@
 <!-- ===== Methods paragraph modal ===== -->
 <div id="methodsModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:640px;">
-    <button class="modal-close-btn" id="methodsModalClose">✕?/button>
-    <h2 data-i18n="methods.title">📝 Methods Paragraph</h2>
-    <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:6px;" data-i18n="methods.desc">The following text is auto-generated from your most recent run parameters. Edit as needed before pasting into your Methods section.</p>
+    <button class="modal-close-btn" id="methodsModalClose" type="button" aria-label="Close methods">&times;</button>
+    <h2 id="methodsModalTitle" data-i18n="methods.title">📝 Methods Paragraph</h2>
+    <p id="methodsModalDesc" style="font-size:12.5px;color:var(--text-muted);margin-bottom:6px;" data-i18n="methods.desc">The following text is auto-generated from your most recent run parameters. Edit as needed before pasting into your Methods section.</p>
     <pre id="methodsText" class="methods-pre" data-i18n="methods.loading">Loading...</pre>
     <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;">
       <button class="btn-secondary" id="methodsCopyBtn" data-i18n="btn.copy">📋 Copy to Clipboard</button>
@@ -566,9 +567,9 @@
 
       <!-- Best Slice: raw vs atlas comparison -->
       <section class="panel" id="bestSliceSection" style="display:none">
-        <h2 data-i18n="qc.bestSliceTitle">Raw Lightsheet vs Atlas Registration</h2>
-        <p class="hint-text" data-i18n="qc.bestSliceHint">Side-by-side comparison — click to view full resolution</p>
-        <div style="text-align:center;cursor:pointer" onclick="openLightbox('/api/outputs/demo-best-slice?'+Date.now(),'Raw vs Atlas')">
+        <h2 data-i18n="qc.bestSliceTitle">Registration Slice vs Atlas Registration</h2>
+        <p class="hint-text" data-i18n="qc.bestSliceHint">Registered-slice comparison — click to view full resolution</p>
+        <div style="text-align:center;cursor:pointer" onclick="openLightbox('/api/outputs/demo-best-slice?'+Date.now(),'Registration Slice vs Atlas')">
           <img id="bestSliceImg" src="" alt="Best Slice Comparison"
                style="max-width:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5)"
                onerror="document.getElementById('bestSliceSection').style.display='none'"/>
@@ -608,9 +609,20 @@
         </div>
       </header>
 
+      <section class="panel" id="resultSummarySection" style="display:none">
+        <div class="results-toolbar">
+          <div>
+            <h2 data-i18n="summary.title">Result Snapshot</h2>
+            <p id="resultSummaryLead" class="hint-text" data-i18n="summary.hint">Check scope and mapping coverage before reading regional biology.</p>
+          </div>
+        </div>
+        <div id="resultSummaryWarnings" class="results-warning-list"></div>
+        <div id="resultSummaryCards" class="result-summary-grid"></div>
+      </section>
+
       <!-- Cell count chart (static PNG from matplotlib) -->
       <section class="panel" id="cellChartSection" style="display:none">
-        <h2 data-i18n="chart.imgTitle">Whole-Brain Cell Count Summary</h2>
+        <h2 data-i18n="chart.imgTitle">Cell Count Summary</h2>
         <div style="text-align:center;cursor:pointer" onclick="openLightbox('/api/outputs/cell-chart?'+Date.now(),'Cell Count Chart')">
           <img id="cellChartImg" src="" alt="Cell count chart"
                style="max-width:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.4)"
@@ -624,23 +636,39 @@
         <div id="regionChart" style="margin-top:12px"></div>
       </section>
 
+      <section class="panel" id="cellConfidenceSection" style="display:none">
+        <h2 data-i18n="cellconf.title">Cell Count Confidence Samples</h2>
+        <p class="hint-text" data-i18n="cellconf.hint">Three representative raw slices with the final counted-cell markers overlaid.</p>
+        <div id="cellConfidenceGrid" class="cell-confidence-grid"></div>
+        <div id="cellConfidenceEmpty" class="empty-hint" data-i18n="cellconf.empty">No counted-cell sample images yet.</div>
+      </section>
+
       <section class="panel">
-        <div class="results-toolbar">
-          <h2 data-i18n="results.title">Cell Counts by Brain Region</h2>
-          <input id="regionSearch" class="search-input" data-i18n-ph="ph.regionSearch" placeholder="🔍 Search region name..." />
-        </div>
-        <table id="resultsTable">
-          <thead>
-            <tr>
-              <th data-i18n="th.region">Region Name</th>
-              <th data-i18n="th.count">Cell Count</th>
-              <th data-i18n="th.pct">%</th>
-              <th data-i18n="th.bar">Distribution</th>
-            </tr>
-          </thead>
-          <tbody id="resultRows"></tbody>
-        </table>
-        <div id="resultsMeta" class="results-meta"></div>
+        <details id="resultsTableDetails" class="results-collapse">
+          <summary class="results-collapse-summary">
+            <div>
+              <h2 data-i18n="results.title">Cell Counts by Brain Region</h2>
+              <div id="resultsMeta" class="results-meta"></div>
+            </div>
+            <span class="results-collapse-hint" data-i18n="results.expandHint">Expand to browse and search</span>
+          </summary>
+          <div class="results-collapse-body">
+            <div class="results-search-row">
+              <input id="regionSearch" class="search-input" data-i18n-ph="ph.regionSearch" placeholder="🔍 Search region name..." />
+            </div>
+            <table id="resultsTable">
+              <thead>
+                <tr>
+                  <th data-i18n="th.region">Region Name</th>
+                  <th data-i18n="th.count">Cell Count</th>
+                  <th data-i18n="th.pct">%</th>
+                  <th data-i18n="th.bar">Distribution</th>
+                </tr>
+              </thead>
+              <tbody id="resultRows"></tbody>
+            </table>
+          </div>
+        </details>
       </section>
 
       <section class="panel">
@@ -659,6 +687,18 @@
       <section class="panel">
         <h2 data-i18n="history.title">Run History</h2>
         <ul id="historyList" class="history-list"></ul>
+      </section>
+
+      <section class="panel">
+        <div class="results-toolbar">
+          <div>
+            <h2 data-i18n="reg3d.title">3D Registration Reports</h2>
+            <p class="hint-text" data-i18n="reg3d.hint">Check the final overview first. Open the summary or metadata only when something looks suspicious.</p>
+          </div>
+          <button id="refreshRegistrationRunsBtn" class="btn-secondary" data-i18n="btn.refreshResults">🔁 Refresh</button>
+        </div>
+        <div id="registrationRunsGrid" class="registration-runs-grid"></div>
+        <div id="registrationRunsEmpty" class="empty-hint" data-i18n="reg3d.empty">No 3D registration runs found yet.</div>
       </section>
 
       <section class="panel">

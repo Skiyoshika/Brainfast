@@ -56,6 +56,7 @@ run_state: dict = {
     "current_channel": None,
     "history": [],
     "config_path": None,
+    "startEpoch": None,
 }
 
 _learning_lock = threading.Lock()
@@ -563,6 +564,7 @@ def _runner(config_path: str, input_dir: str, channels: list[str], run_params=No
             "channels": channels,
             "logs": [],
             "startTime": ts,
+            "startEpoch": time.time(),
         }
     )
 
@@ -636,6 +638,7 @@ def _runner(config_path: str, input_dir: str, channels: list[str], run_params=No
         run_state["running"] = False
         run_state["proc"] = None
         run_state["current_channel"] = None
+        run_state["startEpoch"] = None
 
 
 # ---------------------------------------------------------------------------

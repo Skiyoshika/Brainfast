@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -112,6 +113,8 @@ def _collect_slice_files(slice_dir: Path, glob_pattern: str) -> list[Path]:
 
 
 def _extract_channel_to_tmp(src_files: list[Path], out_dir: Path, ch_idx: int) -> list[Path]:
+    if out_dir.exists():
+        shutil.rmtree(out_dir, ignore_errors=True)
     out_dir.mkdir(parents=True, exist_ok=True)
     out = []
     for i, p in enumerate(src_files):
@@ -127,6 +130,80 @@ def _extract_channel_to_tmp(src_files: list[Path], out_dir: Path, ch_idx: int) -
         imwrite(str(dst), ch.astype(np.uint16))
         out.append(dst)
     return out
+
+
+def _normalize_sampling_mode(cfg: dict) -> tuple[str, int]:
+    input_cfg = cfg.get("input", {})
+    raw_mode = str(input_cfg.get("sampling_mode", "")).strip().lower()
+    interval = max(1, int(input_cfg.get("slice_interval_n", 1)))
+
+    if not raw_mode:
+        raw_mode = "merge" if interval > 1 else "single"
+
+    if raw_mode in {"single", "native", "raw", "original"}:
+        return "single", 1
+    if raw_mode in {"merge", "merged", "merge5", "merge_n"}:
+        return "merged", interval
+    raise ValueError(f"unsupported input.sampling_mode: {raw_mode}")
+
+
+def _resolve_processing_files(
+    cfg: dict,
+    channel_files: list[Path],
+    outputs_dir: Path,
+) -> tuple[list[Path], dict[str, int | str]]:
+    sampling_mode, interval = _normalize_sampling_mode(cfg)
+    if sampling_mode == "single":
+        return channel_files, {"sampling_mode": "single", "slice_interval_n": 1}
+
+    merged_files = merge_every_n_slices(channel_files, outputs_dir / "tmp_merged", n=interval)
+    return merged_files, {"sampling_mode": "merged", "slice_interval_n": int(interval)}
+
+
+def _write_detection_summary(
+    outputs_dir: Path,
+    *,
+    sampling: dict[str, int | str],
+    cfg: dict,
+    detections: pd.DataFrame,
+    deduped: pd.DataFrame | None = None,
+) -> None:
+    det_cfg = cfg.get("detection", {})
+    primary = str(det_cfg.get("primary_model", ""))
+    secondary = str(det_cfg.get("secondary_model", ""))
+    requested_cellpose = primary.lower().startswith("cellpose") or secondary.lower().startswith(
+        "cellpose"
+    )
+    allow_fallback_raw = det_cfg.get("allow_fallback", None)
+    allow_fallback = (
+        bool(allow_fallback_raw) if allow_fallback_raw is not None else (not requested_cellpose)
+    )
+    summary = {
+        "sampling_mode": str(sampling.get("sampling_mode", "single")),
+        "slice_interval_n": int(sampling.get("slice_interval_n", 1)),
+        "primary_model": primary,
+        "secondary_model": secondary,
+        "requested_instance_segmentation": bool(requested_cellpose),
+        "allow_fallback": bool(allow_fallback),
+        "cells_detected": int(len(detections)),
+        "detector_counts": {},
+    }
+    if "detector" in detections.columns and not detections.empty:
+        summary["detector_counts"] = {
+            str(k): int(v)
+            for k, v in detections["detector"].fillna("unknown").value_counts().to_dict().items()
+        }
+    if deduped is not None:
+        summary["cells_dedup"] = int(len(deduped))
+        if "detector" in deduped.columns and not deduped.empty:
+            summary["dedup_detector_counts"] = {
+                str(k): int(v)
+                for k, v in deduped["detector"].fillna("unknown").value_counts().to_dict().items()
+            }
+    (outputs_dir / "detection_summary.json").write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
 
 def _make_sample_tiffs(out_dir: Path, n: int = 12, h: int = 256, w: int = 256) -> None:
@@ -196,8 +273,7 @@ def run_real_input(cfg: dict, input_dir: Path):
     ch_dir = outputs_dir / "tmp_channel"
     channel_files = _extract_channel_to_tmp(files, ch_dir, ch_idx)
 
-    n_merge = int(cfg.get("input", {}).get("slice_interval_n", 5))
-    merged_files = merge_every_n_slices(channel_files, outputs_dir / "tmp_merged", n=n_merge)
+    processing_files, sampling = _resolve_processing_files(cfg, channel_files, outputs_dir)
 
     px_um = _validated_float(cfg, "input.pixel_size_um_xy")
     spacing_um = _validated_float(cfg, "input.slice_spacing_um")
@@ -245,6 +321,8 @@ def run_real_input(cfg: dict, input_dir: Path):
     display_gamma = float(reg_cfg.get("display_gamma", 1.0))
     fail_score_threshold = float(reg_cfg.get("fail_score_threshold", 0.65))
     registration_dir = outputs_dir / "registered_slices"
+    if registration_dir.exists():
+        shutil.rmtree(registration_dir, ignore_errors=True)
     registration_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Optional DeepSlice AP estimation (run on whole series before the loop) ──
@@ -275,7 +353,7 @@ def run_real_input(cfg: dict, input_dir: Path):
     mapped_rows = []
     registration_rows = []
     next_id = 1
-    for sid, mp in enumerate(merged_files):
+    for sid, mp in enumerate(processing_files):
         det = detect_cells(mp, cfg)
         if det.empty:
             continue
@@ -447,8 +525,26 @@ def run_real_input(cfg: dict, input_dir: Path):
         det = det.copy()
         det["slice_id"] = sid
         det["cell_id"] = range(next_id, next_id + len(det))
+        det["source_slice_path"] = str(Path(mp).resolve())
+        det["count_sampling_mode"] = str(sampling["sampling_mode"])
+        det["count_slice_interval_n"] = int(sampling["slice_interval_n"])
         next_id += len(det)
-        detect_rows.append(det[["cell_id", "slice_id", "x", "y", "score"]])
+        detect_rows.append(
+            det[
+                [
+                    "cell_id",
+                    "slice_id",
+                    "x",
+                    "y",
+                    "score",
+                    "detector",
+                    "area_px",
+                    "source_slice_path",
+                    "count_sampling_mode",
+                    "count_slice_interval_n",
+                ]
+            ]
+        )
         mapped_rows.append(
             map_cells_with_registered_label_slice(
                 det,
@@ -473,8 +569,31 @@ def run_real_input(cfg: dict, input_dir: Path):
             f"see {registration_qc_path}"
         )
 
-    if not mapped_rows:
+    if not detect_rows:
+        empty = pd.DataFrame(
+            columns=[
+                "cell_id",
+                "slice_id",
+                "x",
+                "y",
+                "score",
+                "detector",
+                "area_px",
+                "source_slice_path",
+                "count_sampling_mode",
+                "count_slice_interval_n",
+            ]
+        )
+        empty.to_csv(outputs_dir / "cells_detected.csv", index=False)
+        _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=empty)
         print("No detections found in real-input run.")
+        return
+
+    if not mapped_rows:
+        cells = pd.concat(detect_rows, ignore_index=True)
+        cells.to_csv(outputs_dir / "cells_detected.csv", index=False)
+        _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=cells)
+        print("Detections found, but none could be mapped after registration.")
         return
 
     cells = pd.concat(detect_rows, ignore_index=True)
@@ -490,6 +609,7 @@ def run_real_input(cfg: dict, input_dir: Path):
     )
     deduped.to_csv(outputs_dir / "cells_dedup.csv", index=False)
     write_dedup_stats(stats, outputs_dir)
+    _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=cells, deduped=deduped)
 
     deduped.to_csv(outputs_dir / "cells_mapped.csv", index=False)
     leaf, hierarchy = aggregate_by_region(deduped)
@@ -501,9 +621,10 @@ def run_real_input(cfg: dict, input_dir: Path):
 
     # Copy registered atlas overlays to qc_overlays so the UI gallery shows beautiful colored images
     qc_dir = outputs_dir / "qc_overlays"
+    if qc_dir.exists():
+        shutil.rmtree(qc_dir, ignore_errors=True)
     qc_dir.mkdir(parents=True, exist_ok=True)
     reg_overlays = sorted(registration_dir.glob("slice_*_overlay.png"))
-    import shutil
 
     for i, src_png in enumerate(reg_overlays):
         shutil.copy2(src_png, qc_dir / f"overlay_{i:03d}.png")

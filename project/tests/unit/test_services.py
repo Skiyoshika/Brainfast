@@ -157,30 +157,145 @@ class TestApplyLiquifyAndRender:
 class TestGenerateCellChart:
     """demo_service.generate_cell_chart"""
 
-    @patch("subprocess.run")
-    def test_calls_subprocess_with_correct_args(self, mock_run, tmp_path):
-        import sys
+    def test_writes_summary_chart_from_outputs_tables(self, tmp_path):
+        import pandas as pd
         from project.frontend.services.demo_service import generate_cell_chart
 
-        mock_run.return_value = MagicMock(returncode=0)
-        hier = tmp_path / "hier.csv"
+        hier = tmp_path / "cell_counts_hierarchy.csv"
+        cells = tmp_path / "cells_mapped.csv"
         chart = tmp_path / "chart.png"
-        project_root = tmp_path
 
-        generate_cell_chart(hier, chart, project_root)
+        pd.DataFrame(
+            [
+                {"region_id": 997, "depth": 0, "count": 8, "region_name": "root", "acronym": "root"},
+                {"region_id": 315, "depth": 5, "count": 3, "region_name": "Isocortex", "acronym": "Isocortex"},
+                {"region_id": 477, "depth": 4, "count": 3, "region_name": "Striatum", "acronym": "STR"},
+                {"region_id": 803, "depth": 4, "count": 1, "region_name": "Pallidum", "acronym": "PAL"},
+            ]
+        ).to_csv(hier, index=False)
+        pd.DataFrame(
+            [
+                {
+                    "mapping_status": "ok",
+                    "region_id": 672,
+                    "region_name": "Caudoputamen",
+                    "parent_name": "Striatum dorsal region",
+                    "structure_id_path": "/997/8/567/623/477/485/672/",
+                    "source_slice_path": str(tmp_path / "z0100.tif"),
+                },
+                {
+                    "mapping_status": "ok",
+                    "region_id": 754,
+                    "region_name": "Olfactory tubercle",
+                    "parent_name": "Striatum ventral region",
+                    "structure_id_path": "/997/8/567/623/477/493/754/",
+                    "source_slice_path": str(tmp_path / "z0105.tif"),
+                },
+                {
+                    "mapping_status": "ok",
+                    "region_id": 322,
+                    "region_name": "Primary somatosensory area",
+                    "parent_name": "Primary somatosensory area",
+                    "structure_id_path": "/997/8/567/688/695/315/453/322/",
+                    "source_slice_path": str(tmp_path / "z0110.tif"),
+                },
+                {
+                    "mapping_status": "outside_registered_slice",
+                    "region_id": 0,
+                    "region_name": "OUTSIDE_ATLAS",
+                    "parent_name": "",
+                    "structure_id_path": "",
+                    "source_slice_path": str(tmp_path / "z0115.tif"),
+                },
+            ]
+        ).to_csv(cells, index=False)
 
-        mock_run.assert_called_once()
-        args = mock_run.call_args[0][0]
-        assert args[0] == sys.executable
-        assert str(hier) in args
-        assert str(chart) in args
+        generate_cell_chart(hier, chart, tmp_path)
 
-    @patch("subprocess.run", side_effect=Exception("process failed"))
-    def test_raises_on_subprocess_error(self, mock_run, tmp_path):
+        assert chart.exists()
+        assert chart.stat().st_size > 0
+
+    def test_build_cell_summary_prefers_single_assignment_outputs(self, tmp_path):
+        import pandas as pd
+        from project.frontend.services.demo_service import build_cell_summary
+
+        hier = tmp_path / "cell_counts_hierarchy.csv"
+        cells = tmp_path / "cells_mapped.csv"
+        detection = tmp_path / "detection_summary.json"
+
+        pd.DataFrame(
+            [
+                {"region_id": 997, "depth": 0, "count": 8, "region_name": "root", "acronym": "root"},
+                {"region_id": 315, "depth": 5, "count": 3, "region_name": "Isocortex", "acronym": "Isocortex"},
+                {"region_id": 477, "depth": 4, "count": 3, "region_name": "Striatum", "acronym": "STR"},
+                {"region_id": 803, "depth": 4, "count": 1, "region_name": "Pallidum", "acronym": "PAL"},
+            ]
+        ).to_csv(hier, index=False)
+        pd.DataFrame(
+            [
+                {
+                    "mapping_status": "ok",
+                    "region_id": 672,
+                    "region_name": "Caudoputamen",
+                    "parent_name": "Striatum dorsal region",
+                    "structure_id_path": "/997/8/567/623/477/485/672/",
+                    "source_slice_path": str(tmp_path / "tmp_channel" / "ch_0_0000.tif"),
+                    "count_sampling_mode": "single",
+                },
+                {
+                    "mapping_status": "ok",
+                    "region_id": 322,
+                    "region_name": "Primary somatosensory area",
+                    "parent_name": "Primary somatosensory area",
+                    "structure_id_path": "/997/8/567/688/695/315/453/322/",
+                    "source_slice_path": str(tmp_path / "tmp_channel" / "ch_0_0001.tif"),
+                    "count_sampling_mode": "single",
+                },
+                {
+                    "mapping_status": "outside_registered_slice",
+                    "region_id": 0,
+                    "region_name": "OUTSIDE_ATLAS",
+                    "parent_name": "",
+                    "structure_id_path": "",
+                    "source_slice_path": str(tmp_path / "tmp_channel" / "ch_0_0002.tif"),
+                    "count_sampling_mode": "single",
+                },
+            ]
+        ).to_csv(cells, index=False)
+        detection.write_text(
+            '{"sampling_mode":"single","dedup_detector_counts":{"cellpose_cyto2":3}}',
+            encoding="utf-8",
+        )
+
+        summary = build_cell_summary(hier)
+
+        assert summary["sample_name"] == "Current outputs"
+        assert summary["scope_kind"] == "working_set"
+        assert summary["counting_mode"] == "single"
+        assert summary["detectors"] == "cellpose_cyto2"
+        assert summary["mapped_count"] == 2
+        assert summary["outside_count"] == 1
+        assert summary["top_region"]["label"] in {"Striatum dorsal region", "Primary somatosensory area"}
+
+    def test_uses_hierarchy_fallback_when_cells_table_missing(self, tmp_path):
+        import pandas as pd
         from project.frontend.services.demo_service import generate_cell_chart
 
-        with pytest.raises(Exception, match="process failed"):
-            generate_cell_chart(tmp_path / "h.csv", tmp_path / "c.png", tmp_path)
+        hier = tmp_path / "cell_counts_hierarchy.csv"
+        chart = tmp_path / "chart.png"
+        pd.DataFrame(
+            [
+                {"region_id": 997, "depth": 0, "count": 10, "region_name": "root", "acronym": "root"},
+                {"region_id": 315, "depth": 5, "count": 6, "region_name": "Isocortex", "acronym": "Isocortex"},
+                {"region_id": 477, "depth": 4, "count": 3, "region_name": "Striatum", "acronym": "STR"},
+                {"region_id": 803, "depth": 4, "count": 1, "region_name": "Pallidum", "acronym": "PAL"},
+            ]
+        ).to_csv(hier, index=False)
+
+        generate_cell_chart(hier, chart, tmp_path)
+
+        assert chart.exists()
+        assert chart.stat().st_size > 0
 
 
 class TestGenerateDemoComparison:

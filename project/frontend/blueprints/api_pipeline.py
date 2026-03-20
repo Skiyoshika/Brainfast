@@ -87,9 +87,25 @@ def status():
     # Count how many slices have been registered (overlay files present)
     reg_dir = ctx.OUTPUT_DIR / "registered_slices"
     slices_done = len(list(reg_dir.glob("slice_*_overlay.png"))) if reg_dir.exists() else 0
-    # Count total input slices (merged dir)
+    # Count total input slices using whichever processing directory is active.
     merged_dir = ctx.OUTPUT_DIR / "tmp_merged"
-    slices_total = len(list(merged_dir.glob("*.tif"))) if merged_dir.exists() else 0
+    channel_dir = ctx.OUTPUT_DIR / "tmp_channel"
+    merged_total = len(list(merged_dir.glob("*.tif"))) if merged_dir.exists() else 0
+    channel_total = len(list(channel_dir.glob("*.tif"))) if channel_dir.exists() else 0
+    sampling_mode = ""
+    config_path = ctx.run_state.get("config_path")
+    if config_path:
+        try:
+            cfg = json.loads(Path(str(config_path)).read_text(encoding="utf-8-sig"))
+            sampling_mode = str(cfg.get("input", {}).get("sampling_mode", "")).lower().strip()
+        except Exception:
+            sampling_mode = ""
+    if sampling_mode in {"single", "native", "raw", "original"}:
+        slices_total = channel_total
+    elif sampling_mode in {"merge", "merged", "merge5", "merge_n"}:
+        slices_total = merged_total
+    else:
+        slices_total = merged_total if merged_total > 0 else channel_total
     return jsonify(
         {
             "running": ctx.run_state["running"],
@@ -100,6 +116,7 @@ def status():
             "logCount": len(ctx.run_state["logs"]),
             "slicesDone": slices_done,
             "slicesTotal": slices_total,
+            "startEpoch": ctx.run_state.get("startEpoch"),
         }
     )
 
@@ -115,6 +132,7 @@ def cancel():
             ctx.run_state["done"] = False
             ctx.run_state["current_channel"] = None
             ctx.run_state["channels"] = []
+            ctx.run_state["startEpoch"] = None
             ctx._append_log("[cancel] user requested stop")
             return jsonify({"ok": True, "cancelled": True})
     return jsonify({"ok": False, "cancelled": False, "error": "no running process"}), 409
@@ -139,6 +157,13 @@ def export_methods_text():
             params = json.loads(params_files[0].read_text(encoding="utf-8"))
         except Exception:
             pass
+    detection_summary = {}
+    detection_summary_path = ctx.OUTPUT_DIR / "detection_summary.json"
+    if detection_summary_path.exists():
+        try:
+            detection_summary = json.loads(detection_summary_path.read_text(encoding="utf-8"))
+        except Exception:
+            detection_summary = {}
     align_mode = params.get("alignMode", "affine")
     align_cn = "仿射变换 (affine)" if align_mode == "affine" else "非线性变换 (nonlinear/TPS)"
     align_en = "affine" if align_mode == "affine" else "nonlinear (thin-plate spline)"
@@ -146,13 +171,36 @@ def export_methods_text():
     channels = params.get("channels", ["red"])
     ch_str = ", ".join(channels)
     ts = params.get("timestamp", "—")
+    detector_counts = detection_summary.get("dedup_detector_counts") or detection_summary.get(
+        "detector_counts", {}
+    )
+    detector_names = ", ".join(detector_counts.keys()) if detector_counts else "configured detector"
+    sampling_mode = str(detection_summary.get("sampling_mode", "single"))
+    if sampling_mode == "merged":
+        sampling_cn = "合并切片"
+        sampling_en = "merged slices"
+    else:
+        sampling_cn = "原始单切片"
+        sampling_en = "native single slices"
+    if any(str(name).startswith("cellpose") for name in detector_counts):
+        detection_cn = f"细胞实例分割与计数采用 {detector_names}，并基于{sampling_cn}完成去重和图谱统计。"
+        detection_en = (
+            f"Cell counting used instance segmentation via {detector_names} on {sampling_en}, "
+            f"followed by deduplication and hierarchical atlas aggregation."
+        )
+    else:
+        detection_cn = f"细胞计数采用 {detector_names}，并基于{sampling_cn}完成去重和图谱统计。"
+        detection_en = (
+            f"Cell counting used {detector_names} on {sampling_en}, followed by deduplication "
+            f"and hierarchical atlas aggregation."
+        )
     text_cn = (
         f"【方法段落参考（中文）】\n"
         f"脑图谱配准使用 Brainfast v0.3 完成（运行时间：{ts}）。"
         f"显微图像分辨率为 {pixel_size} μm/像素。"
         f"图谱配准参照 Allen 小鼠脑图谱（CCFv3，annotation_25.nii.gz，体素间距 25 μm），"
         f"采用{align_cn}方法对切片进行空间配准。配准质量通过边缘 SSIM（结构相似性指标）评估。"
-        f"细胞检测采用 Cellpose 算法；去重后按图谱分级脑区统计细胞数量。荧光通道：{ch_str}。"
+        f"{detection_cn}荧光通道：{ch_str}。"
     )
     text_en = (
         f"\n【Methods paragraph reference (English)】\n"
@@ -161,7 +209,6 @@ def export_methods_text():
         f"Section registration was carried out against the Allen Mouse Brain Atlas "
         f"(CCFv3, annotation_25.nii.gz, 25 μm voxel spacing) using {align_en} transformation. "
         f"Alignment quality was evaluated by edge-SSIM. "
-        f"Cell detection used the Cellpose algorithm; deduplicated cells were assigned to "
-        f"atlas regions and counts were aggregated hierarchically. Channels: {ch_str}."
+        f"{detection_en} Channels: {ch_str}."
     )
     return jsonify({"ok": True, "text": text_cn + text_en, "params": params})

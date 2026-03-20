@@ -1,29 +1,34 @@
-﻿{
-  "project": {"name": "idlebrain", "version": "mvp-1.0"},
+{
+  "project": {
+    "name": "sample_35_test",
+    "version": "demo-1.0"
+  },
   "input": {
-    "slice_dir": "data/raw_slices",
-    "slice_glob": "*.tif",
+    "slice_dir": "data/35_C0_test",
+    "slice_glob": "z*.tif",
     "sampling_mode": "single",
     "slice_interval_n": 1,
-    "pixel_size_um_xy": 0.65,
+    "pixel_size_um_xy": 5.0,
     "slice_spacing_um": 25.0,
     "bit_depth": 16,
-    "channel_map": {"red": 0, "green": 1, "farred": 2},
+    "channel_map": {
+      "red": 0
+    },
     "active_channel": "red"
   },
   "target": {
-    "marker": "unspecified",
+    "marker": "neurons",
     "signal_type": "cyto"
   },
   "compute": {
     "device": "cuda",
-    "gpu_name": "RTX 3070 Ti",
+    "gpu_name": "RTX 5060 Laptop GPU",
     "vram_gb": 8
   },
   "registration": {
     "mode": "2d_slice_with_3d_smoothness",
     "auto_first": true,
-    "fail_score_threshold": 0.65,
+    "fail_score_threshold": 0.1,
     "landmark_fallback": true,
     "landmark_max_slices": 5
   },
@@ -45,25 +50,24 @@
     "within_slice_dedup_px": 4.0,
     "allow_fallback": false,
     "fallback_model": "log",
-    "fallback_log_min_sigma": 1.2,
-    "fallback_log_max_sigma": 5.0,
+    "fallback_log_min_sigma": 1.0,
+    "fallback_log_max_sigma": 4.0,
     "fallback_log_num_sigma": 8,
-    "fallback_log_threshold_rel": 0.03,
-    "fallback_min_distance": 8,
-    "fallback_threshold": 200.0,
+    "fallback_log_threshold_rel": 0.015,
+    "fallback_min_distance": 6,
+    "fallback_threshold": 150.0,
     "auto_switch_on_distortion": true
   },
   "dedup": {
     "enabled": true,
     "method": "kdtree",
     "neighbor_slices": 1,
-    "r_xy_um": 6.0,
+    "r_xy_um": 8.0,
     "r_z_rule": "slice_spacing_um*0.5"
   },
   "outputs": {
-    "leaf_csv": "outputs/cell_counts_leaf.csv",
-    "hierarchy_csv": "outputs/cell_counts_hierarchy.csv",
-    "qc_dir": "outputs/qc_overlays"
+    "leaf_csv": "outputs/35_test_leaf.csv",
+    "hierarchy_csv": "outputs/35_test_hierarchy.csv",
+    "qc_dir": "outputs/35_test_qc"
   }
 }
-

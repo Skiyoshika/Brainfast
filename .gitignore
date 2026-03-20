@@ -4,6 +4,8 @@
 Samples/
 data/
 outputs/
+project/data/
+project/outputs/
 
 # External dependency repo (already has its own git)
 repos/

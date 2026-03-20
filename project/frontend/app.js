@@ -108,6 +108,8 @@ const LANGS = {
     'progress.queued': 'Queued...',
     'progress.running': 'Running: {ch}',
     'progress.slices': 'Processing slice {cur} / {total}',
+    'progress.eta': 'ETA {eta}',
+    'progress.slicesEta': 'Processing slice {cur} / {total} · ETA {eta}',
     'progress.done': 'Done.',
     'progress.cancelled': 'Cancelled.',
     'progress.startFailed': 'Failed to start.',
@@ -120,6 +122,8 @@ const LANGS = {
     'results.title': 'Cell Counts by Brain Region',
     'results.total': '{n} regions total',
     'results.filtered': 'Showing {found} of {total} regions',
+    'results.expandHint': 'Expand to browse and search',
+    'results.tableHint': 'This tree is for browsing hierarchy totals. Use the summary above for interpretation.',
     'compare.title': 'Channel Comparison (Total Cell Count)',
     'history.title': 'Run History',
     'th.region': 'Region Name',
@@ -127,10 +131,55 @@ const LANGS = {
     'th.confidence': 'Confidence',
     'th.pct': '%',
     'th.bar': 'Distribution',
-    'chart.title': 'Cell Distribution — Major Brain Regions',
-    'chart.imgTitle': 'Whole-Brain Cell Count Summary',
+    'chart.title': 'Distribution — Analysis Regions',
+    'chart.imgTitle': 'Cell Count Summary',
+    'summary.title': 'Result Snapshot',
+    'summary.hint': 'Check scope and mapping coverage before reading regional biology.',
+    'summary.sample': 'Sample',
+    'summary.scope': 'Scope',
+    'summary.mode': 'Counting Mode',
+    'summary.detectors': 'Detector',
+    'summary.detected': 'Detected Cells',
+    'summary.mapped': 'Mapped to Atlas',
+    'summary.outside': 'Outside Atlas',
+    'summary.regions': 'Mapped Regions',
+    'summary.topRegion': 'Top Region',
+    'summary.none': 'No summary available yet.',
+    'cellconf.title': 'Cell Count Confidence Samples',
+    'cellconf.hint': 'Three representative raw slices with the final counted-cell markers overlaid.',
+    'cellconf.empty': 'No counted-cell sample images yet.',
+    'cellconf.detector': 'Detector',
+    'cellconf.cells': 'cells',
     'th.channel': 'Channel',
     'th.total': 'Total Count',
+    'reg3d.title': '3D Registration Reports',
+    'reg3d.hint': 'Check the final overview first. Open the summary or metadata only when something looks suspicious.',
+    'reg3d.empty': 'No 3D registration runs found yet.',
+    'reg3d.pipeline': 'Pipeline',
+    'reg3d.updated': 'Updated',
+    'reg3d.hemisphere': 'Hemisphere',
+    'reg3d.target': 'Target',
+    'reg3d.staining': 'Staining Rate',
+    'reg3d.coverage': 'Atlas Coverage',
+    'reg3d.positiveAtlas': 'Positive / Atlas',
+    'reg3d.before': 'Before',
+    'reg3d.after': 'Final',
+    'reg3d.noBefore': 'No pre-refinement overview',
+    'reg3d.openSummary': 'Open Summary',
+    'reg3d.openMetadata': 'Open Metadata',
+    'reg3d.openReport': 'Open HTML Report',
+    'reg3d.summaryTitle': '3D Run Summary',
+    'reg3d.summaryDesc': 'This is the plain-text summary for the selected 3D registration run.',
+    'reg3d.metadataTitle': '3D Run Metadata',
+    'reg3d.metadataDesc': 'This JSON contains the paths, metrics, backend parameters, and staining stats for the selected 3D registration run.',
+    'reg3d.menu': 'More actions',
+    'reg3d.detailInfo': 'Detailed Info',
+    'reg3d.deleteBad': 'Delete Bad Report',
+    'reg3d.pinReport': 'Pin This Report',
+    'reg3d.pinned': 'Pinned',
+    'reg3d.pinDone': 'Report pinned to top.',
+    'reg3d.deleteDone': 'Report removed from active list.',
+    'reg3d.deleteConfirm': 'Move this report out of the active list?',
     'outputs.title': 'Output Files',
     'outputs.hint': 'Click a PNG to preview · Click CSV/JSON to view content',
     'outputs.empty': 'No output files yet',
@@ -138,8 +187,8 @@ const LANGS = {
     'qc.empty': 'No QC images yet. Please run the pipeline in the Registration Workflow tab first.',
     'qc.annotatedSliceTitle': 'Atlas Registration — Annotated Brain Regions',
     'qc.annotatedSliceHint': 'Lightsheet image with Allen CCFv3 region boundaries and labels. Click to view full size.',
-    'qc.bestSliceTitle': 'Raw Lightsheet vs Atlas Registration',
-    'qc.bestSliceHint': 'Side-by-side comparison — click to view full resolution',
+    'qc.bestSliceTitle': 'Registration Slice vs Atlas Registration',
+    'qc.bestSliceHint': 'Registered-slice comparison — click to view full resolution',
     'qc.panelTitle': 'Whole-Brain Registration Overview',
     'qc.panelHint': 'Multi-slice atlas registration panel — click to view full size',
     'tab.qc.title': 'Batch QC Review',
@@ -217,6 +266,8 @@ const LANGS = {
     'toast.cancelNone': 'No pipeline is running',
     'toast.outputsPath': 'Output folder: {path}',
     'toast.qcLoadFailed': 'Failed to load QC images',
+    'toast.runDetailsFailed': 'Failed to open run details.',
+    'outputs.previewDesc': 'Text preview for the selected output file.',
   },
   zh: {
     'nav.workflow': '配准工作流',
@@ -314,6 +365,8 @@ const LANGS = {
     'progress.queued': '已排队...',
     'progress.running': '运行中：{ch}',
     'progress.slices': '处理切片 {cur} / {total}',
+    'progress.eta': '预计剩余 {eta}',
+    'progress.slicesEta': '处理切片 {cur} / {total} · 预计剩余 {eta}',
     'progress.done': '完成。',
     'progress.cancelled': '已取消。',
     'progress.startFailed': '启动失败。',
@@ -326,17 +379,64 @@ const LANGS = {
     'results.title': '脑区细胞计数',
     'results.total': '共 {n} 个脑区',
     'results.filtered': '显示 {found} / {total} 个脑区',
+    'results.expandHint': '展开后查看和搜索',
+    'results.tableHint': '这张树表用于浏览层级累计值；真正用于解释分布的请以上方摘要和图表为准。',
     'compare.title': '通道比较（细胞总数）',
     'history.title': '运行历史',
     'th.region': '脑区名称',
     'th.count': '细胞计数',
     'th.pct': '占比',
     'th.bar': '分布',
-    'chart.title': '细胞分布 — 主要脑区',
-    'chart.imgTitle': '全脑细胞计数汇总',
+    'chart.title': '细胞分布 — 分析脑区',
+    'chart.imgTitle': '细胞计数汇总',
+    'summary.title': '结果摘要',
+    'summary.hint': '先确认范围和图谱映射覆盖，再解读脑区分布。',
+    'summary.sample': '样本',
+    'summary.scope': '范围',
+    'summary.mode': '计数模式',
+    'summary.detectors': '检测器',
+    'summary.detected': '检测到的细胞',
+    'summary.mapped': '成功映射到图谱',
+    'summary.outside': '落在图谱外',
+    'summary.regions': '映射到的脑区数',
+    'summary.topRegion': '最高脑区',
+    'summary.none': '当前还没有可用摘要。',
+    'cellconf.title': '细胞计数置信样本',
+    'cellconf.hint': '展示 3 张代表性真实切片，并叠加最终计入统计的细胞标记点。',
+    'cellconf.empty': '暂无细胞计数样本图。',
+    'cellconf.detector': '检测器',
+    'cellconf.cells': '个细胞',
     'th.confidence': '置信度',
     'th.channel': '通道',
     'th.total': '总计数',
+    'reg3d.title': '3D配准报告',
+    'reg3d.hint': '先看最终总览图；只有当结果可疑时，再打开摘要或元数据。',
+    'reg3d.empty': '还没有发现3D配准结果。',
+    'reg3d.pipeline': '流程',
+    'reg3d.updated': '更新时间',
+    'reg3d.hemisphere': '半脑',
+    'reg3d.target': '目标分辨率',
+    'reg3d.staining': '染色率',
+    'reg3d.coverage': '图谱覆盖率',
+    'reg3d.positiveAtlas': '阳性/图谱',
+    'reg3d.before': '细化前',
+    'reg3d.after': '最终结果',
+    'reg3d.noBefore': '没有细化前总览图',
+    'reg3d.openSummary': '打开摘要',
+    'reg3d.openMetadata': '打开元数据',
+    'reg3d.openReport': '打开HTML报告',
+    'reg3d.summaryTitle': '3D运行摘要',
+    'reg3d.summaryDesc': '这是当前3D配准结果的纯文本摘要。',
+    'reg3d.metadataTitle': '3D运行元数据',
+    'reg3d.metadataDesc': '这个JSON包含当前3D配准结果的路径、指标、后端参数和染色率。',
+    'reg3d.menu': '更多操作',
+    'reg3d.detailInfo': '详细信息',
+    'reg3d.deleteBad': '删除不良报告',
+    'reg3d.pinReport': '置顶该报告',
+    'reg3d.pinned': '已置顶',
+    'reg3d.pinDone': '报告已置顶。',
+    'reg3d.deleteDone': '报告已从当前列表移除。',
+    'reg3d.deleteConfirm': '确认将该报告移出当前列表吗？',
     'outputs.title': '输出文件',
     'outputs.hint': '点击PNG预览 · 点击CSV/JSON查看内容',
     'outputs.empty': '暂无输出文件',
@@ -344,8 +444,8 @@ const LANGS = {
     'qc.empty': '暂无QC图片，请先在”配准工作流”标签页运行流水线。',
     'qc.annotatedSliceTitle': '图谱配准 — 脑区标注示例',
     'qc.annotatedSliceHint': '光片图像叠加 Allen CCFv3 脑区边界与标签。点击查看大图。',
-    'qc.bestSliceTitle': '原始光片 vs 图谱配准',
-    'qc.bestSliceHint': '左右对比图 — 点击查看原始分辨率',
+    'qc.bestSliceTitle': '配准切片 vs 图谱配准',
+    'qc.bestSliceHint': '配准后切片左右对比图 — 点击查看原始分辨率',
     'qc.panelTitle': '全脑配准总览',
     'qc.panelHint': '多切片图谱配准面板 — 点击查看大图',
     'tab.qc.title': '批量QC审查',
@@ -423,6 +523,8 @@ const LANGS = {
     'toast.cancelNone': '当前没有运行中的流水线',
     'toast.outputsPath': '输出目录：{path}',
     'toast.qcLoadFailed': 'QC图片加载失败',
+    'toast.runDetailsFailed': '打开运行详情失败。',
+    'outputs.previewDesc': '所选输出文件的文本预览。',
   },
 };
 
@@ -488,6 +590,18 @@ const oneClickScopeEl = document.getElementById('oneClickScope');
 const oneClickStartBtn = document.getElementById('oneClickStartBtn');
 const quickExportBtn = document.getElementById('quickExportBtn');
 const quickExportFormatEl = document.getElementById('quickExportFormat');
+const methodsModalTitleEl = document.getElementById('methodsModalTitle');
+const methodsModalDescEl = document.getElementById('methodsModalDesc');
+
+const state = {
+  running: false,
+  channel: 'red',
+  runAll: false,
+  allResults: [],
+  cellSummary: null,
+  useHierarchy: false,
+  startEpoch: null,
+};
 
 const overlayJobState = {
   jobId: localStorage.getItem('idlebrain.overlayJobId') || '',
@@ -623,6 +737,25 @@ function setProgress(p, text) {
   barFill.style.width = `${p}%`;
   stepText.textContent = text;
   progressPct.textContent = `${Math.round(p)}%`;
+}
+function formatEtaSeconds(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  if (total < 60) return `${total}s`;
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  if (mins < 60) return secs ? `${mins}m ${secs}s` : `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins ? `${hours}h ${remMins}m` : `${hours}h`;
+}
+function getRunEtaSeconds(status) {
+  const done = Number(status?.slicesDone || 0);
+  const total = Number(status?.slicesTotal || 0);
+  const startEpoch = Number(status?.startEpoch || 0);
+  if (!(status?.running) || done <= 0 || total <= done || startEpoch <= 0) return null;
+  const elapsed = Math.max(1, Math.floor(Date.now() / 1000 - startEpoch));
+  const perSlice = elapsed / done;
+  return Math.max(1, Math.round((total - done) * perSlice));
 }
 function setRunning(r) {
   state.running = r;
@@ -1169,6 +1302,7 @@ document.getElementById('runBtn').onclick = async () => {
     showToast(t('toast.runFailed', { err: res.error || '?' }), 'error');
     setRunning(false); setProgress(0, t('progress.startFailed')); return;
   }
+  state.startEpoch = Math.floor(Date.now() / 1000);
   setProgress(20, t('progress.running', { ch: channels.join(' + ') }));
   showToast(t('toast.runStarted', { channels: channels.join(' + ') }), 'info', 5000);
   await pollLogsUntilDone();
@@ -1195,6 +1329,7 @@ async function pollLogsUntilDone() {
     logBox.scrollTop = logBox.scrollHeight;
     
     // Update sidebar slice progress bar (visible at all times)
+    state.startEpoch = Number(s.startEpoch || state.startEpoch || 0) || null;
     _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
 
     if (s.running) {
@@ -1202,8 +1337,11 @@ async function pollLogsUntilDone() {
       const m = lastLines.match(/slices?\s+(\d+)\s*[\/／]\s*(\d+)/i);
       if (m) {
         const cur = Number(m[1]), total = Number(m[2]);
+        const etaSeconds = getRunEtaSeconds(s);
         sliceProgress.classList.remove('hidden');
-        sliceProgress.textContent = t('progress.slices', { cur, total });
+        sliceProgress.textContent = etaSeconds != null
+          ? t('progress.slicesEta', { cur, total, eta: formatEtaSeconds(etaSeconds) })
+          : t('progress.slices', { cur, total });
         setProgress(20 + Math.round((cur / total) * 75), t('progress.running', { ch: s.currentChannel || '' }));
       } else {
         setProgress(Math.min(94, 20 + Math.floor((s.logCount || 0) * 0.6)), t('progress.running', { ch: s.currentChannel || '' }));
@@ -1211,6 +1349,7 @@ async function pollLogsUntilDone() {
       }
     }
     if (!s.running) {
+      state.startEpoch = null;
       sliceProgress.classList.add('hidden');
       if (s.error && s.error !== 'cancelled by user') showToast(s.error, 'error');
       break;
@@ -1224,7 +1363,7 @@ async function pollLogsUntilDone() {
 // ================================================================
 document.getElementById('cancelBtn').onclick = async () => {
   const res = await fetch('/api/cancel', { method: 'POST' }).then(r => r.json());
-  if (res.ok) { setRunning(false); setProgress(0, t('progress.cancelled')); sliceProgress.classList.add('hidden'); showToast(t('toast.cancelOk'), 'warning', 3000); }
+  if (res.ok) { state.startEpoch = null; setRunning(false); setProgress(0, t('progress.cancelled')); sliceProgress.classList.add('hidden'); showToast(t('toast.cancelOk'), 'warning', 3000); }
   else showToast(t('toast.cancelNone'), 'info');
 };
 
@@ -1271,22 +1410,34 @@ async function refreshQcAll() {
     const panelSection = document.getElementById('demoPanelSection');
     const panelImg = document.getElementById('demoPanelImg');
     const statsBar = document.getElementById('regStatsBar');
-    // Check if panel exists
-    const sliceListRes = await fetch('/api/outputs/reg-slice-list').then(r => r.json());
-    if (sliceListRes.ok && sliceListRes.count > 0) {
+    const panelHead = await fetch('/api/outputs/demo-panel', { method: 'HEAD' });
+    if (panelHead.ok) {
       panelSection.style.display = '';
       panelImg.src = `/api/outputs/demo-panel?${Date.now()}`;
-      // Load registration stats
+      statsBar.innerHTML = '';
       try {
         const stats = await fetch('/api/outputs/reg-stats').then(r => r.json());
         if (stats.ok) {
-          statsBar.innerHTML = [
-            `<span>✅ <strong>${stats.ok_count}/${stats.total}</strong> slices registered</span>`,
-            `<span>Score mean: <strong>${stats.mean_score}</strong></span>`,
-            `<span>Range: ${stats.min_score} – ${stats.max_score}</span>`,
-          ].join('<span style="color:#444">  |  </span>');
+          if (stats.mode === 'registration_run') {
+            statsBar.innerHTML = [
+              `<span>Pipeline: <strong>${escapeHtml(stats.pipeline || '-')}</strong></span>`,
+              `<span>NCC: <strong>${escapeHtml(formatFixed(stats.ncc, 4))}</strong></span>`,
+              `<span>SSIM: <strong>${escapeHtml(formatFixed(stats.ssim, 4))}</strong></span>`,
+              `<span>Dice: <strong>${escapeHtml(formatFixed(stats.dice, 4))}</strong></span>`,
+              `<span>Staining: <strong>${escapeHtml(formatPercent(stats.staining_rate))}</strong></span>`,
+              `<span>Coverage: <strong>${escapeHtml(formatPercent(stats.atlas_coverage))}</strong></span>`,
+            ].join('<span style="color:#444">  |  </span>');
+          } else {
+            statsBar.innerHTML = [
+              `<span>✅ <strong>${stats.ok_count}/${stats.total}</strong> slices registered</span>`,
+              `<span>Score mean: <strong>${stats.mean_score}</strong></span>`,
+              `<span>Range: ${stats.min_score} – ${stats.max_score}</span>`,
+            ].join('<span style="color:#444">  |  </span>');
+          }
         }
       } catch {}
+    } else {
+      panelSection.style.display = 'none';
     }
   } catch {}
 
@@ -1381,6 +1532,8 @@ async function refreshOutputs() {
     }
     state.allResults = data;
     state.useHierarchy = useHierarchy;
+    state.cellSummary = null;
+    await refreshCellSummary();
     renderResultsTable(state.allResults);
 
     // Load static cell count chart
@@ -1393,6 +1546,7 @@ async function refreshOutputs() {
         chartImg.src = `/api/outputs/cell-chart?${Date.now()}`;
       }
     } catch {}
+    await refreshDetectionConfidenceSamples();
     compareRows.innerHTML = '';
     for (const ch of ['red', 'green', 'farred']) {
       try {
@@ -1405,44 +1559,144 @@ async function refreshOutputs() {
         compareRows.appendChild(tr);
       } catch {}
     }
+    await refreshRegistrationRuns();
     await refreshHistory();
   } catch (err) {
     console.error('Refresh outputs failed:', err);
   }
 }
 
-// Colour palette for chart bars (depth-2 major regions)
-const CHART_COLORS = [
-  '#e57373','#ff9800','#ffeb3b','#66bb6a','#26c6da',
-  '#5c6bc0','#ab47bc','#ec407a','#26a69a','#8d6e63',
-  '#78909c','#ffa726',
-];
+async function refreshCellSummary() {
+  const section = document.getElementById('resultSummarySection');
+  const cards = document.getElementById('resultSummaryCards');
+  const warnings = document.getElementById('resultSummaryWarnings');
+  const lead = document.getElementById('resultSummaryLead');
+  if (!section || !cards || !warnings || !lead) return;
 
-function renderRegionChart(data) {
+  try {
+    const res = await fetch('/api/outputs/cell-summary').then(r => r.json());
+    const summary = res?.ok ? res.summary : null;
+    state.cellSummary = summary || null;
+    if (!summary) {
+      section.style.display = 'none';
+      cards.innerHTML = '';
+      warnings.innerHTML = '';
+      lead.textContent = t('summary.none');
+      return;
+    }
+
+    section.style.display = '';
+    lead.textContent = `${summary.slice_summary || '-'} · ${summary.mode_note || ''}`.trim();
+    warnings.innerHTML = '';
+    (summary.warnings || []).forEach((message) => {
+      const item = document.createElement('div');
+      item.className = 'results-warning';
+      item.textContent = String(message || '');
+      warnings.appendChild(item);
+    });
+
+    const topRegion = summary.top_region
+      ? `${summary.top_region.label} · ${Number(summary.top_region.count || 0).toLocaleString()}`
+      : '-';
+    const mappedText = `${Number(summary.mapped_count || 0).toLocaleString()} (${formatPercent(summary.mapped_pct || 0)})`;
+    const outsideText = `${Number(summary.outside_count || 0).toLocaleString()} (${formatPercent(summary.outside_pct || 0)})`;
+    cards.innerHTML = [
+      renderSummaryCard(t('summary.sample'), summary.sample_name || '-', summary.slice_summary || ''),
+      renderSummaryCard(t('summary.scope'), summary.scope_label || '-', summary.scope_kind || ''),
+      renderSummaryCard(t('summary.mode'), summary.counting_mode || '-', summary.mode_note || ''),
+      renderSummaryCard(t('summary.detectors'), summary.detectors || '-', ''),
+      renderSummaryCard(t('summary.detected'), Number(summary.total_detected || 0).toLocaleString(), ''),
+      renderSummaryCard(t('summary.mapped'), mappedText, ''),
+      renderSummaryCard(t('summary.outside'), outsideText, ''),
+      renderSummaryCard(t('summary.regions'), Number(summary.regions_mapped || 0).toLocaleString(), ''),
+      renderSummaryCard(t('summary.topRegion'), topRegion, ''),
+    ].join('');
+  } catch (err) {
+    console.error('Refresh cell summary failed:', err);
+    section.style.display = 'none';
+    cards.innerHTML = '';
+    warnings.innerHTML = '';
+  }
+}
+
+async function refreshDetectionConfidenceSamples() {
+  const section = document.getElementById('cellConfidenceSection');
+  const grid = document.getElementById('cellConfidenceGrid');
+  const empty = document.getElementById('cellConfidenceEmpty');
+  if (!section || !grid || !empty) return;
+
+  try {
+    const res = await fetch('/api/outputs/detection-samples').then(r => r.json());
+    if (!res.ok || !Array.isArray(res.samples) || !res.samples.length) {
+      section.style.display = 'none';
+      grid.innerHTML = '';
+      empty.style.display = '';
+      return;
+    }
+
+    section.style.display = '';
+    empty.style.display = 'none';
+    grid.innerHTML = '';
+    res.samples.forEach(sample => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'cell-confidence-card';
+      const title = sample.source_name || `slice ${sample.slice_id ?? ''}`;
+      const subtitle = `${Number(sample.count || 0).toLocaleString()} ${t('cellconf.cells')}`;
+      const detectorText = sample.detectors ? `${t('cellconf.detector')}: ${sample.detectors}` : '';
+      card.innerHTML = `
+        <img src="${sample.url}?${Date.now()}" alt="${escapeHtml(title)}" />
+        <div class="cell-confidence-meta">
+          <div class="cell-confidence-title">${escapeHtml(title)}</div>
+          <div class="cell-confidence-subtitle">${escapeHtml(subtitle)}</div>
+          <div class="cell-confidence-detector">${escapeHtml(detectorText)}</div>
+        </div>
+      `;
+      card.onclick = () => openLightbox(`${sample.url}?${Date.now()}`, title);
+      grid.appendChild(card);
+    });
+  } catch (err) {
+    console.error('Refresh detection samples failed:', err);
+    section.style.display = 'none';
+  }
+}
+
+function renderSummaryCard(label, value, note = '') {
+  return `
+    <article class="result-summary-card">
+      <div class="result-summary-label">${escapeHtml(label)}</div>
+      <div class="result-summary-value">${escapeHtml(value)}</div>
+      <div class="result-summary-note">${escapeHtml(note || '')}</div>
+    </article>
+  `;
+}
+
+function safeDepth(value) {
+  const parsed = Number.parseInt(value ?? 0, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.min(parsed, 12);
+}
+
+function renderRegionChart(summary) {
   const section = document.getElementById('chartSection');
   const container = document.getElementById('regionChart');
-  if (!data || !data.length) { section.style.display = 'none'; return; }
-  // Pick depth-2 regions with count > 0
-  const regions = data.filter(d => parseInt(d.depth||0) === 2 && Number(d.count||0) > 0)
-                      .sort((a,b) => Number(b.count)-Number(a.count));
+  const regions = Array.isArray(summary?.major_regions) ? summary.major_regions : [];
   if (!regions.length) { section.style.display = 'none'; return; }
-  const total = regions.reduce((s,r) => s + Number(r.count), 0);
   const maxCount = regions[0] ? Number(regions[0].count) : 1;
   section.style.display = '';
   container.innerHTML = '';
-  regions.forEach((r, i) => {
-    const count = Number(r.count);
-    const pct = (count / total * 100).toFixed(1);
+  regions.forEach((r) => {
+    const count = Number(r.count || 0);
+    const pct = Number(r.pct || 0) * 100;
     const barPct = (count / maxCount * 100).toFixed(1);
-    const color = CHART_COLORS[i % CHART_COLORS.length];
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:7px';
+    row.className = 'region-chart-row';
     row.innerHTML = `
-      <div style="width:110px;text-align:right;font-size:0.82em;color:#ccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.region_name||''}">${r.acronym||r.region_name||''}</div>
-      <div style="flex:1;background:#222;border-radius:3px;height:18px;position:relative">
-        <div style="width:${barPct}%;background:${color};height:100%;border-radius:3px;transition:width 0.4s ease"></div>
+      <div class="region-chart-label" title="${escapeHtml(r.label || '')}">${escapeHtml(r.label || '-')}</div>
+      <div class="region-chart-bar">
+        <div class="region-chart-fill" style="width:${barPct}%;background:${escapeHtml(r.color || '#78909C')}"></div>
       </div>
-      <div style="width:80px;font-size:0.82em;color:#aaa">${count.toLocaleString()} <span style="color:#666">(${pct}%)</span></div>`;
+      <div class="region-chart-value">${count.toLocaleString()} <span>(${pct.toFixed(1)}%)</span></div>`;
     container.appendChild(row);
   });
 }
@@ -1451,10 +1705,10 @@ function renderResultsTable(data) {
   resultRows.innerHTML = '';
   const keyword = (document.getElementById('regionSearch')?.value || '').toLowerCase();
   const filtered = keyword ? data.filter(d => (d.region_name || d.region || '').toLowerCase().includes(keyword) || (d.acronym || '').toLowerCase().includes(keyword)) : data;
-  const rootCount = data.find(d => parseInt(d.depth||0)===0);
+  const rootCount = data.find(d => safeDepth(d.depth) === 0);
   const total = rootCount ? Number(rootCount.count||0) : Math.max(...data.map(d=>Number(d.count||0)));
   filtered.forEach(d => {
-    const depth = parseInt(d.depth || 0);
+    const depth = safeDepth(d.depth);
     const indent = state.useHierarchy && !keyword ? '&nbsp;'.repeat(depth * 3) : '';
     const name = d.region_name || d.region || '-';
     const acronym = d.acronym ? `<span style="color:#888;font-size:0.85em"> (${d.acronym})</span>` : '';
@@ -1474,10 +1728,11 @@ function renderResultsTable(data) {
     resultRows.appendChild(tr);
   });
   const meta = document.getElementById('resultsMeta');
-  meta.textContent = keyword
+  const baseMeta = keyword
     ? t('results.filtered', { found: filtered.length, total: data.length })
     : t('results.total', { n: data.length });
-  if (!keyword) renderRegionChart(data);
+  meta.textContent = `${baseMeta} · ${t('results.tableHint')}`;
+  if (!keyword) renderRegionChart(state.cellSummary);
 }
 
 document.getElementById('regionSearch').addEventListener('input', () => renderResultsTable(state.allResults));
@@ -1487,12 +1742,18 @@ document.getElementById('exportBtn').onclick   = () => window.open('/api/outputs
 // ================================================================
 // METHODS TEXT EXPORT
 // ================================================================
+function openTextModal(title, description, text) {
+  if (methodsModalTitleEl) methodsModalTitleEl.textContent = title;
+  if (methodsModalDescEl) methodsModalDescEl.textContent = description;
+  document.getElementById('methodsText').textContent = text;
+  document.getElementById('methodsModal').classList.remove('hidden');
+}
+
 document.getElementById('exportMethodsBtn').onclick = async () => {
   try {
     const res = await fetch('/api/export/methods-text').then(r => r.json());
     if (!res.ok) { showToast(t('toast.methodsFailed'), 'error'); return; }
-    document.getElementById('methodsText').textContent = res.text;
-    document.getElementById('methodsModal').classList.remove('hidden');
+    openTextModal(t('methods.title'), t('methods.desc'), res.text);
   } catch { showToast(t('toast.methodsFailed'), 'error'); }
 };
 document.getElementById('methodsModalClose').onclick  = () => document.getElementById('methodsModal').classList.add('hidden');
@@ -1523,6 +1784,280 @@ async function refreshHistory() {
 }
 
 // ================================================================
+// 3D REGISTRATION REPORTS
+// ================================================================
+function formatRunTimestamp(value) {
+  if (!value) return '-';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
+}
+
+function formatFixed(value, digits = 4) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(digits) : '-';
+}
+
+function formatPercent(value, digits = 1) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${(n * 100).toFixed(digits)}%` : '-';
+}
+
+function metricDeltaInfo(finalValue, beforeValue, lowerIsBetter = false) {
+  const after = Number(finalValue);
+  const before = Number(beforeValue);
+  if (!Number.isFinite(after) || !Number.isFinite(before)) {
+    return { text: 'final only', cls: 'neutral' };
+  }
+  const delta = after - before;
+  if (Math.abs(delta) < 1e-6) {
+    return { text: 'no change', cls: 'neutral' };
+  }
+  const direction = lowerIsBetter ? -delta : delta;
+  return {
+    text: `${delta > 0 ? '+' : ''}${delta.toFixed(4)}`,
+    cls: direction > 0 ? 'good' : 'bad',
+  };
+}
+
+function renderRegistrationMetric(label, finalValue, beforeValue, opts = {}) {
+  const { lowerIsBetter = false, formatter = (v) => formatFixed(v, 4) } = opts;
+  const delta = metricDeltaInfo(finalValue, beforeValue, lowerIsBetter);
+  return `
+    <div class="registration-metric">
+      <div class="registration-metric-label">${escapeHtml(label)}</div>
+      <div class="registration-metric-value">${escapeHtml(formatter(finalValue))}</div>
+      <div class="registration-metric-delta ${delta.cls}">${escapeHtml(delta.text)}</div>
+    </div>
+  `;
+}
+
+function renderRegistrationPreview(url, caption) {
+  if (!url) {
+    return `
+      <div class="registration-preview">
+        <div class="registration-preview-empty">${escapeHtml(caption)}</div>
+      </div>
+    `;
+  }
+  return `
+    <div class="registration-preview">
+      <img src="${escapeHtml(url)}?ts=${Date.now()}" alt="${escapeHtml(caption)}" data-lightbox-src="${escapeHtml(url)}?ts=${Date.now()}" data-lightbox-caption="${escapeHtml(caption)}" />
+      <div class="registration-preview-caption">${escapeHtml(caption)}</div>
+    </div>
+  `;
+}
+
+function renderRegistrationMenu(run) {
+  const detailUrl = run?.artifacts?.report || run?.artifacts?.summary || run?.artifacts?.metadata || '';
+  const detailType = run?.artifacts?.report ? 'link' : 'text';
+  const detailTitle = run?.artifacts?.report ? '' : (run?.artifacts?.summary ? t('reg3d.summaryTitle') : t('reg3d.metadataTitle'));
+  const detailDesc = run?.artifacts?.report ? '' : (run?.artifacts?.summary ? t('reg3d.summaryDesc') : t('reg3d.metadataDesc'));
+  const pinLabel = t('reg3d.pinReport');
+  return `
+    <div class="registration-menu-wrap" data-registration-menu="${escapeHtml(run.name || '')}">
+      <button
+        class="registration-menu-trigger"
+        type="button"
+        aria-label="${escapeHtml(t('reg3d.menu'))}"
+        data-registration-menu-btn="${escapeHtml(run.name || '')}"
+      >⋯</button>
+      <div class="registration-menu-dropdown">
+        <button
+          type="button"
+          class="registration-menu-item"
+          data-registration-detail="${escapeHtml(run.name || '')}"
+          data-detail-url="${escapeHtml(detailUrl)}"
+          data-detail-type="${escapeHtml(detailType)}"
+          data-detail-title="${escapeHtml(detailTitle)}"
+          data-detail-desc="${escapeHtml(detailDesc)}"
+        >${escapeHtml(t('reg3d.detailInfo'))}</button>
+        <button
+          type="button"
+          class="registration-menu-item"
+          data-registration-delete="${escapeHtml(run.name || '')}"
+        >${escapeHtml(t('reg3d.deleteBad'))}</button>
+        <button
+          type="button"
+          class="registration-menu-item"
+          data-registration-pin="${escapeHtml(run.name || '')}"
+        >${escapeHtml(pinLabel)}</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderRegistrationRunCard(run) {
+  const metrics = run.metrics || {};
+  const pre = run.pre_metrics || {};
+  const staining = run.staining_stats || {};
+  const targetText = run.target_um === null || run.target_um === undefined
+    ? 'native'
+    : `${formatFixed(run.target_um, 1)} um`;
+  return `
+    <article class="registration-card">
+      <div class="registration-card-header">
+        <div class="registration-card-header-main">
+          <div class="registration-card-title">${escapeHtml(run.input_name || run.name || 'Unnamed run')}</div>
+          <div class="registration-card-subtitle">${escapeHtml(run.verdict_body || '')}</div>
+        </div>
+        <div class="registration-card-header-side">
+          ${run.pinned ? `<span class="registration-pill registration-pill-pinned">${escapeHtml(t('reg3d.pinned'))}</span>` : ''}
+          <span class="registration-badge ${escapeHtml(run.verdict_tone || 'neutral')}">${escapeHtml(run.verdict_title || '')}</span>
+          ${renderRegistrationMenu(run)}
+        </div>
+      </div>
+
+      <div class="registration-meta">
+        <div class="registration-meta-label">${escapeHtml(t('reg3d.pipeline'))}</div>
+        <div class="registration-meta-value">${escapeHtml(run.pipeline_label || '-')}</div>
+        <div class="registration-meta-label">${escapeHtml(t('reg3d.hemisphere'))}</div>
+        <div class="registration-meta-value">${escapeHtml(run.hemisphere || '-')}</div>
+        <div class="registration-meta-label">${escapeHtml(t('reg3d.target'))}</div>
+        <div class="registration-meta-value">${escapeHtml(targetText)}</div>
+        <div class="registration-meta-label">${escapeHtml(t('reg3d.updated'))}</div>
+        <div class="registration-meta-value">${escapeHtml(formatRunTimestamp(run.updated_at))}</div>
+      </div>
+
+      <div class="registration-preview-grid">
+        ${renderRegistrationPreview(run?.artifacts?.overview_before, run?.artifacts?.overview_before ? t('reg3d.before') : t('reg3d.noBefore'))}
+        ${renderRegistrationPreview(run?.artifacts?.overview, t('reg3d.after'))}
+      </div>
+
+      <div class="registration-metrics-grid">
+        ${renderRegistrationMetric('NCC', metrics.NCC, pre.NCC)}
+        ${renderRegistrationMetric('SSIM', metrics.SSIM, pre.SSIM)}
+        ${renderRegistrationMetric('Dice', metrics.Dice, pre.Dice)}
+        ${renderRegistrationMetric('MSE', metrics.MSE, pre.MSE, { lowerIsBetter: true })}
+        ${renderRegistrationMetric(t('reg3d.staining'), staining.staining_rate, undefined, { formatter: (v) => formatPercent(v) })}
+        ${renderRegistrationMetric(t('reg3d.coverage'), staining.atlas_coverage, undefined, { formatter: (v) => formatPercent(v) })}
+      </div>
+    </article>
+  `;
+}
+
+async function openRegistrationText(url, title, description) {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('request failed');
+    const text = await resp.text();
+    const capped = text.length > 20000 ? `${text.slice(0, 20000)}\n...(truncated)` : text;
+    openTextModal(title, description, capped);
+  } catch (err) {
+    console.error('Open registration text failed:', err);
+    showToast(t('toast.runDetailsFailed'), 'warning');
+  }
+}
+
+function closeRegistrationMenus() {
+  document.querySelectorAll('.registration-menu-wrap.open').forEach((el) => el.classList.remove('open'));
+}
+
+function toggleRegistrationMenu(runName) {
+  const target = Array.from(document.querySelectorAll('.registration-menu-wrap')).find(
+    (el) => el.dataset.registrationMenu === runName
+  );
+  if (!target) return;
+  const nextState = !target.classList.contains('open');
+  closeRegistrationMenus();
+  if (nextState) target.classList.add('open');
+}
+
+async function pinRegistrationRun(runName) {
+  try {
+    const resp = await fetch(`/api/outputs/registration-run/${encodeURIComponent(runName)}/pin`, {
+      method: 'POST',
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      throw new Error(data?.error || 'pin failed');
+    }
+    showToast(t('reg3d.pinDone'), 'success', 2500);
+    await refreshRegistrationRuns();
+  } catch (err) {
+    console.error('Pin registration run failed:', err);
+    showToast(`${t('toast.runDetailsFailed')} ${err?.message || ''}`.trim(), 'warning');
+  }
+}
+
+async function deleteBadRegistrationRun(runName) {
+  if (!window.confirm(t('reg3d.deleteConfirm'))) return;
+  try {
+    const resp = await fetch(`/api/outputs/registration-run/${encodeURIComponent(runName)}/delete-bad`, {
+      method: 'POST',
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      throw new Error(data?.error || 'delete failed');
+    }
+    showToast(t('reg3d.deleteDone'), 'success', 2500);
+    await refreshRegistrationRuns();
+  } catch (err) {
+    console.error('Delete registration run failed:', err);
+    showToast(`${t('toast.runDetailsFailed')} ${err?.message || ''}`.trim(), 'warning');
+  }
+}
+
+async function refreshRegistrationRuns() {
+  const grid = document.getElementById('registrationRunsGrid');
+  const empty = document.getElementById('registrationRunsEmpty');
+  if (!grid || !empty) return;
+  try {
+    const res = await fetch('/api/outputs/registration-runs').then(r => r.json());
+    const runs = Array.isArray(res?.runs) ? res.runs : [];
+    if (!res.ok || runs.length === 0) {
+      grid.innerHTML = '';
+      empty.classList.remove('hidden');
+      return;
+    }
+
+    empty.classList.add('hidden');
+    grid.innerHTML = runs.map(renderRegistrationRunCard).join('');
+
+    grid.querySelectorAll('[data-lightbox-src]').forEach((img) => {
+      img.onclick = () => openLightbox(img.dataset.lightboxSrc, img.dataset.lightboxCaption || '');
+    });
+    grid.querySelectorAll('[data-registration-menu-btn]').forEach((btn) => {
+      btn.onclick = (event) => {
+        event.stopPropagation();
+        toggleRegistrationMenu(btn.dataset.registrationMenuBtn || '');
+      };
+    });
+    grid.querySelectorAll('[data-registration-detail]').forEach((btn) => {
+      btn.onclick = () => {
+        closeRegistrationMenus();
+        const detailType = btn.dataset.detailType || 'link';
+        const detailUrl = btn.dataset.detailUrl || '';
+        if (!detailUrl) return;
+        if (detailType === 'text') {
+          openRegistrationText(detailUrl, btn.dataset.detailTitle || '', btn.dataset.detailDesc || '');
+          return;
+        }
+        window.open(detailUrl, '_blank');
+      };
+    });
+    grid.querySelectorAll('[data-registration-delete]').forEach((btn) => {
+      btn.onclick = () => {
+        closeRegistrationMenus();
+        deleteBadRegistrationRun(btn.dataset.registrationDelete || '');
+      };
+    });
+    grid.querySelectorAll('[data-registration-pin]').forEach((btn) => {
+      btn.onclick = () => {
+        closeRegistrationMenus();
+        pinRegistrationRun(btn.dataset.registrationPin || '');
+      };
+    });
+  } catch (err) {
+    console.error('Refresh 3D registration runs failed:', err);
+    grid.innerHTML = '';
+    empty.classList.remove('hidden');
+  }
+}
+
+document.getElementById('refreshRegistrationRunsBtn').onclick = refreshRegistrationRuns;
+document.addEventListener('click', () => closeRegistrationMenus());
+
+// ================================================================
 // INIT
 // ── Slice progress bar (sidebar, always visible) ─────────────────────────────
 function _updateSliceProgressBar(done, total) {
@@ -1532,7 +2067,10 @@ function _updateSliceProgressBar(done, total) {
   if (!wrap) return;
   if (done === 0 && total === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
-  txt.textContent = `${done} / ${total || '?'}`;
+  const etaSeconds = getRunEtaSeconds({ running: state.running, slicesDone: done, slicesTotal: total, startEpoch: state.startEpoch });
+  txt.textContent = etaSeconds != null
+    ? `${done} / ${total || '?'} · ${t('progress.eta', { eta: formatEtaSeconds(etaSeconds) })}`
+    : `${done} / ${total || '?'}`;
   const pct = total > 0 ? Math.round(done / total * 100) : 0;
   bar.style.width = pct + '%';
   // Change color when complete
@@ -1546,6 +2084,7 @@ function _updateSliceProgressBar(done, total) {
 async function _pollSliceProgress() {
   try {
     const s = await fetch('/api/status').then(r => r.json());
+    state.startEpoch = Number(s.startEpoch || (s.running ? state.startEpoch : 0) || 0) || null;
     _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
   } catch {}
 }
@@ -2419,7 +2958,7 @@ function updateManualPairsTable() {
   manualPairsBody.innerHTML = '';
   manualState.pairs.forEach((p, i) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i+1}</td><td>(${Math.round(p.real_x)}, ${Math.round(p.real_y)})</td><td>(${Math.round(p.atlas_x)}, ${Math.round(p.atlas_y)})</td><td><button onclick="removeManualPair(${i})" style="background:transparent;color:var(--danger);border:none;cursor:pointer;">✕?/button></td>`;
+  tr.innerHTML = `<td>${i+1}</td><td>(${Math.round(p.real_x)}, ${Math.round(p.real_y)})</td><td>(${Math.round(p.atlas_x)}, ${Math.round(p.atlas_y)})</td><td><button type="button" aria-label="Remove landmark pair ${i+1}" onclick="removeManualPair(${i})" style="background:transparent;color:var(--danger);border:none;cursor:pointer;">&times;</button></td>`;
     manualPairsBody.appendChild(tr);
   });
   manualPairsWrap.classList.toggle('hidden', manualState.pairs.length === 0);
@@ -2527,8 +3066,8 @@ async function handleOutputFileClick(f) {
   } else if (f.ext === '.csv' || f.ext === '.json' || f.ext === '.txt') {
     try {
       const text = await fetch(`/api/outputs/named/${f.name}`).then(r => r.text());
-      document.getElementById('methodsText').textContent = text.slice(0, 8000) + (text.length > 8000 ? '\n...(truncated)' : '');
-      document.getElementById('methodsModal').classList.remove('hidden');
+      const capped = text.slice(0, 8000) + (text.length > 8000 ? '\n...(truncated)' : '');
+      openTextModal(f.name, t('outputs.previewDesc'), capped);
     } catch {}
   }
 }

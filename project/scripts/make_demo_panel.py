@@ -9,6 +9,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import colorsys
+import json
+import re
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +20,175 @@ import tifffile
 from PIL import Image, ImageDraw, ImageFont
 
 # ── annotated single-slice helper ────────────────────────────────────────────
+
+
+_GENERIC_LABEL_ACRONYMS = {"?", "ROOT", "GREY", "BRAIN"}
+_GENERIC_LABEL_NAMES = {
+    "root",
+    "brain",
+    "basic cell groups and regions",
+}
+
+
+@lru_cache(maxsize=1)
+def _load_structure_tree_lookup() -> dict[int, dict[str, str]]:
+    candidates = [
+        Path(__file__).resolve().parent.parent / "configs" / "allen_structure_tree.json",
+        Path(__file__).resolve().parent / "allen_structure_tree.json",
+    ]
+    for path in candidates:
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            out: dict[int, dict[str, str]] = {}
+            for key, info in data.items():
+                try:
+                    rid = int(key)
+                except Exception:
+                    continue
+                if not isinstance(info, dict):
+                    continue
+                out[rid] = {
+                    "acronym": str(info.get("acronym", "") or "").strip(),
+                    "name": str(info.get("name", "") or "").strip(),
+                    "color": str(info.get("color", "") or "").strip().lstrip("#"),
+                }
+            return out
+    return {}
+
+
+@lru_cache(maxsize=8)
+def _load_structure_csv_lookup(structure_csv: str) -> dict[int, dict[str, str]]:
+    import pandas as pd
+
+    path = Path(structure_csv)
+    if not path.exists():
+        return {}
+    df = pd.read_csv(str(path))
+    out: dict[int, dict[str, str]] = {}
+    for _, row in df.iterrows():
+        try:
+            rid = int(row["id"])
+        except Exception:
+            continue
+        out[rid] = {
+            "acronym": str(row.get("acronym", "") or "").strip(),
+            "name": str(row.get("name", "") or "").strip(),
+            "color": str(row.get("color_hex_triplet", "") or "").strip().lstrip("#"),
+        }
+    return out
+
+
+def _combined_structure_lookup(structure_csv: Path | None = None) -> dict[int, dict[str, str]]:
+    lookup = dict(_load_structure_tree_lookup())
+    if structure_csv is not None:
+        csv_lookup = _load_structure_csv_lookup(str(Path(structure_csv).resolve()))
+        for rid, info in csv_lookup.items():
+            existing = lookup.get(rid, {})
+            lookup[rid] = {
+                "acronym": info.get("acronym") or existing.get("acronym", ""),
+                "name": info.get("name") or existing.get("name", ""),
+                "color": info.get("color") or existing.get("color", ""),
+            }
+    return lookup
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int] | None:
+    hx = str(hex_color or "").strip().lstrip("#")
+    if len(hx) != 6:
+        return None
+    try:
+        return (int(hx[0:2], 16), int(hx[2:4], 16), int(hx[4:6], 16))
+    except Exception:
+        return None
+
+
+def _fallback_color(region_id: int) -> tuple[int, int, int]:
+    rng = (int(region_id) * 2654435761) & 0xFFFFFF
+    return ((rng >> 16) & 0xFF, (rng >> 8) & 0xFF, rng & 0xFF)
+
+
+def _family_color(region_id: int, structure_lookup: dict[int, dict[str, str]] | None = None) -> tuple[int, int, int]:
+    info = (structure_lookup or {}).get(int(region_id)) or _load_structure_tree_lookup().get(int(region_id), {})
+    base = _hex_to_rgb(info.get("color", "") if info else "") or _fallback_color(int(region_id))
+    r, g, b = [v / 255.0 for v in base]
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    jitter = (((int(region_id) * 37) % 9) - 4) * 0.028
+    l = min(0.78, max(0.28, l + jitter))
+    s = min(0.95, max(0.35, s * 1.08))
+    rr, gg, bb = colorsys.hls_to_rgb(h, l, s)
+    return int(rr * 255), int(gg * 255), int(bb * 255)
+
+
+def _meaningful_region_label(region_id: int, structure_lookup: dict[int, dict[str, str]]) -> tuple[str, str] | None:
+    info = structure_lookup.get(int(region_id), {})
+    acro = str(info.get("acronym", "") or "").strip()
+    name = str(info.get("name", "") or "").strip()
+
+    if not acro and not name:
+        return None
+    if re.fullmatch(r"\d+", acro or ""):
+        return None
+    if re.fullmatch(r"\d+", name or ""):
+        return None
+    if acro.upper() in _GENERIC_LABEL_ACRONYMS:
+        return None
+    if name.strip().lower() in _GENERIC_LABEL_NAMES:
+        return None
+    return acro or name, name or acro
+
+
+def _representative_point(mask: np.ndarray) -> tuple[int, int]:
+    from scipy.ndimage import distance_transform_edt
+
+    ys, xs = np.nonzero(mask)
+    if len(ys) == 0:
+        return 0, 0
+    dist = distance_transform_edt(mask.astype(np.uint8))
+    cy, cx = np.unravel_index(int(np.argmax(dist)), dist.shape)
+    return int(cy), int(cx)
+
+
+def _select_region_annotations(
+    label_arr: np.ndarray,
+    *,
+    structure_lookup: dict[int, dict[str, str]],
+    top_n: int,
+    min_pixels: int = 80,
+) -> list[dict[str, object]]:
+    ids, counts = np.unique(label_arr[label_arr > 0], return_counts=True)
+    ranking = sorted(
+        ((int(uid), int(count)) for uid, count in zip(ids, counts) if int(count) >= int(min_pixels)),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+
+    selected: list[dict[str, object]] = []
+    used_acronyms: set[str] = set()
+    for uid, count in ranking:
+        label = _meaningful_region_label(uid, structure_lookup)
+        if label is None:
+            continue
+        acro, name = label
+        acro_key = acro.upper()
+        if acro_key in used_acronyms:
+            continue
+        mask = label_arr == uid
+        cy, cx = _representative_point(mask)
+        selected.append(
+            {
+                "region_id": uid,
+                "count": count,
+                "acro": acro,
+                "name": name,
+                "color": _family_color(uid, structure_lookup),
+                "cy": cy,
+                "cx": cx,
+            }
+        )
+        used_acronyms.add(acro_key)
+        if len(selected) >= int(top_n):
+            break
+    return selected
 
 
 def make_annotated_slice(
@@ -30,37 +203,29 @@ def make_annotated_slice(
 
     Regions are annotated with their Allen acronym + full name at centroid positions.
     """
-    import pandas as pd
-
     # --- load overlay and label ---
     ov_arr = np.array(Image.open(str(overlay_png)).convert("RGB"))
     lbl_arr = tifffile.imread(str(label_tif)).astype(np.int32)
 
-    # --- load structure tree for region names ---
-    try:
-        df = pd.read_csv(str(structure_csv))
-        id2name = dict(zip(df["id"].astype(int), df["name"].fillna("?"), strict=False))
-        id2acro = dict(zip(df["id"].astype(int), df["acronym"].fillna("?"), strict=False))
-    except Exception:
-        id2name = {}
-        id2acro = {}
+    structure_lookup = _combined_structure_lookup(structure_csv)
 
-    # --- vibrant recolor ---
-    vib = _vibrant_recolor(ov_arr, lbl_arr)
+    tissue_mask, tissue_alpha = _tissue_support_from_raw(Path(str(raw_tif))) if raw_tif else (
+        None,
+        None,
+    )
+
+    # --- vibrant recolor + smooth tissue clipping ---
+    vib = _vibrant_recolor(ov_arr, lbl_arr, tissue_mask=tissue_mask)
+    if tissue_alpha is not None:
+        vib = _apply_tissue_alpha(vib, tissue_alpha)
 
     # --- crop to brain area ---
-    vib_crop = _crop_to_brain(vib, pad=20)
-    lbl_crop = _crop_to_brain(lbl_arr, pad=20)  # same crop applied
-
-    # Re-compute crop coords to match
-    gray = ov_arr.mean(axis=2)
-    mask = gray > 8
-    rows = np.any(mask, axis=1)
-    cols = np.any(mask, axis=0)
-    r0 = max(0, np.where(rows)[0][0] - 20)
-    r1 = min(ov_arr.shape[0] - 1, np.where(rows)[0][-1] + 20)
-    c0 = max(0, np.where(cols)[0][0] - 20)
-    c1 = min(ov_arr.shape[1] - 1, np.where(cols)[0][-1] + 20)
+    r0, r1, c0, c1 = _crop_bounds(
+        ov_arr.shape[:2],
+        pad=20,
+        mask=tissue_mask,
+        image=ov_arr,
+    )
     vib_crop = vib[r0 : r1 + 1, c0 : c1 + 1]
     lbl_crop = lbl_arr[r0 : r1 + 1, c0 : c1 + 1]
 
@@ -72,7 +237,8 @@ def make_annotated_slice(
                 raw = raw[..., 0]
             p1, p99 = np.percentile(raw[raw > 0], [1, 99]) if raw.max() > 0 else (0, 1)
             raw_norm = np.clip((raw - p1) / (p99 - p1 + 1e-6) * 255, 0, 255).astype(np.uint8)
-            raw_rgb = np.stack([raw_norm] * 3, axis=-1)[r0 : r1 + 1, c0 : c1 + 1]
+            raw_rgb = np.stack([raw_norm] * 3, axis=-1)
+            raw_rgb = raw_rgb[r0 : r1 + 1, c0 : c1 + 1]
         except Exception:
             raw_rgb = None
     else:
@@ -93,23 +259,7 @@ def make_annotated_slice(
         )
     ).astype(np.int32)
 
-    # --- find top regions by area ---
-    ids, counts = np.unique(lbl_r[lbl_r > 0], return_counts=True)
-    sorted_idx = np.argsort(counts)[::-1][:top_n]
-
     # --- draw region labels on the vibrant overlay ---
-    PALETTE = [
-        (255, 80, 80),
-        (255, 165, 50),
-        (255, 220, 50),
-        (80, 200, 80),
-        (50, 200, 200),
-        (80, 130, 255),
-        (180, 80, 255),
-        (255, 100, 200),
-        (255, 140, 80),
-        (120, 220, 120),
-    ]
     result_img = Image.fromarray(vib_r)
     draw = ImageDraw.Draw(result_img)
 
@@ -119,16 +269,19 @@ def make_annotated_slice(
     except Exception:
         font_sm = ImageFont.load_default()
 
+    region_entries = _select_region_annotations(
+        lbl_r,
+        structure_lookup=structure_lookup,
+        top_n=top_n,
+        min_pixels=90,
+    )
+
     legend_entries = []  # (color, acro, full_name) for legend panel
-    for rank, si in enumerate(sorted_idx):
-        uid = int(ids[si])
-        ys, xs = np.nonzero(lbl_r == uid)
-        if len(ys) < 50:
-            continue
-        cy, cx = int(ys.mean()), int(xs.mean())
-        acro = id2acro.get(uid, str(uid))
-        name = id2name.get(uid, acro)
-        color = PALETTE[rank % len(PALETTE)]
+    for entry in region_entries:
+        cy, cx = int(entry["cy"]), int(entry["cx"])
+        acro = str(entry["acro"])
+        name = str(entry["name"])
+        color = tuple(int(v) for v in entry["color"])
         legend_entries.append((color, acro, name))
         # Draw small circle at centroid
         r = 4
@@ -154,7 +307,7 @@ def make_annotated_slice(
     # --- legend panel below body ---
     LEGEND_ROW_H = 22
     LEGEND_PAD = 10
-    legend_h = LEGEND_PAD * 2 + len(legend_entries) * LEGEND_ROW_H
+    legend_h = LEGEND_PAD * 2 + 20 + len(legend_entries) * LEGEND_ROW_H
     legend_panel = np.full((legend_h, TW, 3), 28, dtype=np.uint8)
     leg_img = Image.fromarray(legend_panel)
     leg_draw = ImageDraw.Draw(leg_img)
@@ -163,8 +316,14 @@ def make_annotated_slice(
         font_leg_b = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 13)
     except Exception:
         font_leg = font_leg_b = ImageFont.load_default()
+    leg_draw.text(
+        (12, LEGEND_PAD - 1),
+        "Dots mark representative anchor points for the labeled regions below.",
+        fill=(150, 156, 170),
+        font=font_leg,
+    )
     for i, (color, acro, name) in enumerate(legend_entries):
-        y = LEGEND_PAD + i * LEGEND_ROW_H + 2
+        y = LEGEND_PAD + 18 + i * LEGEND_ROW_H + 2
         # color swatch
         leg_draw.rectangle([12, y + 1, 28, y + 15], fill=color)
         # acronym (bold) + full name
@@ -212,53 +371,86 @@ def make_annotated_slice(
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 
-def _crop_to_brain(img_arr: np.ndarray, pad: int = 20) -> np.ndarray:
-    """Crop away dark background, keeping only the brain region + padding."""
-    gray = img_arr.mean(axis=2) if img_arr.ndim == 3 else img_arr
-    mask = gray > 8  # threshold for "not black background"
-    rows = np.any(mask, axis=1)
-    cols = np.any(mask, axis=0)
+def _crop_bounds(
+    shape: tuple[int, int],
+    pad: int = 20,
+    mask: np.ndarray | None = None,
+    image: np.ndarray | None = None,
+) -> tuple[int, int, int, int]:
+    if mask is not None:
+        if mask.shape != shape:
+            mask = np.array(
+                Image.fromarray(mask.astype(np.uint8) * 255).resize(
+                    (shape[1], shape[0]), Image.Resampling.NEAREST
+                )
+            ) > 127
+        work_mask = mask.astype(bool)
+    elif image is not None:
+        gray = image.mean(axis=2) if image.ndim == 3 else image
+        work_mask = gray > 8
+    else:
+        work_mask = np.zeros(shape, dtype=bool)
+
+    rows = np.any(work_mask, axis=1)
+    cols = np.any(work_mask, axis=0)
     if not rows.any():
-        return img_arr
+        return 0, shape[0] - 1, 0, shape[1] - 1
     r0, r1 = np.where(rows)[0][[0, -1]]
     c0, c1 = np.where(cols)[0][[0, -1]]
-    H, W = img_arr.shape[:2]
+    H, W = shape
     r0 = max(0, r0 - pad)
     r1 = min(H - 1, r1 + pad)
     c0 = max(0, c0 - pad)
     c1 = min(W - 1, c1 + pad)
+    return int(r0), int(r1), int(c0), int(c1)
+
+
+def _crop_to_brain(
+    img_arr: np.ndarray, pad: int = 20, mask: np.ndarray | None = None
+) -> np.ndarray:
+    """Crop away dark background, keeping only the brain region + padding."""
+    r0, r1, c0, c1 = _crop_bounds(img_arr.shape[:2], pad=pad, mask=mask, image=img_arr)
     return img_arr[r0 : r1 + 1, c0 : c1 + 1]
 
 
-def _vibrant_recolor(img_arr: np.ndarray, label_arr: np.ndarray) -> np.ndarray:
+def _load_raw_slice(raw_tif_path: Path) -> np.ndarray:
+    raw = tifffile.imread(str(raw_tif_path)).astype(np.float32)
+    if raw.ndim == 3:
+        raw = raw[0] if raw.shape[0] < raw.shape[1] else raw[..., 0]
+    return raw.astype(np.float32, copy=False)
+
+
+def _resize_bool_mask(mask: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    if mask.shape == shape:
+        return mask.astype(bool)
+    return (
+        np.array(
+            Image.fromarray(mask.astype(np.uint8) * 255).resize(
+                (shape[1], shape[0]),
+                Image.Resampling.NEAREST,
+            )
+        )
+        > 127
+    )
+
+
+def _resize_alpha(alpha: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    if alpha.shape == shape:
+        return np.clip(alpha.astype(np.float32), 0.0, 1.0)
+    img = Image.fromarray(np.clip(alpha * 255.0, 0, 255).astype(np.uint8))
+    arr = np.array(img.resize((shape[1], shape[0]), Image.Resampling.BILINEAR)).astype(np.float32)
+    return np.clip(arr / 255.0, 0.0, 1.0)
+
+
+def _vibrant_recolor(
+    img_arr: np.ndarray, label_arr: np.ndarray, tissue_mask: np.ndarray | None = None
+) -> np.ndarray:
     """
     Re-colorize using a more vibrant, distinct palette while preserving brain texture.
     img_arr  : (H, W, 3) uint8 — existing fill-mode overlay
     label_arr: (H, W)    int32 — registered label (region IDs)
     """
-    # Vivid palette (HSL-spaced, high saturation)
-    PALETTE = [
-        (255, 80, 80),
-        (255, 165, 50),
-        (255, 220, 50),
-        (80, 200, 80),
-        (50, 200, 200),
-        (80, 130, 255),
-        (180, 80, 255),
-        (255, 100, 200),
-        (255, 140, 80),
-        (120, 220, 120),
-        (80, 200, 230),
-        (160, 100, 255),
-        (220, 200, 80),
-        (100, 200, 160),
-        (255, 80, 140),
-        (200, 160, 80),
-        (80, 180, 255),
-        (255, 120, 50),
-        (150, 255, 150),
-        (200, 80, 255),
-    ]
+    structure_lookup = _combined_structure_lookup()
 
     # Convert original image to float grayscale (brain texture)
     gray = img_arr.mean(axis=2).astype(np.float32) / 255.0
@@ -268,17 +460,40 @@ def _vibrant_recolor(img_arr: np.ndarray, label_arr: np.ndarray) -> np.ndarray:
 
     ids = np.unique(label_arr)
     ids = ids[ids > 0]
-    for i, uid in enumerate(ids):
+    for uid in ids:
         mask = label_arr == uid
-        color = PALETTE[i % len(PALETTE)]
+        color = _family_color(int(uid), structure_lookup)
         texture = gray_bright[mask]  # brightened tissue texture
         for ch, cv in enumerate(color):
-            # 60% texture + 40% color: tissue structure clearly visible through tint
-            out[mask, ch] = np.clip(texture * 0.60 * 255 + cv * 0.40, 0, 255).astype(np.uint8)
+            # Use the atlas family color, then keep the lightsheet texture visible under the tint.
+            out[mask, ch] = np.clip(texture * 0.57 * 255 + cv * 0.43, 0, 255).astype(np.uint8)
 
     # Background: keep dark
     bg = label_arr == 0
     out[bg] = (img_arr[bg].astype(np.float32) * 0.3).astype(np.uint8)
+    try:
+        from scipy.ndimage import gaussian_filter
+        from skimage import morphology
+        from skimage.segmentation import find_boundaries
+
+        support = tissue_mask if tissue_mask is not None else (label_arr > 0)
+        if support.shape != label_arr.shape:
+            support = np.array(
+                Image.fromarray(support.astype(np.uint8) * 255).resize(
+                    (label_arr.shape[1], label_arr.shape[0]),
+                    Image.Resampling.NEAREST,
+                )
+            ) > 127
+        edge_band = morphology.dilation(
+            find_boundaries(support.astype(bool), mode="outer", connectivity=2).astype(np.uint8),
+            morphology.disk(3),
+        ).astype(bool)
+        if np.any(edge_band):
+            blurred = gaussian_filter(out.astype(np.float32), sigma=(1.1, 1.1, 0.0))
+            out = out.copy()
+            out[edge_band] = np.clip(blurred[edge_band], 0, 255).astype(np.uint8)
+    except Exception:
+        pass
     return out
 
 
@@ -299,35 +514,71 @@ def _add_label(
 # ── main ─────────────────────────────────────────────────────────────────────
 
 
-def _tissue_mask_from_raw(raw_tif_path: Path) -> np.ndarray | None:
-    """Compute accurate tissue mask from a raw lightsheet TIF using 4-sigma corner threshold."""
+def _tissue_support_from_raw(raw_tif_path: Path) -> tuple[np.ndarray | None, np.ndarray | None]:
+    """Build a smooth tissue support from the brightened real slice.
+
+    Returns a hard mask for cropping plus a soft alpha matte for display clipping.
+    """
     try:
-        raw = tifffile.imread(str(raw_tif_path)).astype(np.float32)
-        if raw.ndim == 3:
-            raw = raw[0] if raw.shape[0] < raw.shape[1] else raw[..., 0]
-        b = 60
-        corners = np.concatenate(
-            [
-                raw[:b, :b].ravel(),
-                raw[:b, -b:].ravel(),
-                raw[-b:, :b].ravel(),
-                raw[-b:, -b:].ravel(),
-            ]
-        )
-        thr = float(np.mean(corners) + 4.0 * np.std(corners))
-        mask = raw > thr
+        from scipy.ndimage import binary_fill_holes as _fill_holes
+        from scipy.ndimage import gaussian_filter as _gaussian_filter
+        from skimage import filters as _filters
         from skimage import measure as _meas
         from skimage import morphology as _morph
 
-        mask = _morph.closing(mask, _morph.disk(20))
+        raw = _load_raw_slice(raw_tif_path)
+        p1, p99 = np.percentile(raw, [1.0, 99.8])
+        if p99 <= p1:
+            p99 = p1 + 1.0
+        norm = np.clip((raw - p1) / (p99 - p1), 0.0, 1.0)
+        bright = np.clip(norm**0.58, 0.0, 1.0)
+
+        sigma = max(1.4, min(raw.shape) * 0.0038)
+        bright_smooth = _gaussian_filter(bright, sigma=sigma)
+
+        b = max(16, min(80, min(raw.shape) // 10))
+        corners = np.concatenate(
+            [
+                bright_smooth[:b, :b].ravel(),
+                bright_smooth[:b, -b:].ravel(),
+                bright_smooth[-b:, :b].ravel(),
+                bright_smooth[-b:, -b:].ravel(),
+            ]
+        )
+        corner_thr = float(np.mean(corners) + 3.2 * np.std(corners))
+        otsu_thr = float(_filters.threshold_otsu(bright_smooth))
+        corner_thr = min(corner_thr, otsu_thr + 0.18)
+        hi_thr = float(np.percentile(bright_smooth, 92.0))
+        thr = min(max(corner_thr, otsu_thr * 0.92), hi_thr)
+        mask = bright_smooth > thr
+
+        close_r = max(10, int(round(min(raw.shape) * 0.010)))
+        open_r = max(2, int(round(close_r * 0.35)))
+        mask = _morph.closing(mask, _morph.disk(close_r))
+        mask = _fill_holes(mask).astype(bool)
+        mask = _morph.opening(mask, _morph.disk(open_r))
         labeled = _meas.label(mask)
         if labeled.max() > 0:
             counts = np.bincount(labeled.ravel())
             counts[0] = 0
             mask = labeled == counts.argmax()
-        return mask.astype(bool)
+        _obj_limit = max(256, raw.size // 400)
+        try:
+            mask = _morph.remove_small_objects(mask.astype(bool), max_size=_obj_limit)
+        except TypeError:
+            mask = _morph.remove_small_objects(mask.astype(bool), min_size=_obj_limit)
+        mask = _fill_holes(mask).astype(bool)
+
+        alpha = _gaussian_filter(mask.astype(np.float32), sigma=max(1.2, close_r * 0.18))
+        alpha = np.clip((alpha - 0.08) / 0.84, 0.0, 1.0).astype(np.float32)
+        return mask.astype(bool), alpha
     except Exception:
-        return None
+        return None, None
+
+
+def _tissue_mask_from_raw(raw_tif_path: Path) -> np.ndarray | None:
+    mask, _ = _tissue_support_from_raw(raw_tif_path)
+    return mask
 
 
 def _clip_to_tissue(
@@ -335,16 +586,40 @@ def _clip_to_tissue(
 ) -> np.ndarray:
     """Clip a colourised overlay to the actual tissue boundary with a smooth feathered edge."""
     from scipy.ndimage import distance_transform_edt as _dt_edt
+    from skimage import morphology as _morph
 
     if tissue_mask.shape != img_arr.shape[:2]:
         # Resize mask to match image
         from PIL import Image as _Im
 
         tm_img = _Im.fromarray(tissue_mask.astype(np.uint8) * 255)
-        tm_img = tm_img.resize((img_arr.shape[1], img_arr.shape[0]), _Im.NEAREST)
-        tissue_mask = np.array(tm_img) > 127
+        tm_img = tm_img.resize((img_arr.shape[1], img_arr.shape[0]), _Im.BILINEAR)
+        tissue_mask = np.array(tm_img) > 96
+
+    tissue_mask = _morph.closing(
+        tissue_mask.astype(np.uint8),
+        _morph.disk(max(2, int(round(feather_px * 0.35)))),
+    ).astype(bool)
+    tissue_mask = _morph.opening(
+        tissue_mask.astype(np.uint8),
+        _morph.disk(max(1, int(round(feather_px * 0.18)))),
+    ).astype(bool)
+    _hole_limit = max(64, int((feather_px * 2) ** 2))
+    try:
+        tissue_mask = _morph.remove_small_holes(tissue_mask, max_size=_hole_limit)
+    except TypeError:
+        tissue_mask = _morph.remove_small_holes(tissue_mask, area_threshold=_hole_limit)
     dist_in = _dt_edt(tissue_mask.astype(np.uint8)).astype(np.float32)
-    alpha = np.clip(dist_in / max(feather_px, 1), 0.0, 1.0)[:, :, np.newaxis]
+    dist_out = _dt_edt((~tissue_mask).astype(np.uint8)).astype(np.float32)
+    signed = dist_in - dist_out
+    alpha = np.clip((signed + max(feather_px, 1)) / (2.0 * max(feather_px, 1)), 0.0, 1.0)[
+        :, :, np.newaxis
+    ]
+    return np.clip(img_arr.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
+
+
+def _apply_tissue_alpha(img_arr: np.ndarray, tissue_alpha: np.ndarray) -> np.ndarray:
+    alpha = _resize_alpha(tissue_alpha, img_arr.shape[:2])[:, :, np.newaxis]
     return np.clip(img_arr.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
 
 
@@ -407,6 +682,8 @@ def make_panel(
     for pos, idx in enumerate(indices):
         ov_path = overlay_files[idx]
         lbl_path = None
+        tmask = None
+        talpha = None
         # Match label file by slice number
         stem = ov_path.stem.replace("_overlay", "")  # slice_0017
         for lf in label_files:
@@ -418,22 +695,25 @@ def make_panel(
 
         img_arr = np.array(Image.open(ov_path).convert("RGB"))
 
+        if raw_files and slice_num < len(raw_files):
+            tmask, talpha = _tissue_support_from_raw(raw_files[slice_num])
+
         # Re-colorize if label available
         if lbl_path and lbl_path.exists():
             try:
                 lbl = tifffile.imread(str(lbl_path))
-                img_arr = _vibrant_recolor(img_arr, lbl)
+                img_arr = _vibrant_recolor(img_arr, lbl, tissue_mask=tmask)
             except Exception:
                 pass
 
-        # Hard tissue boundary: clip using raw slice tissue mask
-        if raw_files and slice_num < len(raw_files):
-            tmask = _tissue_mask_from_raw(raw_files[slice_num])
-            if tmask is not None:
-                img_arr = _clip_to_tissue(img_arr, tmask, feather_px=10)
+        # Clip using the smooth contour derived from the real slice itself.
+        if talpha is not None:
+            img_arr = _apply_tissue_alpha(img_arr, talpha)
+        elif tmask is not None:
+            img_arr = _clip_to_tissue(img_arr, tmask, feather_px=10)
 
         # Crop to brain
-        cropped = _crop_to_brain(img_arr, pad=15)
+        cropped = _crop_to_brain(img_arr, pad=15, mask=tmask)
         h, w = cropped.shape[:2]
 
         # Fit into thumb_size × thumb_size while preserving aspect ratio

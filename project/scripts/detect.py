@@ -18,6 +18,10 @@ except Exception:  # pragma: no cover - optional dependency fallback
 _CELLPOSE_MODEL_CACHE: dict[tuple[str, bool], Any] = {}
 
 
+class CellposeDetectionError(RuntimeError):
+    """Raised when Cellpose was requested but could not produce a valid run."""
+
+
 def _read_gray(slice_path: Path) -> np.ndarray:
     img = imread(str(slice_path))
     if img.ndim == 3:
@@ -45,6 +49,10 @@ def _resolve_model_type(name: str) -> str:
     if "cyto" in s:
         return "cyto"
     return "cyto3"
+
+
+def _is_cellpose_model(name: str) -> bool:
+    return str(name or "").strip().lower().startswith("cellpose")
 
 
 def _pixel_size_um_from_cfg(cfg: dict[str, Any]) -> float | None:
@@ -213,6 +221,66 @@ def detect_cells_log_fallback(
     return pd.DataFrame(rows, columns=["cell_id", "x", "y", "score", "detector", "area_px"])
 
 
+def _tile_starts(length: int, tile_size: int, overlap: int) -> list[int]:
+    if tile_size <= 0 or length <= tile_size:
+        return [0]
+    step = max(1, int(tile_size) - int(overlap))
+    starts = list(range(0, max(1, length - tile_size + 1), step))
+    last = max(0, int(length) - int(tile_size))
+    if not starts or starts[-1] != last:
+        starts.append(last)
+    return sorted(set(int(v) for v in starts))
+
+
+def _eval_cellpose_masks(
+    model: Any,
+    imgf: np.ndarray,
+    *,
+    slice_label: str,
+    model_type: str,
+    diameter_px: float | None,
+    channels: list[int],
+    flow_threshold: float,
+    cellprob_threshold: float,
+    min_size: int,
+    batch_size: int,
+    tile_overlap: float,
+    resample: bool,
+    raise_on_error: bool,
+):
+    kwargs = dict(
+        diameter=diameter_px,
+        channels=channels,
+        flow_threshold=float(flow_threshold),
+        cellprob_threshold=float(cellprob_threshold),
+        min_size=max(0, int(min_size)),
+        batch_size=max(1, int(batch_size)),
+        tile=True,
+        tile_overlap=float(tile_overlap),
+        resample=bool(resample),
+        normalize=False,
+    )
+
+    try:
+        return model.eval(imgf, **kwargs)
+    except TypeError:
+        kwargs2 = dict(diameter=diameter_px, channels=channels)
+        try:
+            return model.eval(imgf, **kwargs2)
+        except Exception as exc:
+            if raise_on_error:
+                raise CellposeDetectionError(
+                    f"Cellpose eval failed for model '{model_type}' on {slice_label}: {exc}"
+                ) from exc
+            return None
+    except Exception as exc:
+        if raise_on_error:
+            raise CellposeDetectionError(
+                f"Cellpose eval failed for model '{model_type}' on {slice_label}: {exc}"
+            ) from exc
+        return None
+
+
 def detect_cells_cellpose(
     slice_path: Path,
     model_type: str = "cyto3",
@@ -223,38 +291,97 @@ def detect_cells_cellpose(
     flow_threshold: float = 0.4,
     cellprob_threshold: float = 0.0,
     min_size: int = 8,
+    batch_size: int = 1,
+    tile_overlap: float = 0.05,
+    resample: bool = False,
+    external_tile_size_px: int | None = None,
+    external_tile_overlap_px: int = 64,
+    raise_on_error: bool = False,
 ) -> pd.DataFrame:
     try:
         model = _load_cellpose_model(model_type=model_type, use_gpu=use_gpu)
-    except Exception:
+    except Exception as exc:
+        if raise_on_error:
+            raise CellposeDetectionError(
+                f"failed to load Cellpose model '{model_type}' (gpu={bool(use_gpu)}): {exc}"
+            ) from exc
         return pd.DataFrame()
 
     img = _read_gray(slice_path)
     imgf = _norm_for_cellpose(img)
     ch = channels if isinstance(channels, list) and len(channels) == 2 else [0, 0]
+    tile_size = int(external_tile_size_px or 0)
+    if tile_size <= 0 and not use_gpu and max(imgf.shape[:2]) > 384:
+        tile_size = 384
+    overlap_px = max(0, int(external_tile_overlap_px))
 
-    # Keep eval kwargs conservative for compatibility across Cellpose versions.
-    kwargs = dict(
-        diameter=diameter_px,
+    if tile_size > 0 and max(imgf.shape[:2]) > tile_size:
+        tile_rows: list[pd.DataFrame] = []
+        y_starts = _tile_starts(int(imgf.shape[0]), tile_size, overlap_px)
+        x_starts = _tile_starts(int(imgf.shape[1]), tile_size, overlap_px)
+        for y0 in y_starts:
+            y1 = min(int(imgf.shape[0]), int(y0) + tile_size)
+            for x0 in x_starts:
+                x1 = min(int(imgf.shape[1]), int(x0) + tile_size)
+                tile_img = imgf[y0:y1, x0:x1]
+                result = _eval_cellpose_masks(
+                    model,
+                    tile_img,
+                    slice_label=f"{slice_path.name}@y{y0}:{y1},x{x0}:{x1}",
+                    model_type=model_type,
+                    diameter_px=diameter_px,
+                    channels=ch,
+                    flow_threshold=flow_threshold,
+                    cellprob_threshold=cellprob_threshold,
+                    min_size=min_size,
+                    batch_size=batch_size,
+                    tile_overlap=tile_overlap,
+                    resample=resample,
+                    raise_on_error=raise_on_error,
+                )
+                if result is None:
+                    continue
+                masks, flows, styles, diams = result
+                tile_df = _masks_to_centroids(masks, detector=f"cellpose_{model_type}")
+                if tile_df.empty:
+                    continue
+                tile_df["x"] = tile_df["x"].astype(np.float32) + float(x0)
+                tile_df["y"] = tile_df["y"].astype(np.float32) + float(y0)
+                tile_rows.append(tile_df)
+        if not tile_rows:
+            return pd.DataFrame(columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+        out = pd.concat(tile_rows, ignore_index=True)
+        out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
+        return out[["cell_id", "x", "y", "score", "detector", "area_px"]]
+
+    result = _eval_cellpose_masks(
+        model,
+        imgf,
+        slice_label=slice_path.name,
+        model_type=model_type,
+        diameter_px=diameter_px,
         channels=ch,
-        flow_threshold=float(flow_threshold),
-        cellprob_threshold=float(cellprob_threshold),
-        min_size=max(0, int(min_size)),
+        flow_threshold=flow_threshold,
+        cellprob_threshold=cellprob_threshold,
+        min_size=min_size,
+        batch_size=batch_size,
+        tile_overlap=tile_overlap,
+        resample=resample,
+        raise_on_error=raise_on_error,
     )
-
-    try:
-        masks, flows, styles, diams = model.eval(imgf, **kwargs)
-    except TypeError:
-        # Older versions may not accept all kwargs.
-        kwargs2 = dict(diameter=diameter_px, channels=ch)
-        masks, flows, styles, diams = model.eval(imgf, **kwargs2)
-    except Exception:
+    if result is None:
         return pd.DataFrame()
-
+    masks, flows, styles, diams = result
     return _masks_to_centroids(masks, detector=f"cellpose_{model_type}")
 
 
-def _run_cellpose_by_name(slice_path: Path, model_name: str, cfg: dict[str, Any]) -> pd.DataFrame:
+def _run_cellpose_by_name(
+    slice_path: Path,
+    model_name: str,
+    cfg: dict[str, Any],
+    *,
+    raise_on_error: bool = False,
+) -> pd.DataFrame:
     det_cfg = cfg.get("detection", {})
     model_type = _resolve_model_type(model_name)
     d_px = _diameter_px(det_cfg, cfg)
@@ -263,6 +390,12 @@ def _run_cellpose_by_name(slice_path: Path, model_name: str, cfg: dict[str, Any]
     flow_thr = float(det_cfg.get("cellpose_flow_threshold", 0.4))
     prob_thr = float(det_cfg.get("cellpose_cellprob_threshold", 0.0))
     min_sz = int(det_cfg.get("cellpose_min_size_px", 8))
+    batch_size = int(det_cfg.get("cellpose_batch_size", 1))
+    tile_overlap = float(det_cfg.get("cellpose_tile_overlap", 0.05))
+    resample = bool(det_cfg.get("cellpose_resample", False))
+    tile_size_px = det_cfg.get("cellpose_external_tile_size_px", None)
+    external_tile_size_px = int(tile_size_px) if tile_size_px not in (None, "", 0) else None
+    external_tile_overlap_px = int(det_cfg.get("cellpose_external_tile_overlap_px", 64))
 
     return detect_cells_cellpose(
         slice_path=slice_path,
@@ -273,6 +406,12 @@ def _run_cellpose_by_name(slice_path: Path, model_name: str, cfg: dict[str, Any]
         flow_threshold=flow_thr,
         cellprob_threshold=prob_thr,
         min_size=min_sz,
+        batch_size=batch_size,
+        tile_overlap=tile_overlap,
+        resample=resample,
+        external_tile_size_px=external_tile_size_px,
+        external_tile_overlap_px=external_tile_overlap_px,
+        raise_on_error=raise_on_error,
     )
 
 
@@ -282,17 +421,42 @@ def detect_cells(slice_path: Path, cfg: dict[str, Any]) -> pd.DataFrame:
     secondary = str(det_cfg.get("secondary_model", "cellpose_nuclei"))
     merge_secondary = bool(det_cfg.get("merge_primary_secondary", False))
     within_slice_dedup_px = float(det_cfg.get("within_slice_dedup_px", 4.0))
+    requested_cellpose = _is_cellpose_model(primary) or _is_cellpose_model(secondary)
+    allow_fallback_raw = det_cfg.get("allow_fallback", None)
+    allow_fallback = (
+        bool(allow_fallback_raw) if allow_fallback_raw is not None else (not requested_cellpose)
+    )
+    cellpose_errors: list[Exception] = []
 
     primary_df = pd.DataFrame()
-    if primary.startswith("cellpose"):
-        primary_df = _run_cellpose_by_name(slice_path, primary, cfg)
+    if _is_cellpose_model(primary):
+        try:
+            primary_df = _run_cellpose_by_name(
+                slice_path,
+                primary,
+                cfg,
+                raise_on_error=not allow_fallback,
+            )
+        except CellposeDetectionError as exc:
+            cellpose_errors.append(exc)
+            primary_df = pd.DataFrame()
         if not primary_df.empty and not merge_secondary:
             out = _dedup_xy(primary_df, radius_px=within_slice_dedup_px)
             out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
             return out
 
-    if secondary.startswith("cellpose"):
-        secondary_df = _run_cellpose_by_name(slice_path, secondary, cfg)
+    secondary_df = pd.DataFrame()
+    if _is_cellpose_model(secondary):
+        try:
+            secondary_df = _run_cellpose_by_name(
+                slice_path,
+                secondary,
+                cfg,
+                raise_on_error=not allow_fallback,
+            )
+        except CellposeDetectionError as exc:
+            cellpose_errors.append(exc)
+            secondary_df = pd.DataFrame()
         if not secondary_df.empty:
             if primary_df.empty:
                 out = _dedup_xy(secondary_df, radius_px=within_slice_dedup_px)
@@ -303,6 +467,11 @@ def detect_cells(slice_path: Path, cfg: dict[str, Any]) -> pd.DataFrame:
                 out = _dedup_xy(combined, radius_px=within_slice_dedup_px)
                 out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
                 return out
+
+    if requested_cellpose and not allow_fallback:
+        if cellpose_errors:
+            raise cellpose_errors[0]
+        return pd.DataFrame(columns=["cell_id", "x", "y", "score", "detector", "area_px"])
 
     fallback_model = str(det_cfg.get("fallback_model", "log")).lower()
     if "log" in fallback_model:

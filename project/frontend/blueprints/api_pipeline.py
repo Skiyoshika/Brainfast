@@ -12,6 +12,13 @@ from uuid import uuid4
 from flask import Blueprint, jsonify, request, send_from_directory
 
 import project.frontend.server_context as ctx
+from project.frontend.api_errors import (
+    ERR_CONFIG_NOT_FOUND,
+    ERR_CONFIG_PATH_DENIED,
+    ERR_INTERNAL,
+    ERR_INVALID_INPUT,
+    ERR_PIPELINE_RUNNING,
+)
 from project.scripts.config_validation import collect_runtime_config_issues, load_config
 
 bp = Blueprint("api_pipeline", __name__)
@@ -38,18 +45,25 @@ def _make_job_id() -> str:
 
 def _read_version_info() -> dict[str, str]:
     version_path = ctx.PROJECT_ROOT / "version.json"
-    fallback = {"version": "0.3.0-desktop", "build_date": "", "commit": ""}
-    if not version_path.exists():
-        return fallback
+    fallback = {"version": "0.5.1", "build_date": "", "commit": ""}
+    # Try version.json first (created by build_version_json.py during release)
+    if version_path.exists():
+        try:
+            data = json.loads(version_path.read_text(encoding="utf-8"))
+            return {
+                "version": str(data.get("version", fallback["version"])),
+                "build_date": str(data.get("build_date", "")),
+                "commit": str(data.get("commit", "")),
+            }
+        except Exception:
+            pass
+    # Fall back to setuptools-scm generated _version.py
     try:
-        data = json.loads(version_path.read_text(encoding="utf-8"))
+        import project._version as _v  # type: ignore[import]
+        return {"version": str(_v.__version__), "build_date": "", "commit": ""}
     except Exception:
-        return fallback
-    return {
-        "version": str(data.get("version", fallback["version"])),
-        "build_date": str(data.get("build_date", "")),
-        "commit": str(data.get("commit", "")),
-    }
+        pass
+    return fallback
 
 
 _ALLOWED_CONFIG_ROOTS = lambda: (ctx.PROJECT_ROOT / "configs", ctx.OUTPUT_DIR)
@@ -259,14 +273,14 @@ def run_pipeline():
 
     with ctx._run_state_lock:
         if job_state["running"]:
-            return jsonify({"ok": False, "error": "pipeline already running", "jobId": job_id}), 409
+            return jsonify({"ok": False, "error": "pipeline already running", "error_code": ERR_PIPELINE_RUNNING, "jobId": job_id}), 409
 
     try:
         config = str(_materialize_runtime_config(payload, job_id=job_id))
     except PermissionError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 403
+        return jsonify({"ok": False, "error": str(exc), "error_code": ERR_CONFIG_PATH_DENIED}), 403
     except Exception as exc:
-        return jsonify({"ok": False, "error": f"failed to build runtime config: {exc}"}), 400
+        return jsonify({"ok": False, "error": f"failed to build runtime config: {exc}", "error_code": ERR_INVALID_INPUT}), 400
     input_dir = payload.get("inputDir", "")
     channels = payload.get("channels", ["red"])
     if isinstance(channels, str):
@@ -390,6 +404,69 @@ def history():
     return jsonify({"jobId": job_id, "history": job_state["history"]})
 
 
+@bp.get("/api/poll")
+def poll():
+    """Composite poll endpoint — replaces three independent polling loops.
+
+    Returns a single JSON object containing:
+      running, done, error, progress, slicesDone, slicesTotal,
+      logTail (last 20 lines), errors (structured error list).
+
+    Frontend polls this at 500ms when active, 30s when idle.
+    """
+    job_id = _resolve_job_id()
+    job_state = _job_state(job_id)
+    progress = dict(job_state.get("progress", {}) or {})
+    outputs_dir = _job_outputs_dir(job_id)
+
+    # Slice progress (same logic as /api/status)
+    slices_done = int(progress.get("slicesDone", 0) or 0)
+    slices_total = int(progress.get("slicesTotal", 0) or 0)
+    if slices_done <= 0 and slices_total <= 0:
+        reg_dir = outputs_dir / "registered_slices"
+        slices_done = len(list(reg_dir.glob("slice_*_overlay.png"))) if reg_dir.exists() else 0
+        merged_dir = outputs_dir / "tmp_merged"
+        channel_dir = outputs_dir / "tmp_channel"
+        merged_total = len(list(merged_dir.glob("*.tif"))) if merged_dir.exists() else 0
+        channel_total = len(list(channel_dir.glob("*.tif"))) if channel_dir.exists() else 0
+        config_path = job_state.get("config_path")
+        sampling_mode = ""
+        if config_path:
+            try:
+                cfg = json.loads(Path(str(config_path)).read_text(encoding="utf-8-sig"))
+                sampling_mode = str(cfg.get("input", {}).get("sampling_mode", "")).lower().strip()
+            except Exception:
+                sampling_mode = ""
+        if sampling_mode in {"single", "native", "raw", "original"}:
+            slices_total = channel_total
+        elif sampling_mode in {"merge", "merged", "merge5", "merge_n"}:
+            slices_total = merged_total
+        else:
+            slices_total = merged_total if merged_total > 0 else channel_total
+
+    logs = job_state.get("logs", [])
+    log_tail = logs[-20:] if len(logs) > 20 else list(logs)
+    errors = list(job_state.get("errors", []) or [])
+
+    return jsonify({
+        "ok": True,
+        "jobId": job_id,
+        "running": job_state["running"],
+        "done": job_state["done"],
+        "error": job_state["error"],
+        "slicesDone": slices_done,
+        "slicesTotal": slices_total,
+        "logTail": log_tail,
+        "errors": errors,
+        "progress": {
+            "phase": str(progress.get("phase", "idle")),
+            "stepCurrent": int(progress.get("stepCurrent", 0) or 0),
+            "stepTotal": int(progress.get("stepTotal", 0) or 0),
+            "message": str(progress.get("message", "")),
+        },
+    })
+
+
 @bp.get("/api/export/methods-text")
 def export_methods_text():
     job_id = _resolve_job_id()
@@ -415,6 +492,7 @@ def export_methods_text():
     channels = params.get("channels", ["red"])
     ch_str = ", ".join(channels)
     ts = params.get("timestamp", "—")
+    atlas_sha256 = detection_summary.get("atlas_sha256", "")
     detector_counts = detection_summary.get("dedup_detector_counts") or detection_summary.get(
         "detector_counts", {}
     )
@@ -444,7 +522,9 @@ def export_methods_text():
         f"【方法段落参考（中文）】\n"
         f"脑图谱配准使用 Brainfast v0.3 完成（运行时间：{ts}）。"
         f"显微图像分辨率为 {pixel_size} μm/像素。"
-        f"图谱配准参照 Allen 小鼠脑图谱（CCFv3，annotation_25.nii.gz，体素间距 25 μm），"
+        f"图谱配准参照 Allen 小鼠脑图谱（CCFv3，annotation_25.nii.gz，体素间距 25 μm"
+        + (f"，sha256: {atlas_sha256}" if atlas_sha256 else "")
+        + f"），"
         f"采用{align_cn}方法对切片进行空间配准。配准质量通过边缘 SSIM（结构相似性指标）评估。"
         f"{detection_cn}荧光通道：{ch_str}。"
     )
@@ -453,7 +533,9 @@ def export_methods_text():
         f"Brain atlas registration was performed using Brainfast v0.3 (run: {ts}). "
         f"Microscopy images were acquired at {pixel_size} μm/pixel. "
         f"Section registration was carried out against the Allen Mouse Brain Atlas "
-        f"(CCFv3, annotation_25.nii.gz, 25 μm voxel spacing) using {align_en} transformation. "
+        f"(CCFv3, annotation_25.nii.gz, 25 μm voxel spacing"
+        + (f", sha256: {atlas_sha256}" if atlas_sha256 else "")
+        + f") using {align_en} transformation. "
         f"Alignment quality was evaluated by edge-SSIM. "
         f"{detection_en} Channels: {ch_str}."
     )

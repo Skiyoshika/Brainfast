@@ -19,6 +19,25 @@
   --radius:     10px;
   --radius-sm:  6px;
 }
+/* ===== LIGHT THEME OVERRIDES ===== */
+[data-theme="light"] {
+  --bg:         #f5f6f8;
+  --bg-soft:    #eceef2;
+  --bg-panel:   #ffffff;
+  --bg-card:    #f0f2f6;
+  --bg-input:   #ffffff;
+  --text:       #1a1c22;
+  --text-muted: #5a6170;
+  --text-hint:  #8a939e;
+  --border:     #d0d4de;
+  --accent:     #2f52d4;
+  --accent-h:   #4060e0;
+  --ok:         #1e7d46;
+  --ok-light:   #24904f;
+  --warn:       #a06a10;
+  --danger:     #b83030;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: "PingFang SC", "Microsoft YaHei", Inter, "Segoe UI", sans-serif;

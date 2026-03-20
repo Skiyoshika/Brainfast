@@ -66,7 +66,13 @@ const LANGS = {
     'btn.close': 'Close',
     'btn.refreshResults': '🔁 Refresh',
     'btn.exportCsv': '⬇️ Export CSV',
+    'btn.exportExcel': '📊 Export Excel',
     'btn.exportMethods': '📝 Export Methods Text',
+    'coexpr.title': 'Co-expression by Region',
+    'coexpr.hint': 'Cell counts per atlas region for each fluorescence channel — only shown when per-channel leaf CSVs exist.',
+    'coexpr.th.region': 'Region',
+    'coexpr.th.red': 'Red (count)',
+    'coexpr.th.green': 'Green (count)',
     'btn.browse': 'Browse',
     'btn.savePreset': '💾 Save Config',
     'btn.loadPreset': '📂 Load Config',
@@ -381,7 +387,13 @@ const LANGS = {
     'btn.close': '关闭',
     'btn.refreshResults': '🔁 刷新',
     'btn.exportCsv': '⬇️ 导出CSV',
+    'btn.exportExcel': '📊 导出Excel',
     'btn.exportMethods': '📝 导出方法段落',
+    'coexpr.title': '各通道区域共表达',
+    'coexpr.hint': '每个荧光通道在各脑图谱区域的细胞数——仅当存在分通道叶区CSV时显示。',
+    'coexpr.th.region': '区域',
+    'coexpr.th.red': '红色通道（数量）',
+    'coexpr.th.green': '绿色通道（数量）',
     'btn.browse': '浏览',
     'btn.savePreset': '💾 保存配置',
     'btn.loadPreset': '📂 加载配置',
@@ -684,6 +696,24 @@ function applyLang(lang) {
 // Language toggle buttons
 document.querySelectorAll('.lang-btn[data-lang]').forEach(function(btn) {
   btn.onclick = function() { applyLang(btn.dataset.lang); };
+});
+
+// ================================================================
+// THEME TOGGLE (light / dark)
+// ================================================================
+(function initTheme() {
+  const saved = localStorage.getItem('idlebrain.theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
+  const btn = document.getElementById('themeToggleBtn');
+  if (btn) btn.textContent = saved === 'light' ? '🌙' : '☀️';
+})();
+
+document.getElementById('themeToggleBtn')?.addEventListener('click', function() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('idlebrain.theme', next);
+  this.textContent = next === 'light' ? '🌙' : '☀️';
 });
 
 
@@ -1722,48 +1752,84 @@ document.getElementById('runBtn').onclick = async () => {
 // ================================================================
 // POLL LOGS
 // ================================================================
-async function pollLogsUntilDone() {
-  while (true) {
-    const [s, logsData] = await Promise.all([
-      fetch(withActiveJobQuery('/api/status')).then(r => r.json()),
-      fetch(withActiveJobQuery('/api/logs')).then(r => r.json()),
-    ]);
-    refreshErrorLog();
-    
-    // 保护前端的开发者日志不被后端的流水线日志覆盖
-    const feLogs = logBox.textContent.split('\n').filter(l => l.includes('❌') || l.includes('⚠️') || l.includes('[ready]'));
-    const srvLogs = logsData.logs.join('\n');
-    logBox.textContent = srvLogs + (feLogs.length ? '\n\n--- Frontend Dev Logs ---\n' + feLogs.join('\n') : '');
-    logBox.scrollTop = logBox.scrollHeight;
-    
-    // Update sidebar slice progress bar (visible at all times)
-    state.startEpoch = Number(s.startEpoch || state.startEpoch || 0) || null;
-    _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
+// ================================================================
+// UNIFIED POLL (/api/poll — replaces pollLogsUntilDone + _pollSliceProgress + refreshErrorLog)
+// ================================================================
+let _uniPollTimer = null;
 
-    if (s.running) {
-      const cur = Number(s.slicesDone || 0);
-      const total = Number(s.slicesTotal || 0);
-      const etaSeconds = getRunEtaSeconds(s);
-      const phase = phaseLabel(s.progress?.phase || 'running');
-      const detail = String(s.progress?.message || '').trim() || t('progress.running', { ch: s.currentChannel || '' });
-      if (total > 0) {
-        sliceProgress.classList.remove('hidden');
-        sliceProgress.textContent = etaSeconds != null
-          ? t('progress.slicesEta', { cur, total, eta: formatEtaSeconds(etaSeconds) })
-          : t('progress.slices', { cur, total });
-      } else {
-        sliceProgress.classList.add('hidden');
-      }
-      setProgress(computeRunProgress(s), `${phase} · ${detail}`);
-    }
-    if (!s.running) {
-      state.startEpoch = null;
-      sliceProgress.classList.add('hidden');
-      if (s.error && s.error !== 'cancelled by user') showToast(s.error, 'error');
-      break;
-    }
-    await new Promise(r => setTimeout(r, 1200));
+function _applyPollResponse(p) {
+  // Structured errors
+  state.backendErrors = Array.isArray(p?.errors) ? p.errors : [];
+  renderErrorPanel();
+
+  // Log tail
+  if (Array.isArray(p?.logTail) && logBox) {
+    const feLogs = logBox.textContent.split('\n').filter(l => l.includes('❌') || l.includes('⚠️') || l.includes('[ready]'));
+    logBox.textContent = p.logTail.join('\n') + (feLogs.length ? '\n\n--- Frontend Dev Logs ---\n' + feLogs.join('\n') : '');
+    logBox.scrollTop = logBox.scrollHeight;
   }
+
+  // Slice progress bar
+  state.startEpoch = Number(p.startEpoch || state.startEpoch || 0) || null;
+  _updateSliceProgressBar(p.slicesDone || 0, p.slicesTotal || 0);
+
+  // Running state divergence detection
+  if (Boolean(p.running) !== state.running) setRunning(Boolean(p.running));
+
+  if (p.running) {
+    const cur = Number(p.slicesDone || 0);
+    const total = Number(p.slicesTotal || 0);
+    const etaSeconds = getRunEtaSeconds(p);
+    const phase = phaseLabel(p.progress?.phase || 'running');
+    const detail = String(p.progress?.message || '').trim() || t('progress.running', { ch: p.currentChannel || '' });
+    if (total > 0) {
+      sliceProgress.classList.remove('hidden');
+      sliceProgress.textContent = etaSeconds != null
+        ? t('progress.slicesEta', { cur, total, eta: formatEtaSeconds(etaSeconds) })
+        : t('progress.slices', { cur, total });
+    } else {
+      sliceProgress.classList.add('hidden');
+    }
+    setProgress(computeRunProgress(p), `${phase} · ${detail}`);
+  }
+}
+
+async function _runUnifiedPoll() {
+  try {
+    const p = await fetch(withActiveJobQuery('/api/poll')).then(r => r.json());
+    if (!p.ok) return;
+    _applyPollResponse(p);
+  } catch {}
+}
+
+function _startUnifiedPoll(activeMode = false) {
+  _stopUnifiedPoll();
+  _runUnifiedPoll();  // immediate first tick
+  const interval = activeMode ? 500 : 30000;
+  _uniPollTimer = setInterval(_runUnifiedPoll, interval);
+}
+
+function _stopUnifiedPoll() {
+  if (_uniPollTimer != null) { clearInterval(_uniPollTimer); _uniPollTimer = null; }
+}
+
+async function pollLogsUntilDone() {
+  _startUnifiedPoll(true);
+  while (true) {
+    await new Promise(r => setTimeout(r, 600));
+    try {
+      const p = await fetch(withActiveJobQuery('/api/poll')).then(r => r.json());
+      if (!p.ok) continue;
+      _applyPollResponse(p);
+      if (!p.running) {
+        state.startEpoch = null;
+        sliceProgress.classList.add('hidden');
+        if (p.error && p.error !== 'cancelled by user') showToast(p.error, 'error');
+        break;
+      }
+    } catch { continue; }
+  }
+  _startUnifiedPoll(false);  // switch to idle rate after done
 }
 
 // ================================================================
@@ -2069,6 +2135,7 @@ async function refreshOutputs() {
       }
     } catch {}
     refreshApDensity();
+    refreshCoexpression();
     await refreshDetectionConfidenceSamples();
     compareRows.innerHTML = '';
     for (const ch of ['red', 'green', 'farred']) {
@@ -2278,7 +2345,8 @@ function renderResultsTable(data) {
 document.getElementById('regionSearch').addEventListener('input', () => renderResultsTable(state.allResults));
 document.getElementById('morphToggle')?.addEventListener('change', () => renderResultsTable(state.allResults));
 document.getElementById('refreshBtn').onclick = refreshOutputs;
-document.getElementById('exportBtn').onclick   = () => window.open(withActiveJobQuery('/api/outputs/leaf'), '_blank');
+document.getElementById('exportBtn').onclick      = () => window.open(withActiveJobQuery('/api/outputs/leaf'), '_blank');
+document.getElementById('exportExcelBtn').onclick  = () => window.open(withActiveJobQuery('/api/outputs/excel'), '_blank');
 
 // ================================================================
 // METHODS TEXT EXPORT
@@ -2621,21 +2689,8 @@ function _updateSliceProgressBar(done, total) {
     : 'linear-gradient(90deg,#4CAF50,#81C784)';  // green = in progress
 }
 
-// Poll slice progress even when pipeline is not running via /api/run
-// (covers the background main.py pipeline case)
-async function _pollSliceProgress() {
-  try {
-    const s = await fetch(withActiveJobQuery('/api/status')).then(r => r.json());
-    if (Boolean(s.running) !== state.running) setRunning(Boolean(s.running));
-    state.startEpoch = Number(s.startEpoch || (s.running ? state.startEpoch : 0) || 0) || null;
-    _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
-  } catch {}
-}
-// Check on load + every 30s
-_pollSliceProgress();
-setInterval(_pollSliceProgress, 30000);
-refreshErrorLog();
-setInterval(refreshErrorLog, 5000);
+// Start unified background poll at idle rate (30s); switches to 500ms during active run
+_startUnifiedPoll(false);
 
 // ================================================================
 async function init() {
@@ -3749,6 +3804,40 @@ async function refreshApDensity() {
 
     svg += '</svg>';
     chartDiv.innerHTML = svg;
+  } catch { section.style.display = 'none'; }
+}
+
+// ================================================================
+// CO-EXPRESSION TABLE
+// ================================================================
+async function refreshCoexpression() {
+  const section = document.getElementById('coexpressionSection');
+  const tableDiv = document.getElementById('coexpressionTable');
+  if (!section || !tableDiv) return;
+  try {
+    const r = await fetch(withActiveJobQuery('/api/outputs/coexpression'));
+    if (!r.ok) { section.style.display = 'none'; return; }
+    const j = await r.json();
+    if (!j.ok || !Array.isArray(j.regions) || !j.regions.length) {
+      section.style.display = 'none'; return;
+    }
+    section.style.display = '';
+    const rows = j.regions.slice(0, 200);
+    let html = `<table class="results-table"><thead><tr>
+      <th>${t('coexpr.th.region')}</th>
+      ${j.channel_red_available ? `<th>${t('coexpr.th.red')}</th>` : ''}
+      ${j.channel_green_available ? `<th>${t('coexpr.th.green')}</th>` : ''}
+    </tr></thead><tbody>`;
+    rows.forEach(r => {
+      const label = r.name ? `${r.acronym} — ${r.name}` : (r.acronym || '—');
+      html += `<tr>
+        <td>${label}</td>
+        ${j.channel_red_available ? `<td style="text-align:right">${Math.round(r.count_red)}</td>` : ''}
+        ${j.channel_green_available ? `<td style="text-align:right">${Math.round(r.count_green)}</td>` : ''}
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    tableDiv.innerHTML = html;
   } catch { section.style.display = 'none'; }
 }
 

@@ -142,6 +142,7 @@
         <button class="lang-btn active" data-lang="en">EN</button>
         <span class="lang-sep">/</span>
         <button class="lang-btn" data-lang="zh">中文</button>
+        <button id="themeToggleBtn" title="Toggle light/dark theme" style="background:none;border:none;cursor:pointer;font-size:1.1em;margin-left:8px;opacity:0.7" aria-label="Toggle theme">🌙</button>
       </div>
       <div class="sidebar-meta">
         <span class="version" id="versionText">v0.0.0</span>
@@ -660,6 +661,7 @@
         <div class="topbar-actions">
           <button id="refreshBtn"       class="btn-secondary" data-i18n="btn.refreshResults">🔁 Refresh</button>
           <button id="exportBtn"        class="btn-secondary" data-i18n="btn.exportCsv">⬇️ Export CSV</button>
+          <button id="exportExcelBtn"   class="btn-secondary" data-i18n="btn.exportExcel">📊 Export Excel</button>
           <button id="exportMethodsBtn" class="btn-secondary" data-i18n="btn.exportMethods">📝 Export Methods Text</button>
         </div>
       </header>
@@ -769,6 +771,13 @@
         </div>
         <div id="registrationRunsGrid" class="registration-runs-grid"></div>
         <div id="registrationRunsEmpty" class="empty-hint" data-i18n="reg3d.empty">No 3D registration runs found yet.</div>
+      </section>
+
+      <!-- Multi-channel co-expression panel -->
+      <section class="panel" id="coexpressionSection" style="display:none">
+        <h2 data-i18n="coexpr.title">Co-expression by Region</h2>
+        <p class="hint-text" data-i18n="coexpr.hint">Cell counts per atlas region for each fluorescence channel — only shown when per-channel leaf CSVs exist.</p>
+        <div id="coexpressionTable" style="overflow-x:auto;margin-top:8px"></div>
       </section>
 
       <!-- Cross-sample comparison panel -->

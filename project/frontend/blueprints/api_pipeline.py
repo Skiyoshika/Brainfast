@@ -220,6 +220,22 @@ def info():
     )
 
 
+@bp.get("/api/config-schema")
+def config_schema():
+    """Serve the run_config JSON Schema (Draft-07).
+
+    Frontend can use this for live config validation or to render a schema viewer.
+    """
+    schema_path = ctx.PROJECT_ROOT / "configs" / "run_config.schema.json"
+    if not schema_path.exists():
+        return jsonify({"ok": False, "error": "Schema file not found.", "error_code": "NOT_FOUND"}), 404
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        return jsonify({"ok": True, "schema": schema})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc), "error_code": ERR_INTERNAL}), 500
+
+
 @bp.get("/api/validate")
 def validate():
     payload = {

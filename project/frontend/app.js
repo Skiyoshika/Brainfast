@@ -68,6 +68,20 @@ const LANGS = {
     'btn.exportCsv': '⬇️ Export CSV',
     'btn.exportExcel': '📊 Export Excel',
     'btn.exportMethods': '📝 Export Methods Text',
+    'tour.btnTitle': 'Start guided tour',
+    'tour.skip': 'Skip tour',
+    'tour.next': 'Next →',
+    'tour.done': 'Done',
+    'tour.step1.title': '① Input paths',
+    'tour.step1.body': 'Set your input image folder (TIFF Z-stack) and output folder here. The atlas file is auto-filled if found.',
+    'tour.step2.title': '② Atlas selection',
+    'tour.step2.body': 'Brainfast auto-selects the best Allen CCFv3 coronal plane for each slice. Choose hemisphere and pixel size to match your sample.',
+    'tour.step3.title': '③ Registration mode',
+    'tour.step3.body': 'Affine is fast and robust. Nonlinear (TPS) handles curved or deformed tissue. Adjust the confidence threshold to filter detections.',
+    'tour.step4.title': '④ Run & monitor',
+    'tour.step4.body': 'Click Run Pipeline. The log and slice progress bar update in real-time. Cancel at any time.',
+    'tour.step5.title': '⑤ Results',
+    'tour.step5.body': 'Switch to the Results tab after the run. Export to CSV or Excel, view the Garwood CI per region, and copy the Methods paragraph.',
     'coexpr.title': 'Co-expression by Region',
     'coexpr.hint': 'Cell counts per atlas region for each fluorescence channel — only shown when per-channel leaf CSVs exist.',
     'coexpr.th.region': 'Region',
@@ -389,6 +403,20 @@ const LANGS = {
     'btn.exportCsv': '⬇️ 导出CSV',
     'btn.exportExcel': '📊 导出Excel',
     'btn.exportMethods': '📝 导出方法段落',
+    'tour.btnTitle': '开始引导游览',
+    'tour.skip': '跳过',
+    'tour.next': '下一步 →',
+    'tour.done': '完成',
+    'tour.step1.title': '① 输入路径',
+    'tour.step1.body': '在这里设置输入图像文件夹（TIFF Z-stack）和输出文件夹。若检测到图谱文件则自动填充。',
+    'tour.step2.title': '② 图谱选层',
+    'tour.step2.body': 'Brainfast 自动为每张切片匹配最佳 Allen CCFv3 冠状面。请根据样本设置半球和像素大小。',
+    'tour.step3.title': '③ 配准模式',
+    'tour.step3.body': '仿射变换速度快且鲁棒；非线性（TPS）适用于弯曲或变形组织。调整置信度阈值可过滤检测结果。',
+    'tour.step4.title': '④ 运行与监控',
+    'tour.step4.body': '点击运行流程，日志和切片进度条实时更新。可随时取消。',
+    'tour.step5.title': '⑤ 查看结果',
+    'tour.step5.body': '运行完成后切换到结果 Tab，可按脑区导出 CSV/Excel，查看 Garwood CI，并复制方法段落用于论文。',
     'coexpr.title': '各通道区域共表达',
     'coexpr.hint': '每个荧光通道在各脑图谱区域的细胞数——仅当存在分通道叶区CSV时显示。',
     'coexpr.th.region': '区域',
@@ -4045,3 +4073,139 @@ document.getElementById('refreshProjectsBtn')?.addEventListener('click', () => {
 document.getElementById('pixelSizeUm')?.addEventListener('input', function() {
   this.dataset.userModified = '1';
 });
+
+// ================================================================
+// GUIDED TOUR
+// ================================================================
+(function() {
+  const TOUR_KEY = 'idlebrain.tourDone';
+
+  const STEPS = [
+    {
+      target: '#inputDir',
+      titleKey: 'tour.step1.title',
+      bodyKey:  'tour.step1.body',
+      tab: 'workflow',
+    },
+    {
+      target: '#atlasPath',
+      titleKey: 'tour.step2.title',
+      bodyKey:  'tour.step2.body',
+      tab: 'workflow',
+    },
+    {
+      target: '#confidenceThreshold',
+      titleKey: 'tour.step3.title',
+      bodyKey:  'tour.step3.body',
+      tab: 'workflow',
+    },
+    {
+      target: '#runBtn',
+      titleKey: 'tour.step4.title',
+      bodyKey:  'tour.step4.body',
+      tab: 'workflow',
+    },
+    {
+      target: '#exportBtn',
+      titleKey: 'tour.step5.title',
+      bodyKey:  'tour.step5.body',
+      tab: 'results',
+    },
+  ];
+
+  let _overlay = null;
+  let _highlight = null;
+  let _tooltip = null;
+  let _stepIdx = 0;
+
+  function _switchTab(tabName) {
+    document.querySelectorAll('.nav-btn[data-tab]').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    const btn = document.querySelector(`.nav-btn[data-tab="${tabName}"]`);
+    const pane = document.getElementById(`tab-${tabName}`);
+    if (btn) btn.classList.add('active');
+    if (pane) pane.classList.add('active');
+  }
+
+  function _positionTooltip(targetEl, tooltipEl) {
+    const r = targetEl.getBoundingClientRect();
+    const tw = tooltipEl.offsetWidth || 310;
+    const th = tooltipEl.offsetHeight || 160;
+    const margin = 16;
+    let top = r.bottom + margin;
+    let left = r.left;
+    if (top + th > window.innerHeight - margin) top = r.top - th - margin;
+    if (left + tw > window.innerWidth - margin) left = window.innerWidth - tw - margin;
+    if (left < margin) left = margin;
+    if (top < margin) top = margin;
+    tooltipEl.style.top = top + 'px';
+    tooltipEl.style.left = left + 'px';
+  }
+
+  function _showStep(idx) {
+    _stepIdx = idx;
+    const step = STEPS[idx];
+    if (!step) { _endTour(true); return; }
+
+    if (step.tab) _switchTab(step.tab);
+
+    const targetEl = document.querySelector(step.target);
+    if (!targetEl) { _showStep(idx + 1); return; }  // skip missing elements
+
+    targetEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+
+    // Position highlight
+    setTimeout(() => {
+      const r = targetEl.getBoundingClientRect();
+      const pad = 6;
+      _highlight.style.top    = (r.top - pad) + 'px';
+      _highlight.style.left   = (r.left - pad) + 'px';
+      _highlight.style.width  = (r.width + pad * 2) + 'px';
+      _highlight.style.height = (r.height + pad * 2) + 'px';
+
+      // Build tooltip
+      const isLast = idx === STEPS.length - 1;
+      _tooltip.innerHTML = `
+        <h3>${t(step.titleKey)}</h3>
+        <p>${t(step.bodyKey)}</p>
+        <div class="tour-tooltip-footer">
+          <span class="tour-step-counter">${idx + 1} / ${STEPS.length}</span>
+          <div class="tour-btn-row">
+            <button class="tour-btn tour-btn-skip" id="_tourSkip">${t('tour.skip')}</button>
+            <button class="tour-btn tour-btn-next" id="_tourNext">${isLast ? t('tour.done') : t('tour.next')}</button>
+          </div>
+        </div>`;
+      document.getElementById('_tourSkip').onclick = () => _endTour(false);
+      document.getElementById('_tourNext').onclick = () => (isLast ? _endTour(true) : _showStep(idx + 1));
+
+      _positionTooltip(targetEl, _tooltip);
+    }, step.tab ? 120 : 0);
+  }
+
+  function startTour() {
+    if (!_overlay) {
+      _overlay   = document.createElement('div');
+      _highlight = document.createElement('div');
+      _tooltip   = document.createElement('div');
+      _overlay.className   = 'tour-overlay';
+      _highlight.className = 'tour-highlight';
+      _tooltip.className   = 'tour-tooltip';
+      document.body.append(_overlay, _highlight, _tooltip);
+    }
+    _overlay.style.display = _highlight.style.display = _tooltip.style.display = '';
+    _showStep(0);
+  }
+
+  function _endTour(completed) {
+    if (_overlay) { _overlay.style.display = _highlight.style.display = _tooltip.style.display = 'none'; }
+    if (completed) localStorage.setItem(TOUR_KEY, '1');
+  }
+
+  // Trigger on first visit
+  if (!localStorage.getItem(TOUR_KEY)) {
+    setTimeout(startTour, 1200);
+  }
+
+  // "?" button in sidebar
+  document.getElementById('startTourBtn')?.addEventListener('click', startTour);
+})();

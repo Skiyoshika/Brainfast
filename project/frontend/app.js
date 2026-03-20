@@ -646,6 +646,7 @@ const state = {
   startEpoch: null,
   backendErrors: [],
   frontendErrors: [],
+  activeJobId: localStorage.getItem('idlebrain.activeJobId') || '',
 };
 
 const overlayJobState = {
@@ -676,6 +677,21 @@ function getOverlayJobId() {
     localStorage.setItem('idlebrain.overlayJobId', overlayJobState.jobId);
   }
   return overlayJobState.jobId;
+}
+
+function setActiveJobId(jobId) {
+  state.activeJobId = String(jobId || '').trim();
+  if (state.activeJobId) localStorage.setItem('idlebrain.activeJobId', state.activeJobId);
+  else localStorage.removeItem('idlebrain.activeJobId');
+}
+
+function withActiveJobQuery(path, extra = {}) {
+  const url = new URL(path, window.location.origin);
+  if (state.activeJobId) url.searchParams.set('job', state.activeJobId);
+  Object.entries(extra || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
+  });
+  return `${url.pathname}${url.search}`;
 }
 
 function syncOverlayJobId(resp) {
@@ -815,7 +831,7 @@ function pushPersistentError(message, opts = {}) {
 
 async function refreshErrorLog() {
   try {
-    const res = await fetch('/api/error-log').then(r => r.json());
+    const res = await fetch(withActiveJobQuery('/api/error-log')).then(r => r.json());
     state.backendErrors = Array.isArray(res?.errors) ? res.errors : [];
     renderErrorPanel();
   } catch {}
@@ -1606,6 +1622,7 @@ document.getElementById('runBtn').onclick = async () => {
     showToast(t('toast.runFailed', { err: res.error || '?' }), 'error');
     setRunning(false); setProgress(0, t('progress.startFailed')); return;
   }
+  setActiveJobId(res.jobId || '');
   state.startEpoch = Math.floor(Date.now() / 1000);
   setProgress(20, t('progress.running', { ch: payload.channels.join(' + ') }));
   showToast(t('toast.runStarted', { channels: payload.channels.join(' + ') }), 'info', 5000);
@@ -1622,8 +1639,8 @@ document.getElementById('runBtn').onclick = async () => {
 async function pollLogsUntilDone() {
   while (true) {
     const [s, logsData] = await Promise.all([
-      fetch('/api/status').then(r => r.json()),
-      fetch('/api/logs').then(r => r.json()),
+      fetch(withActiveJobQuery('/api/status')).then(r => r.json()),
+      fetch(withActiveJobQuery('/api/logs')).then(r => r.json()),
     ]);
     refreshErrorLog();
     
@@ -1667,7 +1684,11 @@ async function pollLogsUntilDone() {
 // CANCEL
 // ================================================================
 document.getElementById('cancelBtn').onclick = async () => {
-  const res = await fetch('/api/cancel', { method: 'POST' }).then(r => r.json());
+  const res = await fetch('/api/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: state.activeJobId || '' }),
+  }).then(r => r.json());
   if (res.ok) { state.startEpoch = null; setRunning(false); setProgress(0, t('progress.cancelled')); sliceProgress.classList.add('hidden'); showToast(t('toast.cancelOk'), 'warning', 3000); }
   else showToast(t('toast.cancelNone'), 'info');
 };
@@ -1676,8 +1697,11 @@ document.getElementById('cancelBtn').onclick = async () => {
 // OPEN OUTPUT FOLDER
 // ================================================================
 document.getElementById('openOutputsBtn').onclick = async () => {
-  const info = await fetch('/api/info').then(r => r.json());
-  showToast(t('toast.outputsPath', { path: info.outputs }), 'info', 8000);
+  const [info, status] = await Promise.all([
+    fetch('/api/info').then(r => r.json()),
+    fetch(withActiveJobQuery('/api/status')).then(r => r.json()).catch(() => ({})),
+  ]);
+  showToast(t('toast.outputsPath', { path: status.outputsDir || info.outputs }), 'info', 8000);
 };
 
 // ================================================================
@@ -1692,10 +1716,10 @@ async function refreshQcAll() {
   try {
     const annSection = document.getElementById('annotatedSliceSection');
     const annImg = document.getElementById('annotatedSliceImg');
-    const ra = await fetch('/api/outputs/demo-annotated-slice', {method:'HEAD'});
+    const ra = await fetch(withActiveJobQuery('/api/outputs/demo-annotated-slice'), {method:'HEAD'});
     if (ra.ok) {
       annSection.style.display = '';
-      annImg.src = `/api/outputs/demo-annotated-slice?${Date.now()}`;
+      annImg.src = withActiveJobQuery('/api/outputs/demo-annotated-slice', { ts: Date.now() });
     }
   } catch {}
 
@@ -1703,10 +1727,10 @@ async function refreshQcAll() {
   try {
     const bestSection = document.getElementById('bestSliceSection');
     const bestImg = document.getElementById('bestSliceImg');
-    const r = await fetch('/api/outputs/demo-best-slice', {method:'HEAD'});
+    const r = await fetch(withActiveJobQuery('/api/outputs/demo-best-slice'), {method:'HEAD'});
     if (r.ok) {
       bestSection.style.display = '';
-      bestImg.src = `/api/outputs/demo-best-slice?${Date.now()}`;
+      bestImg.src = withActiveJobQuery('/api/outputs/demo-best-slice', { ts: Date.now() });
     }
   } catch {}
 
@@ -1715,13 +1739,13 @@ async function refreshQcAll() {
     const panelSection = document.getElementById('demoPanelSection');
     const panelImg = document.getElementById('demoPanelImg');
     const statsBar = document.getElementById('regStatsBar');
-    const panelHead = await fetch('/api/outputs/demo-panel', { method: 'HEAD' });
+    const panelHead = await fetch(withActiveJobQuery('/api/outputs/demo-panel'), { method: 'HEAD' });
     if (panelHead.ok) {
       panelSection.style.display = '';
-      panelImg.src = `/api/outputs/demo-panel?${Date.now()}`;
+      panelImg.src = withActiveJobQuery('/api/outputs/demo-panel', { ts: Date.now() });
       statsBar.innerHTML = '';
       try {
-        const stats = await fetch('/api/outputs/reg-stats').then(r => r.json());
+        const stats = await fetch(withActiveJobQuery('/api/outputs/reg-stats')).then(r => r.json());
         if (stats.ok) {
           if (stats.mode === 'registration_run') {
             statsBar.innerHTML = [
@@ -1749,7 +1773,7 @@ async function refreshQcAll() {
   // Load individual QC thumbnails (use registered slice gallery if available)
   try {
     // Prefer the vibrant registered slice overlays
-    const regList = await fetch('/api/outputs/reg-slice-list').then(r => r.json());
+    const regList = await fetch(withActiveJobQuery('/api/outputs/reg-slice-list')).then(r => r.json());
     if (regList.ok && regList.files.length > 0) {
       empty.classList.add('hidden');
       count.textContent = `${regList.count}`;
@@ -1758,7 +1782,7 @@ async function refreshQcAll() {
         const wrap = document.createElement('div');
         wrap.className = 'qc-thumb';
         const img = document.createElement('img');
-        img.src = `/api/outputs/reg-slice/${fname}?${Date.now()}`;
+        img.src = withActiveJobQuery(`/api/outputs/reg-slice/${fname}`, { ts: Date.now() });
         img.alt = fname; img.onerror = () => wrap.remove();
         const label = document.createElement('div');
         label.className = 'qc-thumb-label';
@@ -1766,13 +1790,13 @@ async function refreshQcAll() {
         label.textContent = fname.replace('slice_', '').replace('_overlay.png', '');
         wrap.appendChild(img); wrap.appendChild(label);
         // Click → open side-by-side comparison
-        wrap.onclick = () => openLightbox(`/api/outputs/demo-comparison/${sliceIdx}?${Date.now()}`, `Slice ${sliceIdx} — Raw vs Atlas`);
+        wrap.onclick = () => openLightbox(withActiveJobQuery(`/api/outputs/demo-comparison/${sliceIdx}`, { ts: Date.now() }), `Slice ${sliceIdx} — Raw vs Atlas`);
         grid.appendChild(wrap);
       });
       return;
     }
     // Fallback to qc_overlays
-    const res = await fetch('/api/outputs/qc-list').then(r => r.json());
+    const res = await fetch(withActiveJobQuery('/api/outputs/qc-list')).then(r => r.json());
     if (!res.ok || res.files.length === 0) { grid.innerHTML = ''; empty.classList.remove('hidden'); count.textContent = ''; return; }
     empty.classList.add('hidden');
     count.textContent = `${res.count}`;
@@ -1781,7 +1805,7 @@ async function refreshQcAll() {
       const wrap = document.createElement('div');
       wrap.className = 'qc-thumb';
       const img = document.createElement('img');
-      img.src = `/api/outputs/qc-file/${fname}?${Date.now()}`;
+      img.src = withActiveJobQuery(`/api/outputs/qc-file/${fname}`, { ts: Date.now() });
       img.alt = fname; img.onerror = () => wrap.remove();
       const label = document.createElement('div');
       label.className = 'qc-thumb-label';
@@ -1798,7 +1822,7 @@ async function regenDemoVisuals() {
   const btn = document.getElementById('regenDemoBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Regenerating...'; }
   try {
-    const r = await fetch('/api/outputs/refresh-demo', { method: 'POST' });
+    const r = await fetch(withActiveJobQuery('/api/outputs/refresh-demo'), { method: 'POST' });
     const j = await r.json();
     if (j.ok) {
       showToast('Demo visuals regeneration started. Refreshing in 15s...', 'info');
@@ -1828,11 +1852,11 @@ async function refreshOutputs() {
     let data = null;
     let useHierarchy = false;
     try {
-      const hierText = await fetch('/api/outputs/hierarchy').then(r => r.ok ? r.text() : null);
+      const hierText = await fetch(withActiveJobQuery('/api/outputs/hierarchy')).then(r => r.ok ? r.text() : null);
       if (hierText) { data = parseCsv(hierText); useHierarchy = true; }
     } catch {}
     if (!data) {
-      const leaf = await fetch('/api/outputs/leaf').then(r => r.text());
+      const leaf = await fetch(withActiveJobQuery('/api/outputs/leaf')).then(r => r.text());
       data = parseCsv(leaf);
     }
     state.allResults = data;
@@ -1843,19 +1867,19 @@ async function refreshOutputs() {
 
     // Load static cell count chart
     try {
-      const chartRes = await fetch('/api/outputs/cell-chart', { method: 'HEAD' });
+      const chartRes = await fetch(withActiveJobQuery('/api/outputs/cell-chart'), { method: 'HEAD' });
       const chartSection = document.getElementById('cellChartSection');
       const chartImg = document.getElementById('cellChartImg');
       if (chartRes.ok && chartSection && chartImg) {
         chartSection.style.display = '';
-        chartImg.src = `/api/outputs/cell-chart?${Date.now()}`;
+        chartImg.src = withActiveJobQuery('/api/outputs/cell-chart', { ts: Date.now() });
       }
     } catch {}
     await refreshDetectionConfidenceSamples();
     compareRows.innerHTML = '';
     for (const ch of ['red', 'green', 'farred']) {
       try {
-        const txt = await fetch(`/api/outputs/leaf/${ch}`).then(r => (r.ok ? r.text() : ''));
+        const txt = await fetch(withActiveJobQuery(`/api/outputs/leaf/${ch}`)).then(r => (r.ok ? r.text() : ''));
         if (!txt) continue;
         const arr = parseCsv(txt);
         const total = arr.reduce((s, x) => s + Number(x.count || 0), 0);
@@ -1879,7 +1903,7 @@ async function refreshCellSummary() {
   if (!section || !cards || !warnings || !lead) return;
 
   try {
-    const res = await fetch('/api/outputs/cell-summary').then(r => r.json());
+    const res = await fetch(withActiveJobQuery('/api/outputs/cell-summary')).then(r => r.json());
     const summary = res?.ok ? res.summary : null;
     state.cellSummary = summary || null;
     if (!summary) {
@@ -1931,7 +1955,7 @@ async function refreshDetectionConfidenceSamples() {
   if (!section || !grid || !empty) return;
 
   try {
-    const res = await fetch('/api/outputs/detection-samples').then(r => r.json());
+    const res = await fetch(withActiveJobQuery('/api/outputs/detection-samples')).then(r => r.json());
     if (!res.ok || !Array.isArray(res.samples) || !res.samples.length) {
       section.style.display = 'none';
       grid.innerHTML = '';
@@ -1949,15 +1973,16 @@ async function refreshDetectionConfidenceSamples() {
       const title = sample.source_name || `slice ${sample.slice_id ?? ''}`;
       const subtitle = `${Number(sample.count || 0).toLocaleString()} ${t('cellconf.cells')}`;
       const detectorText = sample.detectors ? `${t('cellconf.detector')}: ${sample.detectors}` : '';
+      const sampleUrl = withActiveJobQuery(sample.url || '', { ts: Date.now() });
       card.innerHTML = `
-        <img src="${sample.url}?${Date.now()}" alt="${escapeHtml(title)}" />
+        <img src="${sampleUrl}" alt="${escapeHtml(title)}" />
         <div class="cell-confidence-meta">
           <div class="cell-confidence-title">${escapeHtml(title)}</div>
           <div class="cell-confidence-subtitle">${escapeHtml(subtitle)}</div>
           <div class="cell-confidence-detector">${escapeHtml(detectorText)}</div>
         </div>
       `;
-      card.onclick = () => openLightbox(`${sample.url}?${Date.now()}`, title);
+      card.onclick = () => openLightbox(sampleUrl, title);
       grid.appendChild(card);
     });
   } catch (err) {
@@ -2042,7 +2067,7 @@ function renderResultsTable(data) {
 
 document.getElementById('regionSearch').addEventListener('input', () => renderResultsTable(state.allResults));
 document.getElementById('refreshBtn').onclick = refreshOutputs;
-document.getElementById('exportBtn').onclick   = () => window.open('/api/outputs/leaf', '_blank');
+document.getElementById('exportBtn').onclick   = () => window.open(withActiveJobQuery('/api/outputs/leaf'), '_blank');
 
 // ================================================================
 // METHODS TEXT EXPORT
@@ -2056,7 +2081,7 @@ function openTextModal(title, description, text) {
 
 document.getElementById('exportMethodsBtn').onclick = async () => {
   try {
-    const res = await fetch('/api/export/methods-text').then(r => r.json());
+    const res = await fetch(withActiveJobQuery('/api/export/methods-text')).then(r => r.json());
     if (!res.ok) { showToast(t('toast.methodsFailed'), 'error'); return; }
     openTextModal(t('methods.title'), t('methods.desc'), res.text);
   } catch { showToast(t('toast.methodsFailed'), 'error'); }
@@ -2074,7 +2099,7 @@ document.getElementById('methodsCopyBtn').onclick = async () => {
 // ================================================================
 async function refreshHistory() {
   try {
-    const h = await fetch('/api/history').then(r => r.json());
+    const h = await fetch(withActiveJobQuery('/api/history')).then(r => r.json());
     historyList.innerHTML = '';
     (h.history || []).slice().reverse().forEach(item => {
       const li = document.createElement('li');
@@ -2144,9 +2169,10 @@ function renderRegistrationPreview(url, caption) {
       </div>
     `;
   }
+  const previewUrl = withActiveJobQuery(url, { ts: Date.now() });
   return `
     <div class="registration-preview">
-      <img src="${escapeHtml(url)}?ts=${Date.now()}" alt="${escapeHtml(caption)}" data-lightbox-src="${escapeHtml(url)}?ts=${Date.now()}" data-lightbox-caption="${escapeHtml(caption)}" />
+      <img src="${escapeHtml(previewUrl)}" alt="${escapeHtml(caption)}" data-lightbox-src="${escapeHtml(previewUrl)}" data-lightbox-caption="${escapeHtml(caption)}" />
       <div class="registration-preview-caption">${escapeHtml(caption)}</div>
     </div>
   `;
@@ -2242,7 +2268,7 @@ function renderRegistrationRunCard(run) {
 
 async function openRegistrationText(url, title, description) {
   try {
-    const resp = await fetch(url);
+    const resp = await fetch(withActiveJobQuery(url));
     if (!resp.ok) throw new Error('request failed');
     const text = await resp.text();
     const capped = text.length > 20000 ? `${text.slice(0, 20000)}\n...(truncated)` : text;
@@ -2269,7 +2295,7 @@ function toggleRegistrationMenu(runName) {
 
 async function pinRegistrationRun(runName) {
   try {
-    const resp = await fetch(`/api/outputs/registration-run/${encodeURIComponent(runName)}/pin`, {
+    const resp = await fetch(withActiveJobQuery(`/api/outputs/registration-run/${encodeURIComponent(runName)}/pin`), {
       method: 'POST',
     });
     const data = await resp.json();
@@ -2287,7 +2313,7 @@ async function pinRegistrationRun(runName) {
 async function deleteBadRegistrationRun(runName) {
   if (!window.confirm(t('reg3d.deleteConfirm'))) return;
   try {
-    const resp = await fetch(`/api/outputs/registration-run/${encodeURIComponent(runName)}/delete-bad`, {
+    const resp = await fetch(withActiveJobQuery(`/api/outputs/registration-run/${encodeURIComponent(runName)}/delete-bad`), {
       method: 'POST',
     });
     const data = await resp.json();
@@ -2307,7 +2333,7 @@ async function refreshRegistrationRuns() {
   const empty = document.getElementById('registrationRunsEmpty');
   if (!grid || !empty) return;
   try {
-    const res = await fetch('/api/outputs/registration-runs').then(r => r.json());
+    const res = await fetch(withActiveJobQuery('/api/outputs/registration-runs')).then(r => r.json());
     const runs = Array.isArray(res?.runs) ? res.runs : [];
     if (!res.ok || runs.length === 0) {
       grid.innerHTML = '';
@@ -2337,7 +2363,7 @@ async function refreshRegistrationRuns() {
           openRegistrationText(detailUrl, btn.dataset.detailTitle || '', btn.dataset.detailDesc || '');
           return;
         }
-        window.open(detailUrl, '_blank');
+        window.open(withActiveJobQuery(detailUrl), '_blank');
       };
     });
     grid.querySelectorAll('[data-registration-delete]').forEach((btn) => {
@@ -2388,7 +2414,8 @@ function _updateSliceProgressBar(done, total) {
 // (covers the background main.py pipeline case)
 async function _pollSliceProgress() {
   try {
-    const s = await fetch('/api/status').then(r => r.json());
+    const s = await fetch(withActiveJobQuery('/api/status')).then(r => r.json());
+    if (Boolean(s.running) !== state.running) setRunning(Boolean(s.running));
     state.startEpoch = Number(s.startEpoch || (s.running ? state.startEpoch : 0) || 0) || null;
     _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
   } catch {}
@@ -3350,7 +3377,7 @@ async function refreshFileList() {
   const grid  = document.getElementById('outputFileGrid');
   const empty = document.getElementById('outputFileEmpty');
   try {
-    const res = await fetch('/api/outputs/file-list').then(r => r.json());
+  const res = await fetch(withActiveJobQuery('/api/outputs/file-list')).then(r => r.json());
     if (!res.ok || res.files.length === 0) { grid.innerHTML = ''; empty.classList.remove('hidden'); return; }
     empty.classList.add('hidden');
     grid.innerHTML = '';
@@ -3369,10 +3396,10 @@ async function refreshFileList() {
 
 async function handleOutputFileClick(f) {
   if (f.ext === '.png') {
-    openLightbox(`/api/outputs/named/${f.name}?${Date.now()}`, f.name);
+        openLightbox(withActiveJobQuery(`/api/outputs/named/${f.name}`, { ts: Date.now() }), f.name);
   } else if (f.ext === '.csv' || f.ext === '.json' || f.ext === '.txt') {
     try {
-      const text = await fetch(`/api/outputs/named/${f.name}`).then(r => r.text());
+        const text = await fetch(withActiveJobQuery(`/api/outputs/named/${f.name}`)).then(r => r.text());
       const capped = text.slice(0, 8000) + (text.length > 8000 ? '\n...(truncated)' : '');
       openTextModal(f.name, t('outputs.previewDesc'), capped);
     } catch {}

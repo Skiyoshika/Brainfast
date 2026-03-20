@@ -277,9 +277,12 @@ def run_demo(cfg: dict):
     print("Demo pipeline complete: kdtree dedup + mapping + aggregation outputs generated")
 
 
-def run_real_input(cfg: dict, input_dir: Path):
+def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = None):
     project_root = _project_root()
-    outputs_dir = project_root / "outputs"
+    env_output_dir = os.environ.get("BRAINCOUNT_OUTPUT_DIR", "").strip()
+    outputs_dir = Path(outputs_dir) if outputs_dir is not None else (
+        Path(env_output_dir) if env_output_dir else project_root / "outputs"
+    )
     outputs_dir.mkdir(parents=True, exist_ok=True)
     annotation_nii = project_root / "annotation_25.nii.gz"
     if not annotation_nii.exists():
@@ -760,7 +763,7 @@ def run_real_input(cfg: dict, input_dir: Path):
 
     # Auto-regenerate demo visuals (panel, annotated slice, chart) after pipeline completes
     refresh_script = project_root / "scripts" / "refresh_demo.py"
-    if refresh_script.exists():
+    if refresh_script.exists() and outputs_dir == (project_root / "outputs"):
         import subprocess
         import sys as _sys
 
@@ -864,7 +867,9 @@ def main():
         return
 
     if args.run_real_input:
-        run_real_input(cfg, Path(args.run_real_input))
+        env_output_dir = os.environ.get("BRAINCOUNT_OUTPUT_DIR", "").strip()
+        output_override = Path(env_output_dir) if env_output_dir else None
+        run_real_input(cfg, Path(args.run_real_input), outputs_dir=output_override)
         return
 
     print("MVP skeleton only: registration/mapping integration pending.")

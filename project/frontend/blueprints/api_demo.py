@@ -24,8 +24,12 @@ from project.frontend.services.demo_service import (
 bp = Blueprint("api_demo", __name__, url_prefix="/api")
 
 
+def _outputs_root() -> Path:
+    return ctx._job_output_dir(ctx._query_job_id())
+
+
 def _latest_registration_run() -> Path | None:
-    runs = _registration_run_dirs()
+    runs = _registration_run_dirs(_outputs_root())
     return runs[0] if runs else None
 
 
@@ -76,7 +80,7 @@ def _serve_generated_run_artifact(
 
 
 def _detection_sample_dir() -> Path:
-    return ctx.OUTPUT_DIR / "detection_samples"
+    return _outputs_root() / "detection_samples"
 
 
 def _detection_sample_manifest_path() -> Path:
@@ -98,10 +102,11 @@ def outputs_demo_best_slice():
         except Exception as exc:
             return jsonify({"ok": False, "error": f"3D best-slice generation failed: {exc}"}), 500
 
-    fp = ctx.OUTPUT_DIR / "demo_best_slice.jpg"
+    outputs_root = _outputs_root()
+    fp = outputs_root / "demo_best_slice.jpg"
     if not fp.exists():
         return jsonify({"ok": False, "error": "Best-slice image not generated yet"}), 404
-    return send_from_directory(str(ctx.OUTPUT_DIR), fp.name)
+    return send_from_directory(str(outputs_root), fp.name)
 
 
 @bp.get("/outputs/demo-annotated-slice")
@@ -122,21 +127,23 @@ def outputs_demo_annotated_slice():
         except Exception as exc:
             return jsonify({"ok": False, "error": f"3D annotated-slice generation failed: {exc}"}), 500
 
-    fp = ctx.OUTPUT_DIR / "demo_annotated_slice.jpg"
+    outputs_root = _outputs_root()
+    fp = outputs_root / "demo_annotated_slice.jpg"
     if not fp.exists():
         return jsonify(
             {"ok": False, "error": "Annotated slice not generated yet. Run refresh_demo.py first."}
         ), 404
-    return send_from_directory(str(ctx.OUTPUT_DIR), fp.name)
+    return send_from_directory(str(outputs_root), fp.name)
 
 
 @bp.get("/outputs/cell-chart")
 def outputs_cell_chart():
     """Generate and serve the cell-count summary chart."""
 
-    chart_path = ctx.OUTPUT_DIR / "cell_count_chart.png"
-    hier_path = ctx.OUTPUT_DIR / "cell_counts_hierarchy.csv"
-    cells_path = ctx.OUTPUT_DIR / "cells_mapped.csv"
+    outputs_root = _outputs_root()
+    chart_path = outputs_root / "cell_count_chart.png"
+    hier_path = outputs_root / "cell_counts_hierarchy.csv"
+    cells_path = outputs_root / "cells_mapped.csv"
     if not hier_path.exists():
         return jsonify({"ok": False, "error": "No hierarchy CSV yet"}), 404
     sources = [hier_path]
@@ -149,14 +156,14 @@ def outputs_cell_chart():
             return jsonify({"ok": False, "error": f"Chart generation failed: {exc}"}), 500
     if not chart_path.exists():
         return jsonify({"ok": False, "error": "Chart not found"}), 404
-    return send_from_directory(str(ctx.OUTPUT_DIR), chart_path.name)
+    return send_from_directory(str(outputs_root), chart_path.name)
 
 
 @bp.get("/outputs/cell-summary")
 def outputs_cell_summary():
     """Return a product-facing summary of the current cell-count outputs."""
 
-    hier_path = ctx.OUTPUT_DIR / "cell_counts_hierarchy.csv"
+    hier_path = _outputs_root() / "cell_counts_hierarchy.csv"
     if not hier_path.exists():
         return jsonify({"ok": False, "error": "No hierarchy CSV yet"}), 404
     try:
@@ -170,7 +177,7 @@ def outputs_cell_summary():
 def outputs_detection_samples():
     """Return representative counted-cell overlays rendered from the final dedup table."""
 
-    cells_path = ctx.OUTPUT_DIR / "cells_dedup.csv"
+    cells_path = _outputs_root() / "cells_dedup.csv"
     if not cells_path.exists():
         return jsonify({"ok": True, "samples": [], "count": 0})
 
@@ -218,18 +225,19 @@ def outputs_detection_sample_file(filename: str):
 def outputs_demo_comparison(slice_idx: int):
     """Generate and serve a side-by-side raw vs atlas comparison for a legacy slice."""
 
-    reg_dir = ctx.OUTPUT_DIR / "registered_slices"
+    outputs_root = _outputs_root()
+    reg_dir = outputs_root / "registered_slices"
     data_dir = ctx.PROJECT_ROOT / "data" / "35_C0_demo"
     ov_path = reg_dir / f"slice_{slice_idx:04d}_overlay.png"
     if not ov_path.exists():
         return jsonify({"ok": False, "error": f"slice {slice_idx} not found"}), 404
 
-    out_path = ctx.OUTPUT_DIR / f"compare_{slice_idx:04d}.jpg"
+    out_path = outputs_root / f"compare_{slice_idx:04d}.jpg"
     try:
         generate_demo_comparison(slice_idx, reg_dir, data_dir, out_path)
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
-    return send_from_directory(str(ctx.OUTPUT_DIR), out_path.name)
+    return send_from_directory(str(outputs_root), out_path.name)
 
 
 @bp.get("/outputs/demo-panel")
@@ -253,8 +261,9 @@ def outputs_demo_panel():
     import subprocess
     import sys
 
-    panel_path = ctx.OUTPUT_DIR / "demo_panel.jpg"
-    reg_dir = ctx.OUTPUT_DIR / "registered_slices"
+    outputs_root = _outputs_root()
+    panel_path = outputs_root / "demo_panel.jpg"
+    reg_dir = outputs_root / "registered_slices"
     if not panel_path.exists() or (
         reg_dir.exists()
         and any(p.stat().st_mtime > panel_path.stat().st_mtime for p in reg_dir.glob("slice_*_overlay.png"))
@@ -285,7 +294,7 @@ def outputs_demo_panel():
             return jsonify({"ok": False, "error": f"Panel generation failed: {exc}"}), 500
     if not panel_path.exists():
         return jsonify({"ok": False, "error": "Panel not found"}), 404
-    return send_from_directory(str(ctx.OUTPUT_DIR), panel_path.name)
+    return send_from_directory(str(outputs_root), panel_path.name)
 
 
 @bp.post("/outputs/refresh-demo")
@@ -302,9 +311,20 @@ def outputs_refresh_demo():
 
     def _run():
         try:
+            outputs_root = _outputs_root()
+            hier_path = outputs_root / "cell_counts_hierarchy.csv"
+            chart_path = outputs_root / "cell_count_chart.png"
+            cells_path = outputs_root / "cells_dedup.csv"
+
             if run_dir is not None:
                 structure_csv = ctx.PROJECT_ROOT / "configs" / "allen_mouse_structure_graph.csv"
-                generate_registration_demo_panel(run_dir, _run_qc_artifact(run_dir, "qc_panel.jpg"), n_slices=12, cols=4, thumb_size=380)
+                generate_registration_demo_panel(
+                    run_dir,
+                    _run_qc_artifact(run_dir, "qc_panel.jpg"),
+                    n_slices=12,
+                    cols=4,
+                    thumb_size=380,
+                )
                 generate_registration_best_slice(run_dir, _run_qc_artifact(run_dir, "qc_best_slice.jpg"))
                 generate_registration_annotated_slice(
                     run_dir,
@@ -312,11 +332,8 @@ def outputs_refresh_demo():
                     structure_csv=structure_csv,
                     top_n=12,
                 )
-                hier_path = ctx.OUTPUT_DIR / "cell_counts_hierarchy.csv"
-                chart_path = ctx.OUTPUT_DIR / "cell_count_chart.png"
                 if hier_path.exists():
                     generate_cell_chart(hier_path, chart_path, ctx.PROJECT_ROOT)
-                cells_path = ctx.OUTPUT_DIR / "cells_dedup.csv"
                 if cells_path.exists():
                     manifest = generate_detection_confidence_samples(
                         cells_path,
@@ -338,7 +355,6 @@ def outputs_refresh_demo():
                 text=True,
             )
             ctx._append_log(f"[refresh_demo] {result.stdout.strip()}")
-            cells_path = ctx.OUTPUT_DIR / "cells_dedup.csv"
             if result.returncode == 0 and cells_path.exists():
                 manifest = generate_detection_confidence_samples(
                     cells_path,
@@ -349,8 +365,6 @@ def outputs_refresh_demo():
                     json.dumps(manifest, indent=2, ensure_ascii=False),
                     encoding="utf-8",
                 )
-            hier_path = ctx.OUTPUT_DIR / "cell_counts_hierarchy.csv"
-            chart_path = ctx.OUTPUT_DIR / "cell_count_chart.png"
             if result.returncode == 0 and hier_path.exists():
                 generate_cell_chart(hier_path, chart_path, ctx.PROJECT_ROOT)
             if result.returncode != 0:
@@ -397,7 +411,7 @@ def outputs_reg_stats():
             except Exception as exc:
                 return jsonify({"ok": False, "error": str(exc)}), 500
 
-    qc_path = ctx.OUTPUT_DIR / "slice_registration_qc.csv"
+    qc_path = _outputs_root() / "slice_registration_qc.csv"
     if not qc_path.exists():
         return jsonify({"ok": False, "error": "No registration QC data yet"})
     try:

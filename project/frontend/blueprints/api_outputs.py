@@ -17,12 +17,17 @@ RUN_STATE_FILE = ".registration_runs_state.json"
 RUN_ARCHIVE_DIR = "archive/registration_runs"
 
 
-def _run_state_path() -> Path:
-    return ctx.OUTPUT_DIR / RUN_STATE_FILE
+def _outputs_root() -> Path:
+    return ctx._job_output_dir(ctx._query_job_id())
 
 
-def _load_run_state() -> dict[str, object]:
-    path = _run_state_path()
+def _run_state_path(outputs_root: Path | None = None) -> Path:
+    root = outputs_root or _outputs_root()
+    return root / RUN_STATE_FILE
+
+
+def _load_run_state(outputs_root: Path | None = None) -> dict[str, object]:
+    path = _run_state_path(outputs_root)
     if not path.exists():
         return {"pinned": []}
     try:
@@ -36,29 +41,30 @@ def _load_run_state() -> dict[str, object]:
     return {"pinned": pinned}
 
 
-def _save_run_state(state: dict[str, object]) -> None:
-    ctx.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+def _save_run_state(state: dict[str, object], outputs_root: Path | None = None) -> None:
+    root = outputs_root or _outputs_root()
+    root.mkdir(parents=True, exist_ok=True)
     pinned = state.get("pinned", [])
     if not isinstance(pinned, list):
         pinned = []
     data = {"pinned": [Path(str(name)).name for name in pinned if str(name).strip()]}
-    _run_state_path().write_text(json.dumps(data, indent=2), encoding="utf-8")
+    _run_state_path(root).write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def _pin_run(run_name: str) -> list[str]:
-    state = _load_run_state()
+def _pin_run(run_name: str, outputs_root: Path | None = None) -> list[str]:
+    state = _load_run_state(outputs_root)
     pinned = [name for name in state.get("pinned", []) if name != run_name]
     pinned.insert(0, run_name)
     state["pinned"] = pinned
-    _save_run_state(state)
+    _save_run_state(state, outputs_root)
     return pinned
 
 
-def _unpin_run(run_name: str) -> list[str]:
-    state = _load_run_state()
+def _unpin_run(run_name: str, outputs_root: Path | None = None) -> list[str]:
+    state = _load_run_state(outputs_root)
     pinned = [name for name in state.get("pinned", []) if name != run_name]
     state["pinned"] = pinned
-    _save_run_state(state)
+    _save_run_state(state, outputs_root)
     return pinned
 
 
@@ -111,17 +117,18 @@ def _verdict(metrics: dict[str, float], pre_metrics: dict[str, float]) -> tuple[
     )
 
 
-def _registration_run_dirs() -> list[Path]:
-    if not ctx.OUTPUT_DIR.exists():
+def _registration_run_dirs(outputs_root: Path | None = None) -> list[Path]:
+    root = outputs_root or _outputs_root()
+    if not root.exists():
         return []
 
     runs: list[Path] = []
-    for child in ctx.OUTPUT_DIR.iterdir():
+    for child in root.iterdir():
         if not child.is_dir():
             continue
         if (child / "registration_metadata.json").exists() and (child / "registration_metrics.csv").exists():
             runs.append(child)
-    state = _load_run_state()
+    state = _load_run_state(root)
     pinned_order = [name for name in state.get("pinned", []) if isinstance(name, str)]
     runs_by_name = {run.name: run for run in runs}
     pinned_runs = [runs_by_name[name] for name in pinned_order if name in runs_by_name]
@@ -131,8 +138,9 @@ def _registration_run_dirs() -> list[Path]:
 
 
 def _safe_registration_run_dir(run_name: str) -> Path | None:
+    root = _outputs_root()
     safe = Path(run_name).name
-    run_dir = ctx.OUTPUT_DIR / safe
+    run_dir = root / safe
     if safe != run_name:
         return None
     if not run_dir.exists() or not run_dir.is_dir():
@@ -177,7 +185,7 @@ def _serialize_registration_run(run_dir: Path) -> dict[str, object]:
     pipeline_label = backend or "UNKNOWN"
     if meta.get("laplacian_enabled"):
         pipeline_label = f"{pipeline_label} + Laplacian"
-    state = _load_run_state()
+    state = _load_run_state(run_dir.parent)
     pinned = run_dir.name in state.get("pinned", [])
 
     return {
@@ -210,7 +218,7 @@ def _serialize_registration_run(run_dir: Path) -> dict[str, object]:
 
 
 def _archive_run_dir(run_dir: Path) -> Path:
-    archive_root = ctx.OUTPUT_DIR / RUN_ARCHIVE_DIR
+    archive_root = run_dir.parent / RUN_ARCHIVE_DIR
     archive_root.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     archived = archive_root / f"{stamp}_{run_dir.name}"
@@ -224,7 +232,7 @@ def _archive_run_dir(run_dir: Path) -> Path:
 
 @bp.get("/leaf")
 def outputs_leaf():
-    fp = ctx.OUTPUT_DIR / "cell_counts_leaf.csv"
+    fp = _outputs_root() / "cell_counts_leaf.csv"
     if not fp.exists():
         return jsonify({"ok": False, "error": "output not found"}), 404
     return send_from_directory(fp.parent, fp.name)
@@ -232,7 +240,7 @@ def outputs_leaf():
 
 @bp.get("/leaf/<channel>")
 def outputs_leaf_channel(channel: str):
-    fp = ctx.OUTPUT_DIR / f"cell_counts_leaf_{channel}.csv"
+    fp = _outputs_root() / f"cell_counts_leaf_{channel}.csv"
     if not fp.exists():
         return ("", 204, {"Content-Type": "text/csv; charset=utf-8"})
     return send_from_directory(fp.parent, fp.name)
@@ -240,7 +248,7 @@ def outputs_leaf_channel(channel: str):
 
 @bp.get("/hierarchy")
 def outputs_hierarchy():
-    fp = ctx.OUTPUT_DIR / "cell_counts_hierarchy.csv"
+    fp = _outputs_root() / "cell_counts_hierarchy.csv"
     if not fp.exists():
         return jsonify({"ok": False, "error": "hierarchy output not found"}), 404
     return send_from_directory(fp.parent, fp.name)
@@ -248,7 +256,7 @@ def outputs_hierarchy():
 
 @bp.get("/registration-qc")
 def outputs_registration_qc():
-    fp = ctx.OUTPUT_DIR / "slice_registration_qc.csv"
+    fp = _outputs_root() / "slice_registration_qc.csv"
     if not fp.exists():
         return jsonify({"ok": False, "error": "registration QC not found"}), 404
     return send_from_directory(fp.parent, fp.name)
@@ -256,7 +264,7 @@ def outputs_registration_qc():
 
 @bp.get("/reg-slice-list")
 def outputs_reg_slice_list():
-    reg_dir = ctx.OUTPUT_DIR / "registered_slices"
+    reg_dir = _outputs_root() / "registered_slices"
     if not reg_dir.exists():
         return jsonify({"ok": True, "files": [], "count": 0})
     files = sorted(reg_dir.glob("slice_*_overlay.png"))
@@ -265,7 +273,7 @@ def outputs_reg_slice_list():
 
 @bp.get("/reg-slice/<filename>")
 def outputs_reg_slice_file(filename: str):
-    reg_dir = ctx.OUTPUT_DIR / "registered_slices"
+    reg_dir = _outputs_root() / "registered_slices"
     safe = Path(filename).name
     fp = reg_dir / safe
     if not fp.exists() or not safe.endswith(".png"):
@@ -275,19 +283,20 @@ def outputs_reg_slice_file(filename: str):
 
 @bp.get("/file-list")
 def outputs_file_list():
-    if not ctx.OUTPUT_DIR.exists():
+    outputs_root = _outputs_root()
+    if not outputs_root.exists():
         return jsonify({"ok": True, "files": []})
     files = []
-    for f in sorted(ctx.OUTPUT_DIR.iterdir()):
+    for f in sorted(outputs_root.iterdir()):
         if f.is_file():
             files.append({"name": f.name, "size": f.stat().st_size, "ext": f.suffix.lower()})
-    return jsonify({"ok": True, "files": files, "dir": str(ctx.OUTPUT_DIR)})
+    return jsonify({"ok": True, "files": files, "dir": str(outputs_root)})
 
 
 @bp.get("/registration-runs")
 def outputs_registration_runs():
     runs: list[dict[str, object]] = []
-    for run_dir in _registration_run_dirs():
+    for run_dir in _registration_run_dirs(_outputs_root()):
         try:
             runs.append(_serialize_registration_run(run_dir))
         except Exception:
@@ -300,7 +309,7 @@ def outputs_registration_run_pin(run_name: str):
     run_dir = _safe_registration_run_dir(run_name)
     if run_dir is None:
         return jsonify({"ok": False, "error": "run not found"}), 404
-    pinned = _pin_run(run_dir.name)
+    pinned = _pin_run(run_dir.name, run_dir.parent)
     return jsonify({"ok": True, "run": run_dir.name, "pinned": pinned})
 
 
@@ -310,7 +319,7 @@ def outputs_registration_run_delete_bad(run_name: str):
     if run_dir is None:
         return jsonify({"ok": False, "error": "run not found"}), 404
     archived_dir = _archive_run_dir(run_dir)
-    _unpin_run(run_dir.name)
+    _unpin_run(run_dir.name, archived_dir.parent.parent)
     return jsonify(
         {
             "ok": True,
@@ -336,15 +345,16 @@ def outputs_registration_run_file(run_name: str, filename: str):
 @bp.get("/named/<filename>")
 def outputs_named(filename: str):
     safe = Path(filename).name
-    fp = ctx.OUTPUT_DIR / safe
+    outputs_root = _outputs_root()
+    fp = outputs_root / safe
     if not fp.exists():
         return jsonify({"ok": False, "error": "file not found"}), 404
-    return send_from_directory(str(ctx.OUTPUT_DIR), safe)
+    return send_from_directory(str(outputs_root), safe)
 
 
 @bp.get("/qc-list")
 def outputs_qc_list():
-    qc_dir = ctx.OUTPUT_DIR / "qc_overlays"
+    qc_dir = _outputs_root() / "qc_overlays"
     if not qc_dir.exists():
         return jsonify({"ok": True, "files": [], "count": 0})
     files = sorted(qc_dir.glob("overlay_*.png"))
@@ -353,6 +363,6 @@ def outputs_qc_list():
 
 @bp.get("/qc-file/<filename>")
 def outputs_qc_file(filename: str):
-    qc_dir = ctx.OUTPUT_DIR / "qc_overlays"
+    qc_dir = _outputs_root() / "qc_overlays"
     safe = Path(filename).name
     return send_from_directory(str(qc_dir), safe)

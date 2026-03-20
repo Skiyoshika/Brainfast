@@ -11,6 +11,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import project.frontend.server_context as ctx
 from project.frontend.server import app
+from project.scripts.paths import RunPaths
 
 
 def _minimal_cfg(input_dir: Path) -> dict:
@@ -114,10 +115,13 @@ def test_preflight_returns_structured_error_for_invalid_runtime_config(
 
 def test_error_log_and_status_expose_structured_progress(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path)
+    job_id = "job_test123"
     monkeypatch.setattr(
         ctx,
-        "run_state",
+        "_job_states",
         {
+            ctx.DEFAULT_JOB_ID: ctx.run_state,
+            job_id: {
             "running": True,
             "done": False,
             "error": None,
@@ -137,6 +141,8 @@ def test_error_log_and_status_expose_structured_progress(tmp_path: Path, monkeyp
             "history": [],
             "config_path": None,
             "startEpoch": 1234567890,
+            "job_id": job_id,
+            "outputs_dir": str(tmp_path / "jobs" / job_id),
             "progress": {
                 "phase": "registration",
                 "stepCurrent": 3,
@@ -145,20 +151,47 @@ def test_error_log_and_status_expose_structured_progress(tmp_path: Path, monkeyp
                 "slicesTotal": 12,
                 "message": "Processing slice 4 / 12",
             },
+            },
         },
     )
 
     with app.test_client() as client:
-        error_resp = client.get("/api/error-log")
+        error_resp = client.get(f"/api/error-log?job={job_id}")
         assert error_resp.status_code == 200
         error_data = error_resp.get_json()
         assert error_data["count"] == 1
         assert error_data["errors"][0]["step"] == "registration"
 
-        status_resp = client.get("/api/status")
+        status_resp = client.get(f"/api/status?job={job_id}")
         assert status_resp.status_code == 200
         status_data = status_resp.get_json()
+        assert status_data["jobId"] == job_id
         assert status_data["progress"]["phase"] == "registration"
         assert status_data["progress"]["stepCurrent"] == 3
         assert status_data["slicesDone"] == 4
         assert status_data["slicesTotal"] == 12
+
+
+def test_job_output_dirs_do_not_overlap() -> None:
+    left = ctx._job_output_dir("job_alpha")
+    right = ctx._job_output_dir("job_beta")
+    assert left != right
+    assert left.name == "job_alpha"
+    assert right.name == "job_beta"
+
+
+def test_runpaths_accepts_custom_outputs_dir(tmp_path: Path) -> None:
+    cfg = _minimal_cfg(tmp_path / "input")
+    custom_root = tmp_path / "jobs" / "job_alpha"
+    paths = RunPaths.from_project_root(tmp_path, cfg, outputs_dir=custom_root)
+    assert paths.outputs == custom_root
+    assert paths.cells_detected == custom_root / "cells_detected.csv"
+    assert paths.registered_slices == custom_root / "registered_slices"
+
+
+def test_info_reads_version_json() -> None:
+    with app.test_client() as client:
+        resp = client.get("/api/info")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["version"] == "0.4.0"

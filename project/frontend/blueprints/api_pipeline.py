@@ -7,6 +7,7 @@ import threading
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 from flask import Blueprint, jsonify, request, send_from_directory
 
@@ -14,6 +15,41 @@ import project.frontend.server_context as ctx
 from project.scripts.config_validation import collect_runtime_config_issues, load_config
 
 bp = Blueprint("api_pipeline", __name__)
+
+
+def _resolve_job_id(payload: dict | None = None) -> str:
+    if isinstance(payload, dict) and payload.get("jobId"):
+        return ctx._sanitize_job_id(payload.get("jobId"))
+    return ctx._query_job_id()
+
+
+def _job_state(job_id: str | None = None) -> dict:
+    return ctx.get_job_state(job_id)
+
+
+def _job_outputs_dir(job_id: str | None = None) -> Path:
+    return ctx._job_output_dir(job_id)
+
+
+def _make_job_id() -> str:
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return ctx._sanitize_job_id(f"job_{stamp}_{uuid4().hex[:8]}")
+
+
+def _read_version_info() -> dict[str, str]:
+    version_path = ctx.PROJECT_ROOT / "version.json"
+    fallback = {"version": "0.3.0-desktop", "build_date": "", "commit": ""}
+    if not version_path.exists():
+        return fallback
+    try:
+        data = json.loads(version_path.read_text(encoding="utf-8"))
+    except Exception:
+        return fallback
+    return {
+        "version": str(data.get("version", fallback["version"])),
+        "build_date": str(data.get("build_date", "")),
+        "commit": str(data.get("commit", "")),
+    }
 
 
 def _resolve_config_path(raw_path: str | None) -> Path:
@@ -106,9 +142,9 @@ def _collect_preflight_issues(payload: dict) -> tuple[dict, list[dict[str, str]]
     return cfg, issues, config_path
 
 
-def _materialize_runtime_config(payload: dict) -> Path:
+def _materialize_runtime_config(payload: dict, *, job_id: str = ctx.DEFAULT_JOB_ID) -> Path:
     cfg, _issues, _config_path = _collect_preflight_issues(payload)
-    runtime_dir = ctx.OUTPUT_DIR / "runtime_configs"
+    runtime_dir = _job_outputs_dir(job_id) / "runtime_configs"
     runtime_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     runtime_path = runtime_dir / f"run_config_{stamp}.json"
@@ -125,10 +161,13 @@ def index():
 def info():
     default_atlas = ctx.PROJECT_ROOT / "annotation_25.nii.gz"
     default_struct = ctx.DEFAULT_STRUCTURE_SOURCE
+    version = _read_version_info()
     return jsonify(
         {
             "app": "BrainfastUI",
-            "version": "0.3.0-desktop",
+            "version": version["version"],
+            "buildDate": version["build_date"],
+            "commit": version["commit"],
             "frontend": str(ctx.ROOT),
             "project": str(ctx.PROJECT_ROOT),
             "outputs": str(ctx.OUTPUT_DIR),
@@ -185,13 +224,19 @@ def preflight():
 
 @bp.post("/api/run")
 def run_pipeline():
-    with ctx._run_state_lock:
-        if ctx.run_state["running"]:
-            return jsonify({"ok": False, "error": "pipeline already running"}), 409
+    payload = request.get_json(force=True) or {}
+    job_id = _resolve_job_id(payload)
+    if not payload.get("jobId"):
+        job_id = _make_job_id()
+        payload["jobId"] = job_id
+    job_state = _job_state(job_id)
 
-    payload = request.get_json(force=True)
+    with ctx._run_state_lock:
+        if job_state["running"]:
+            return jsonify({"ok": False, "error": "pipeline already running", "jobId": job_id}), 409
+
     try:
-        config = str(_materialize_runtime_config(payload))
+        config = str(_materialize_runtime_config(payload, job_id=job_id))
     except Exception as exc:
         return jsonify({"ok": False, "error": f"failed to build runtime config: {exc}"}), 400
     input_dir = payload.get("inputDir", "")
@@ -201,28 +246,34 @@ def run_pipeline():
 
     run_params = payload.get("params", {})
     with ctx._run_state_lock:
-        ctx.run_state["config_path"] = config
+        job_state["config_path"] = config
     t = threading.Thread(
-        target=ctx._runner, args=(config, input_dir, channels, run_params), daemon=True
+        target=ctx._runner,
+        args=(config, input_dir, channels, run_params),
+        kwargs={"job_id": job_id},
+        daemon=True,
     )
     t.start()
-    return jsonify({"ok": True, "started": True})
+    return jsonify({"ok": True, "started": True, "jobId": job_id, "outputsDir": str(_job_outputs_dir(job_id))})
 
 
 @bp.get("/api/status")
 def status():
-    progress = dict(ctx.run_state.get("progress", {}) or {})
+    job_id = _resolve_job_id()
+    job_state = _job_state(job_id)
+    progress = dict(job_state.get("progress", {}) or {})
+    outputs_dir = _job_outputs_dir(job_id)
     slices_done = int(progress.get("slicesDone", 0) or 0)
     slices_total = int(progress.get("slicesTotal", 0) or 0)
     if slices_done <= 0 and slices_total <= 0:
-        reg_dir = ctx.OUTPUT_DIR / "registered_slices"
+        reg_dir = outputs_dir / "registered_slices"
         slices_done = len(list(reg_dir.glob("slice_*_overlay.png"))) if reg_dir.exists() else 0
-        merged_dir = ctx.OUTPUT_DIR / "tmp_merged"
-        channel_dir = ctx.OUTPUT_DIR / "tmp_channel"
+        merged_dir = outputs_dir / "tmp_merged"
+        channel_dir = outputs_dir / "tmp_channel"
         merged_total = len(list(merged_dir.glob("*.tif"))) if merged_dir.exists() else 0
         channel_total = len(list(channel_dir.glob("*.tif"))) if channel_dir.exists() else 0
         sampling_mode = ""
-        config_path = ctx.run_state.get("config_path")
+        config_path = job_state.get("config_path")
         if config_path:
             try:
                 cfg = json.loads(Path(str(config_path)).read_text(encoding="utf-8-sig"))
@@ -237,15 +288,17 @@ def status():
             slices_total = merged_total if merged_total > 0 else channel_total
     return jsonify(
         {
-            "running": ctx.run_state["running"],
-            "done": ctx.run_state["done"],
-            "error": ctx.run_state["error"],
-            "channels": ctx.run_state["channels"],
-            "currentChannel": ctx.run_state["current_channel"],
-            "logCount": len(ctx.run_state["logs"]),
+            "jobId": job_id,
+            "outputsDir": str(outputs_dir),
+            "running": job_state["running"],
+            "done": job_state["done"],
+            "error": job_state["error"],
+            "channels": job_state["channels"],
+            "currentChannel": job_state["current_channel"],
+            "logCount": len(job_state["logs"]),
             "slicesDone": slices_done,
             "slicesTotal": slices_total,
-            "startEpoch": ctx.run_state.get("startEpoch"),
+            "startEpoch": job_state.get("startEpoch"),
             "progress": {
                 "phase": str(progress.get("phase", "idle")),
                 "stepCurrent": int(progress.get("stepCurrent", 0) or 0),
@@ -258,42 +311,55 @@ def status():
 
 @bp.post("/api/cancel")
 def cancel():
+    payload = request.get_json(silent=True) or {}
+    job_id = _resolve_job_id(payload)
+    job_state = _job_state(job_id)
     with ctx._run_state_lock:
-        p = ctx.run_state.get("proc")
-        if p and ctx.run_state.get("running"):
+        p = job_state.get("proc")
+        if p and job_state.get("running"):
             p.terminate()
-            ctx.run_state["error"] = "cancelled by user"
-            ctx.run_state["running"] = False
-            ctx.run_state["done"] = False
-            ctx.run_state["current_channel"] = None
-            ctx.run_state["channels"] = []
-            ctx.run_state["startEpoch"] = None
-            ctx.run_state.setdefault("progress", {})["phase"] = "cancelled"
-            ctx._append_log("[cancel] user requested stop")
-            ctx._append_error("Pipeline cancelled by user.", step="cancel", recoverable=True)
-            return jsonify({"ok": True, "cancelled": True})
-    return jsonify({"ok": False, "cancelled": False, "error": "no running process"}), 409
+            job_state["error"] = "cancelled by user"
+            job_state["running"] = False
+            job_state["done"] = False
+            job_state["current_channel"] = None
+            job_state["channels"] = []
+            job_state["startEpoch"] = None
+            job_state.setdefault("progress", {})["phase"] = "cancelled"
+            ctx._append_log("[cancel] user requested stop", state=job_state)
+            ctx._append_error(
+                "Pipeline cancelled by user.", step="cancel", recoverable=True, state=job_state
+            )
+            return jsonify({"ok": True, "cancelled": True, "jobId": job_id})
+    return jsonify({"ok": False, "cancelled": False, "error": "no running process", "jobId": job_id}), 409
 
 
 @bp.get("/api/logs")
 def logs():
-    return jsonify({"logs": ctx.run_state["logs"]})
+    job_id = _resolve_job_id()
+    job_state = _job_state(job_id)
+    return jsonify({"jobId": job_id, "logs": job_state["logs"]})
 
 
 @bp.get("/api/error-log")
 def error_log():
-    errors = list(ctx.run_state.get("errors", []) or [])
-    return jsonify({"ok": True, "errors": errors, "count": len(errors)})
+    job_id = _resolve_job_id()
+    job_state = _job_state(job_id)
+    errors = list(job_state.get("errors", []) or [])
+    return jsonify({"ok": True, "jobId": job_id, "errors": errors, "count": len(errors)})
 
 
 @bp.get("/api/history")
 def history():
-    return jsonify({"history": ctx.run_state["history"]})
+    job_id = _resolve_job_id()
+    job_state = _job_state(job_id)
+    return jsonify({"jobId": job_id, "history": job_state["history"]})
 
 
 @bp.get("/api/export/methods-text")
 def export_methods_text():
-    params_files = sorted(ctx.OUTPUT_DIR.glob("run_params_*.json"), reverse=True)
+    job_id = _resolve_job_id()
+    outputs_dir = _job_outputs_dir(job_id)
+    params_files = sorted(outputs_dir.glob("run_params_*.json"), reverse=True)
     params = {}
     if params_files:
         try:
@@ -301,7 +367,7 @@ def export_methods_text():
         except Exception:
             pass
     detection_summary = {}
-    detection_summary_path = ctx.OUTPUT_DIR / "detection_summary.json"
+    detection_summary_path = outputs_dir / "detection_summary.json"
     if detection_summary_path.exists():
         try:
             detection_summary = json.loads(detection_summary_path.read_text(encoding="utf-8"))
@@ -354,4 +420,4 @@ def export_methods_text():
         f"Alignment quality was evaluated by edge-SSIM. "
         f"{detection_en} Channels: {ch_str}."
     )
-    return jsonify({"ok": True, "text": text_cn + text_en, "params": params})
+    return jsonify({"ok": True, "jobId": job_id, "text": text_cn + text_en, "params": params})

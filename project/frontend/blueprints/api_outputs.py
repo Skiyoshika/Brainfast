@@ -352,6 +352,90 @@ def outputs_named(filename: str):
     return send_from_directory(str(outputs_root), safe)
 
 
+@bp.get("/z-continuity")
+def outputs_z_continuity():
+    """Return AP (best_z) time-series data for the Z-continuity chart in the QC tab.
+
+    Merges slice_registration_qc.csv with z_smoothness_report.json (if present)
+    to return per-slice original, smoothed, and outlier flags.
+    """
+    outputs_root = _outputs_root()
+    qc_csv = outputs_root / "slice_registration_qc.csv"
+    if not qc_csv.exists():
+        return jsonify({"ok": False, "error": "slice_registration_qc.csv not found"}), 404
+
+    try:
+        import pandas as pd
+
+        df = pd.read_csv(qc_csv, usecols=lambda c: c in {"slice_id", "best_z", "registration_ok"})
+        df = df.sort_values("slice_id").reset_index(drop=True)
+        slices = df["slice_id"].tolist()
+        original_z = [int(v) for v in df["best_z"].tolist()]
+        reg_ok = [bool(v) for v in df.get("registration_ok", [True] * len(slices)).tolist()]
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+    # Try to enrich with smoothness analysis
+    smoothness_json = outputs_root / "z_smoothness_report.json"
+    smoothed_z = original_z
+    deviation = [0.0] * len(slices)
+    is_outlier = [False] * len(slices)
+    outlier_count = 0
+    max_deviation = 0.0
+    mean_deviation = 0.0
+    monotone = True
+    threshold = 8
+
+    if smoothness_json.exists():
+        try:
+            report = json.loads(smoothness_json.read_text(encoding="utf-8"))
+            # Align by slice_ids from report
+            r_ids = report.get("slice_ids", [])
+            r_sz = report.get("smoothed_z", [])
+            r_dev = report.get("deviation", [])
+            r_out = report.get("is_outlier", [])
+            id_to_idx = {int(sid): i for i, sid in enumerate(r_ids)}
+
+            smoothed_z = []
+            deviation = []
+            is_outlier = []
+            for sid in slices:
+                idx = id_to_idx.get(int(sid))
+                if idx is not None:
+                    smoothed_z.append(int(r_sz[idx]) if idx < len(r_sz) else 0)
+                    deviation.append(float(r_dev[idx]) if idx < len(r_dev) else 0.0)
+                    is_outlier.append(bool(r_out[idx]) if idx < len(r_out) else False)
+                else:
+                    smoothed_z.append(original_z[slices.index(sid)])
+                    deviation.append(0.0)
+                    is_outlier.append(False)
+
+            outlier_count = int(report.get("outlier_count", 0))
+            max_deviation = float(report.get("max_deviation", 0.0))
+            mean_deviation = float(report.get("mean_deviation", 0.0))
+            monotone = bool(report.get("monotone", True))
+            threshold = int(report.get("max_dev_threshold", 8))
+        except Exception:
+            pass  # fallback to original values
+
+    return jsonify(
+        {
+            "ok": True,
+            "slice_ids": slices,
+            "original_z": original_z,
+            "smoothed_z": smoothed_z,
+            "deviation": deviation,
+            "is_outlier": is_outlier,
+            "registration_ok": reg_ok,
+            "outlier_count": outlier_count,
+            "max_deviation": max_deviation,
+            "mean_deviation": mean_deviation,
+            "monotone": monotone,
+            "threshold": threshold,
+        }
+    )
+
+
 @bp.get("/qc-list")
 def outputs_qc_list():
     qc_dir = _outputs_root() / "qc_overlays"

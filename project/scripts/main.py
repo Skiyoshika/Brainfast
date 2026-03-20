@@ -601,22 +601,23 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
         det["count_sampling_mode"] = str(sampling["sampling_mode"])
         det["count_slice_interval_n"] = int(sampling["slice_interval_n"])
         next_id += len(det)
-        detect_rows.append(
-            det[
-                [
-                    "cell_id",
-                    "slice_id",
-                    "x",
-                    "y",
-                    "score",
-                    "detector",
-                    "area_px",
-                    "source_slice_path",
-                    "count_sampling_mode",
-                    "count_slice_interval_n",
-                ]
-            ]
-        )
+        _keep_cols = [
+            "cell_id",
+            "slice_id",
+            "x",
+            "y",
+            "score",
+            "detector",
+            "area_px",
+            "source_slice_path",
+            "count_sampling_mode",
+            "count_slice_interval_n",
+        ]
+        # Include morphology columns when present
+        for _mc in ("elongation", "mean_intensity"):
+            if _mc in det.columns:
+                _keep_cols.append(_mc)
+        detect_rows.append(det[_keep_cols])
         mapped_rows.append(
             map_cells_with_registered_label_slice(
                 det,
@@ -641,6 +642,26 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
 
     registration_qc_path = outputs_dir / "slice_registration_qc.csv"
     pd.DataFrame(registration_rows).to_csv(registration_qc_path, index=False)
+
+    # ── Z-continuity analysis: flag AP jumps between adjacent slices ──────────
+    try:
+        try:
+            from scripts.z_smoothness import smooth_ap_series, write_smoothness_report
+        except Exception:
+            from z_smoothness import smooth_ap_series, write_smoothness_report  # type: ignore[import]
+
+        _z_max_dev = int(reg_cfg.get("z_smooth_max_dev", 8))
+        _smoothness = smooth_ap_series(registration_rows, max_dev=_z_max_dev)
+        write_smoothness_report(_smoothness, outputs_dir / "z_smoothness_report.json")
+        if _smoothness["outlier_count"] > 0:
+            print(
+                f"[z_smoothness] {_smoothness['outlier_count']} slice(s) deviate "
+                f">{_z_max_dev} voxels from smoothed AP curve "
+                f"(max={_smoothness['max_deviation']:.1f} voxels). "
+                f"See z_smoothness_report.json for details."
+            )
+    except Exception as _zs_err:
+        print(f"[z_smoothness] analysis skipped: {_zs_err}")
 
     failed_slices = [row for row in registration_rows if not row["registration_ok"]]
     if failed_slices:

@@ -109,16 +109,29 @@ def _load_cellpose_model(model_type: str, use_gpu: bool):
     return model
 
 
-def _masks_to_centroids(masks: np.ndarray, detector: str) -> pd.DataFrame:
+def _masks_to_centroids(
+    masks: np.ndarray,
+    detector: str,
+    intensity_image: np.ndarray | None = None,
+) -> pd.DataFrame:
+    _empty_cols = ["cell_id", "x", "y", "score", "detector", "area_px", "elongation", "mean_intensity"]
     if masks is None or masks.size == 0 or int(np.max(masks)) <= 0:
-        return pd.DataFrame(columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+        return pd.DataFrame(columns=_empty_cols)
+
+    base_props = ["label", "centroid", "area"]
+    extra_props: list[str] = []
+    if intensity_image is not None:
+        extra_props.append("mean_intensity")
+    # minor/major axis needs ≥3px objects; safe to request always
+    extra_props += ["minor_axis_length", "major_axis_length"]
 
     props = measure.regionprops_table(
         masks.astype(np.int32, copy=False),
-        properties=("label", "centroid", "area"),
+        intensity_image=intensity_image,
+        properties=base_props + extra_props,
     )
     if not props or len(props.get("label", [])) == 0:
-        return pd.DataFrame(columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+        return pd.DataFrame(columns=_empty_cols)
 
     df = pd.DataFrame(
         {
@@ -130,7 +143,25 @@ def _masks_to_centroids(masks: np.ndarray, detector: str) -> pd.DataFrame:
     df["score"] = np.clip(np.sqrt(df["area_px"].astype(np.float32)), 0.0, None)
     df["cell_id"] = np.arange(1, len(df) + 1, dtype=np.int32)
     df["detector"] = str(detector)
-    return df[["cell_id", "x", "y", "score", "detector", "area_px"]]
+
+    # elongation: minor/major axis ratio (1.0 = circle, 0.0 = line)
+    minor = np.asarray(props.get("minor_axis_length", []), dtype=np.float32)
+    major = np.asarray(props.get("major_axis_length", []), dtype=np.float32)
+    if len(minor) == len(df) and len(major) == len(df):
+        with np.errstate(invalid="ignore", divide="ignore"):
+            elong = np.where(major > 0, minor / major, 1.0)
+        df["elongation"] = np.clip(elong, 0.0, 1.0).astype(np.float32)
+    else:
+        df["elongation"] = np.float32(1.0)
+
+    # mean_intensity from intensity image
+    if intensity_image is not None and "mean_intensity" in props:
+        mi = np.asarray(props["mean_intensity"], dtype=np.float32)
+        df["mean_intensity"] = mi if len(mi) == len(df) else np.float32(0.0)
+    else:
+        df["mean_intensity"] = np.float32(0.0)
+
+    return df[_empty_cols]
 
 
 def _dedup_xy(df: pd.DataFrame, radius_px: float = 4.0) -> pd.DataFrame:
@@ -162,6 +193,7 @@ def detect_cells_fallback(
     min_distance: int = 8,
     threshold_abs: float = 200.0,
 ) -> pd.DataFrame:
+    _cols = ["cell_id", "x", "y", "score", "detector", "area_px", "elongation", "mean_intensity"]
     img = _read_gray(slice_path)
     coords = peak_local_max(
         img,
@@ -178,9 +210,11 @@ def detect_cells_fallback(
                 "score": float(img[y, x]),
                 "detector": "fallback_peak",
                 "area_px": 1.0,
+                "elongation": 1.0,
+                "mean_intensity": float(img[y, x]),
             }
         )
-    return pd.DataFrame(rows, columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+    return pd.DataFrame(rows, columns=_cols)
 
 
 def detect_cells_log_fallback(
@@ -190,6 +224,7 @@ def detect_cells_log_fallback(
     num_sigma: int = 8,
     threshold_rel: float = 0.03,
 ) -> pd.DataFrame:
+    _cols = ["cell_id", "x", "y", "score", "detector", "area_px", "elongation", "mean_intensity"]
     img = _read_gray(slice_path)
     x = _norm_for_cellpose(img)
     blobs = blob_log(
@@ -200,14 +235,22 @@ def detect_cells_log_fallback(
         threshold=float(threshold_rel),
     )
     if blobs is None or len(blobs) == 0:
-        return pd.DataFrame(columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+        return pd.DataFrame(columns=_cols)
 
+    h, w = img.shape[:2]
     rows = []
     for i, b in enumerate(blobs, 1):
         y, x0, sigma = float(b[0]), float(b[1]), float(b[2])
         r = np.sqrt(2.0) * sigma
-        y0 = int(np.clip(round(y), 0, img.shape[0] - 1))
-        x1 = int(np.clip(round(x0), 0, img.shape[1] - 1))
+        y0 = int(np.clip(round(y), 0, h - 1))
+        x1 = int(np.clip(round(x0), 0, w - 1))
+        # Disk mean intensity: sample pixels within radius r
+        iy0 = int(max(0, y0 - r))
+        iy1 = int(min(h, y0 + r + 1))
+        ix0 = int(max(0, x1 - r))
+        ix1 = int(min(w, x1 + r + 1))
+        patch = img[iy0:iy1, ix0:ix1]
+        mean_int = float(np.mean(patch)) if patch.size > 0 else float(img[y0, x1])
         rows.append(
             {
                 "cell_id": i,
@@ -216,9 +259,11 @@ def detect_cells_log_fallback(
                 "score": float(img[y0, x1]),
                 "detector": "fallback_log",
                 "area_px": float(np.pi * r * r),
+                "elongation": 1.0,       # circular blob approximation
+                "mean_intensity": mean_int,
             }
         )
-    return pd.DataFrame(rows, columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+    return pd.DataFrame(rows, columns=_cols)
 
 
 def _tile_starts(length: int, tile_size: int, overlap: int) -> list[int]:
@@ -342,17 +387,23 @@ def detect_cells_cellpose(
                 if result is None:
                     continue
                 masks, flows, styles, diams = result
-                tile_df = _masks_to_centroids(masks, detector=f"cellpose_{model_type}")
+                tile_intensity = img[y0:y1, x0:x1].astype(np.float32)
+                tile_df = _masks_to_centroids(
+                    masks,
+                    detector=f"cellpose_{model_type}",
+                    intensity_image=tile_intensity,
+                )
                 if tile_df.empty:
                     continue
                 tile_df["x"] = tile_df["x"].astype(np.float32) + float(x0)
                 tile_df["y"] = tile_df["y"].astype(np.float32) + float(y0)
                 tile_rows.append(tile_df)
+        _ecols = ["cell_id", "x", "y", "score", "detector", "area_px", "elongation", "mean_intensity"]
         if not tile_rows:
-            return pd.DataFrame(columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+            return pd.DataFrame(columns=_ecols)
         out = pd.concat(tile_rows, ignore_index=True)
         out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
-        return out[["cell_id", "x", "y", "score", "detector", "area_px"]]
+        return out[_ecols]
 
     result = _eval_cellpose_masks(
         model,
@@ -372,7 +423,11 @@ def detect_cells_cellpose(
     if result is None:
         return pd.DataFrame()
     masks, flows, styles, diams = result
-    return _masks_to_centroids(masks, detector=f"cellpose_{model_type}")
+    return _masks_to_centroids(
+        masks,
+        detector=f"cellpose_{model_type}",
+        intensity_image=img.astype(np.float32),
+    )
 
 
 def _run_cellpose_by_name(

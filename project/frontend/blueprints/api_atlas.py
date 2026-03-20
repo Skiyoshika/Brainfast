@@ -6,6 +6,7 @@ import threading
 import uuid as _uuid_mod
 from pathlib import Path
 
+from project.frontend.api_errors import ERR_INTERNAL, ERR_NOT_FOUND, ERR_INVALID_INPUT, ERR_FILE_NOT_FOUND
 from flask import Blueprint, jsonify, request
 
 import project.frontend.server_context as ctx
@@ -25,7 +26,7 @@ def atlas_autopick_z():
     slicing_plane = str(payload.get("slicingPlane", "coronal"))
     roi_mode = str(payload.get("roiMode", "auto"))
     if not real_path.exists():
-        return jsonify({"ok": False, "error": f"Real image not found: {real_path}"}), 400
+        return jsonify({"ok": False, "error": f"Real image not found: {real_path}", "error_code": ERR_NOT_FOUND}), 400
     if not annotation_path.exists():
         return jsonify(
             {"ok": False, "error": f"Atlas annotation not found: {annotation_path}"}
@@ -67,7 +68,7 @@ def atlas_autopick_z():
 def atlas_autopick_z_status():
     token = request.args.get("token", "")
     if not token or token not in ctx._autopick_tasks:
-        return jsonify({"ok": False, "error": "unknown token"}), 404
+        return jsonify({"ok": False, "error": "unknown token", "error_code": ERR_NOT_FOUND}), 404
     task = ctx._autopick_tasks[token]
     resp = {
         "ok": True,
@@ -93,7 +94,7 @@ def atlas_autopick_cancel():
     payload = request.get_json(force=True) or {}
     token = str(payload.get("token", "")).strip()
     if not token or token not in ctx._autopick_tasks:
-        return jsonify({"ok": False, "error": "unknown token"}), 404
+        return jsonify({"ok": False, "error": "unknown token", "error_code": ERR_NOT_FOUND}), 404
     task = ctx._autopick_tasks[token]
     task["cancel_requested"] = True
     task["message"] = "Cancelling..."

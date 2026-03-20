@@ -144,6 +144,8 @@ const LANGS = {
     'hint.maxPoints': 'Fewer points → faster but less accurate',
     'hint.minDistance': 'Pixels between detected landmarks',
     'hint.ransacResidual': 'Higher → more permissive matching',
+    'label.confidenceThreshold': 'Confidence Threshold',
+    'hint.confidenceThreshold': 'Filter cell detections by minimum score (0 = keep all, 1 = strictest).',
     'opt.coronal': 'Coronal (default)',
     'opt.sagittal': 'Sagittal',
     'opt.horizontal.plane': 'Horizontal (Axial)',
@@ -479,6 +481,8 @@ const LANGS = {
     'hint.maxPoints': '点数越少 → 越快但精度较低',
     'hint.minDistance': '检测地标之间的像素距离',
     'hint.ransacResidual': '值越大 → 匹配容忍度越高',
+    'label.confidenceThreshold': '置信度阈值',
+    'hint.confidenceThreshold': '按最低置信度过滤检测结果（0 = 保留全部，1 = 最严格）。',
     'opt.coronal': '冠状面（默认）',
     'opt.sagittal': '射状面',
     'opt.horizontal.plane': '水平面（轴位）',
@@ -2164,6 +2168,7 @@ async function refreshOutputs() {
     } catch {}
     refreshApDensity();
     refreshCoexpression();
+    refreshZContinuity();
     await refreshDetectionConfidenceSamples();
     compareRows.innerHTML = '';
     for (const ch of ['red', 'green', 'farred']) {

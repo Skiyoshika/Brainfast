@@ -468,8 +468,8 @@ def outputs_ap_density():
     import pandas as pd  # local import — only needed for this route
 
     outputs_root = _outputs_root()
-    leaf_path = _job_file("cell_counts_leaf.csv")
-    qc_path = _job_file("slice_registration_qc.csv")
+    leaf_path = outputs_root / "cell_counts_leaf.csv"
+    qc_path = outputs_root / "slice_registration_qc.csv"
 
     if not leaf_path.exists() or not qc_path.exists():
         return (

@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -29,6 +30,7 @@ try:
     from scripts.preprocess import merge_every_n_slices
     from scripts.qc import export_slice_qc
     from scripts.registration_adapter import bootstrap_registration_assets
+    from scripts.z_smoothness import smooth_ap_series, write_smoothness_report
 except Exception:
     from atlas_autopick import autopick_best_z, refine_atlas_z_by_size
     from atlas_mapper import map_cells_with_registered_label_slice
@@ -41,6 +43,7 @@ except Exception:
     from preprocess import merge_every_n_slices
     from qc import export_slice_qc
     from registration_adapter import bootstrap_registration_assets
+    from z_smoothness import smooth_ap_series, write_smoothness_report
 
 
 def _validated_float(cfg: dict, dotted_key: str) -> float:
@@ -49,6 +52,26 @@ def _validated_float(cfg: dict, dotted_key: str) -> float:
 
 def _validated_int(cfg: dict, dotted_key: str) -> int:
     return int(config_value(cfg, dotted_key))
+
+
+def emit_progress(
+    step_current: int,
+    step_total: int,
+    phase: str,
+    message: str,
+    *,
+    slices_done: int | None = None,
+    slices_total: int | None = None,
+) -> None:
+    parts = [
+        f"step={int(step_current)}/{int(step_total)}",
+        f"phase={str(phase).strip() or 'registration'}",
+    ]
+    if slices_done is not None or slices_total is not None:
+        cur = int(slices_done or 0)
+        total = int(slices_total or 0)
+        parts.append(f"slices={cur}/{total}")
+    print(f"[PROGRESS:{':'.join(parts)}] {message}", flush=True)
 
 
 def _project_root() -> Path:
@@ -112,6 +135,8 @@ def _collect_slice_files(slice_dir: Path, glob_pattern: str) -> list[Path]:
 
 
 def _extract_channel_to_tmp(src_files: list[Path], out_dir: Path, ch_idx: int) -> list[Path]:
+    if out_dir.exists():
+        shutil.rmtree(out_dir, ignore_errors=True)
     out_dir.mkdir(parents=True, exist_ok=True)
     out = []
     for i, p in enumerate(src_files):
@@ -127,6 +152,80 @@ def _extract_channel_to_tmp(src_files: list[Path], out_dir: Path, ch_idx: int) -
         imwrite(str(dst), ch.astype(np.uint16))
         out.append(dst)
     return out
+
+
+def _normalize_sampling_mode(cfg: dict) -> tuple[str, int]:
+    input_cfg = cfg.get("input", {})
+    raw_mode = str(input_cfg.get("sampling_mode", "")).strip().lower()
+    interval = max(1, int(input_cfg.get("slice_interval_n", 1)))
+
+    if not raw_mode:
+        raw_mode = "merge" if interval > 1 else "single"
+
+    if raw_mode in {"single", "native", "raw", "original"}:
+        return "single", 1
+    if raw_mode in {"merge", "merged", "merge5", "merge_n"}:
+        return "merged", interval
+    raise ValueError(f"unsupported input.sampling_mode: {raw_mode}")
+
+
+def _resolve_processing_files(
+    cfg: dict,
+    channel_files: list[Path],
+    outputs_dir: Path,
+) -> tuple[list[Path], dict[str, int | str]]:
+    sampling_mode, interval = _normalize_sampling_mode(cfg)
+    if sampling_mode == "single":
+        return channel_files, {"sampling_mode": "single", "slice_interval_n": 1}
+
+    merged_files = merge_every_n_slices(channel_files, outputs_dir / "tmp_merged", n=interval)
+    return merged_files, {"sampling_mode": "merged", "slice_interval_n": int(interval)}
+
+
+def _write_detection_summary(
+    outputs_dir: Path,
+    *,
+    sampling: dict[str, int | str],
+    cfg: dict,
+    detections: pd.DataFrame,
+    deduped: pd.DataFrame | None = None,
+) -> None:
+    det_cfg = cfg.get("detection", {})
+    primary = str(det_cfg.get("primary_model", ""))
+    secondary = str(det_cfg.get("secondary_model", ""))
+    requested_cellpose = primary.lower().startswith("cellpose") or secondary.lower().startswith(
+        "cellpose"
+    )
+    allow_fallback_raw = det_cfg.get("allow_fallback", None)
+    allow_fallback = (
+        bool(allow_fallback_raw) if allow_fallback_raw is not None else (not requested_cellpose)
+    )
+    summary = {
+        "sampling_mode": str(sampling.get("sampling_mode", "single")),
+        "slice_interval_n": int(sampling.get("slice_interval_n", 1)),
+        "primary_model": primary,
+        "secondary_model": secondary,
+        "requested_instance_segmentation": bool(requested_cellpose),
+        "allow_fallback": bool(allow_fallback),
+        "cells_detected": int(len(detections)),
+        "detector_counts": {},
+    }
+    if "detector" in detections.columns and not detections.empty:
+        summary["detector_counts"] = {
+            str(k): int(v)
+            for k, v in detections["detector"].fillna("unknown").value_counts().to_dict().items()
+        }
+    if deduped is not None:
+        summary["cells_dedup"] = int(len(deduped))
+        if "detector" in deduped.columns and not deduped.empty:
+            summary["dedup_detector_counts"] = {
+                str(k): int(v)
+                for k, v in deduped["detector"].fillna("unknown").value_counts().to_dict().items()
+            }
+    (outputs_dir / "detection_summary.json").write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
 
 def _make_sample_tiffs(out_dir: Path, n: int = 12, h: int = 256, w: int = 256) -> None:
@@ -180,9 +279,14 @@ def run_demo(cfg: dict):
     print("Demo pipeline complete: kdtree dedup + mapping + aggregation outputs generated")
 
 
-def run_real_input(cfg: dict, input_dir: Path):
+def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = None):
     project_root = _project_root()
-    outputs_dir = project_root / "outputs"
+    env_output_dir = os.environ.get("BRAINCOUNT_OUTPUT_DIR", "").strip()
+    outputs_dir = (
+        Path(outputs_dir)
+        if outputs_dir is not None
+        else (Path(env_output_dir) if env_output_dir else project_root / "outputs")
+    )
     outputs_dir.mkdir(parents=True, exist_ok=True)
     annotation_nii = project_root / "annotation_25.nii.gz"
     if not annotation_nii.exists():
@@ -196,8 +300,16 @@ def run_real_input(cfg: dict, input_dir: Path):
     ch_dir = outputs_dir / "tmp_channel"
     channel_files = _extract_channel_to_tmp(files, ch_dir, ch_idx)
 
-    n_merge = int(cfg.get("input", {}).get("slice_interval_n", 5))
-    merged_files = merge_every_n_slices(channel_files, outputs_dir / "tmp_merged", n=n_merge)
+    processing_files, sampling = _resolve_processing_files(cfg, channel_files, outputs_dir)
+    total_slices = len(processing_files)
+    emit_progress(
+        1,
+        6,
+        "ap_selection",
+        f"Prepared {total_slices} slice(s) for processing.",
+        slices_done=0,
+        slices_total=total_slices,
+    )
 
     px_um = _validated_float(cfg, "input.pixel_size_um_xy")
     spacing_um = _validated_float(cfg, "input.slice_spacing_um")
@@ -245,12 +357,22 @@ def run_real_input(cfg: dict, input_dir: Path):
     display_gamma = float(reg_cfg.get("display_gamma", 1.0))
     fail_score_threshold = float(reg_cfg.get("fail_score_threshold", 0.65))
     registration_dir = outputs_dir / "registered_slices"
+    if registration_dir.exists():
+        shutil.rmtree(registration_dir, ignore_errors=True)
     registration_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Optional DeepSlice AP estimation (run on whole series before the loop) ──
     ap_method = str(reg_cfg.get("ap_method", "formula")).lower().strip()
     _deepslice_az: dict[str, int] = {}
     if ap_method in ("deepslice", "deepslice+formula"):
+        emit_progress(
+            2,
+            6,
+            "ap_selection",
+            "Running DeepSlice AP estimation on the full series...",
+            slices_done=0,
+            slices_total=total_slices,
+        )
         try:
             from scripts.atlas_deepslice import predict_ap_series
 
@@ -270,14 +392,38 @@ def run_real_input(cfg: dict, input_dir: Path):
         except Exception as _ds_err:
             print(f"[main] DeepSlice failed ({_ds_err}); falling back to formula")
             _deepslice_az = {}
+    emit_progress(
+        2,
+        6,
+        "ap_selection",
+        "Atlas AP selection is ready.",
+        slices_done=0,
+        slices_total=total_slices,
+    )
 
     detect_rows = []
     mapped_rows = []
     registration_rows = []
     next_id = 1
-    for sid, mp in enumerate(merged_files):
+    for sid, mp in enumerate(processing_files):
+        emit_progress(
+            3,
+            6,
+            "registration",
+            f"Processing slice {sid + 1} / {total_slices}: {Path(mp).name}",
+            slices_done=sid,
+            slices_total=total_slices,
+        )
         det = detect_cells(mp, cfg)
         if det.empty:
+            emit_progress(
+                3,
+                6,
+                "registration",
+                f"Processed slice {sid + 1} / {total_slices}: no detections.",
+                slices_done=sid + 1,
+                slices_total=total_slices,
+            )
             continue
 
         auto_label_path = registration_dir / f"slice_{sid:04d}_auto_label.tif"
@@ -442,13 +588,40 @@ def run_real_input(cfg: dict, input_dir: Path):
             }
         )
         if not reg_ok:
+            emit_progress(
+                3,
+                6,
+                "registration",
+                f"Processed slice {sid + 1} / {total_slices}: registration score below threshold.",
+                slices_done=sid + 1,
+                slices_total=total_slices,
+            )
             continue
 
         det = det.copy()
         det["slice_id"] = sid
         det["cell_id"] = range(next_id, next_id + len(det))
+        det["source_slice_path"] = str(Path(mp).resolve())
+        det["count_sampling_mode"] = str(sampling["sampling_mode"])
+        det["count_slice_interval_n"] = int(sampling["slice_interval_n"])
         next_id += len(det)
-        detect_rows.append(det[["cell_id", "slice_id", "x", "y", "score"]])
+        _keep_cols = [
+            "cell_id",
+            "slice_id",
+            "x",
+            "y",
+            "score",
+            "detector",
+            "area_px",
+            "source_slice_path",
+            "count_sampling_mode",
+            "count_slice_interval_n",
+        ]
+        # Include morphology columns when present
+        for _mc in ("elongation", "mean_intensity"):
+            if _mc in det.columns:
+                _keep_cols.append(_mc)
+        detect_rows.append(det[_keep_cols])
         mapped_rows.append(
             map_cells_with_registered_label_slice(
                 det,
@@ -462,9 +635,32 @@ def run_real_input(cfg: dict, input_dir: Path):
                 ),
             )
         )
+        emit_progress(
+            3,
+            6,
+            "registration",
+            f"Processed slice {sid + 1} / {total_slices}.",
+            slices_done=sid + 1,
+            slices_total=total_slices,
+        )
 
     registration_qc_path = outputs_dir / "slice_registration_qc.csv"
     pd.DataFrame(registration_rows).to_csv(registration_qc_path, index=False)
+
+    # ── Z-continuity analysis: flag AP jumps between adjacent slices ──────────
+    try:
+        _z_max_dev = int(reg_cfg.get("z_smooth_max_dev", 8))
+        _smoothness = smooth_ap_series(registration_rows, max_dev=_z_max_dev)
+        write_smoothness_report(_smoothness, outputs_dir / "z_smoothness_report.json")
+        if _smoothness["outlier_count"] > 0:
+            print(
+                f"[z_smoothness] {_smoothness['outlier_count']} slice(s) deviate "
+                f">{_z_max_dev} voxels from smoothed AP curve "
+                f"(max={_smoothness['max_deviation']:.1f} voxels). "
+                f"See z_smoothness_report.json for details."
+            )
+    except Exception as _zs_err:
+        print(f"[z_smoothness] analysis skipped: {_zs_err}")
 
     failed_slices = [row for row in registration_rows if not row["registration_ok"]]
     if failed_slices:
@@ -473,14 +669,69 @@ def run_real_input(cfg: dict, input_dir: Path):
             f"see {registration_qc_path}"
         )
 
-    if not mapped_rows:
+    emit_progress(
+        4,
+        6,
+        "detection",
+        "Finalizing cell detections...",
+        slices_done=total_slices,
+        slices_total=total_slices,
+    )
+    if not detect_rows:
+        empty = pd.DataFrame(
+            columns=[
+                "cell_id",
+                "slice_id",
+                "x",
+                "y",
+                "score",
+                "detector",
+                "area_px",
+                "source_slice_path",
+                "count_sampling_mode",
+                "count_slice_interval_n",
+            ]
+        )
+        empty.to_csv(outputs_dir / "cells_detected.csv", index=False)
+        _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=empty)
         print("No detections found in real-input run.")
+        emit_progress(
+            6,
+            6,
+            "done",
+            "No detections found. Pipeline completed.",
+            slices_done=total_slices,
+            slices_total=total_slices,
+        )
+        return
+
+    if not mapped_rows:
+        cells = pd.concat(detect_rows, ignore_index=True)
+        cells.to_csv(outputs_dir / "cells_detected.csv", index=False)
+        _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=cells)
+        print("Detections found, but none could be mapped after registration.")
+        emit_progress(
+            6,
+            6,
+            "done",
+            "Detections found, but nothing could be mapped after registration.",
+            slices_done=total_slices,
+            slices_total=total_slices,
+        )
         return
 
     cells = pd.concat(detect_rows, ignore_index=True)
     cells.to_csv(outputs_dir / "cells_detected.csv", index=False)
     mapped = pd.concat(mapped_rows, ignore_index=True)
 
+    emit_progress(
+        5,
+        6,
+        "dedup",
+        "Deduplicating detected cells across slices...",
+        slices_done=total_slices,
+        slices_total=total_slices,
+    )
     deduped, stats = apply_dedup_kdtree(
         mapped,
         neighbor_slices=neighbor,
@@ -490,8 +741,19 @@ def run_real_input(cfg: dict, input_dir: Path):
     )
     deduped.to_csv(outputs_dir / "cells_dedup.csv", index=False)
     write_dedup_stats(stats, outputs_dir)
+    _write_detection_summary(
+        outputs_dir, sampling=sampling, cfg=cfg, detections=cells, deduped=deduped
+    )
 
     deduped.to_csv(outputs_dir / "cells_mapped.csv", index=False)
+    emit_progress(
+        6,
+        6,
+        "mapping",
+        "Mapping cells to brain regions and writing outputs...",
+        slices_done=total_slices,
+        slices_total=total_slices,
+    )
     leaf, hierarchy = aggregate_by_region(deduped)
     write_outputs(leaf, hierarchy, outputs_dir)
 
@@ -501,9 +763,10 @@ def run_real_input(cfg: dict, input_dir: Path):
 
     # Copy registered atlas overlays to qc_overlays so the UI gallery shows beautiful colored images
     qc_dir = outputs_dir / "qc_overlays"
+    if qc_dir.exists():
+        shutil.rmtree(qc_dir, ignore_errors=True)
     qc_dir.mkdir(parents=True, exist_ok=True)
     reg_overlays = sorted(registration_dir.glob("slice_*_overlay.png"))
-    import shutil
 
     for i, src_png in enumerate(reg_overlays):
         shutil.copy2(src_png, qc_dir / f"overlay_{i:03d}.png")
@@ -511,10 +774,18 @@ def run_real_input(cfg: dict, input_dir: Path):
     print(
         f"Real-input end-to-end complete: detected={len(cells)}, dedup={len(deduped)} -> outputs/cell_counts_leaf.csv + QC"
     )
+    emit_progress(
+        6,
+        6,
+        "done",
+        "Pipeline completed successfully.",
+        slices_done=total_slices,
+        slices_total=total_slices,
+    )
 
     # Auto-regenerate demo visuals (panel, annotated slice, chart) after pipeline completes
     refresh_script = project_root / "scripts" / "refresh_demo.py"
-    if refresh_script.exists():
+    if refresh_script.exists() and outputs_dir == (project_root / "outputs"):
         import subprocess
         import sys as _sys
 
@@ -618,7 +889,9 @@ def main():
         return
 
     if args.run_real_input:
-        run_real_input(cfg, Path(args.run_real_input))
+        env_output_dir = os.environ.get("BRAINCOUNT_OUTPUT_DIR", "").strip()
+        output_override = Path(env_output_dir) if env_output_dir else None
+        run_real_input(cfg, Path(args.run_real_input), outputs_dir=output_override)
         return
 
     print("MVP skeleton only: registration/mapping integration pending.")

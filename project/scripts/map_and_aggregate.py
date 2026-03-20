@@ -45,12 +45,25 @@ def aggregate_by_region(mapped: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFram
         return empty_leaf, empty_hierarchy
 
     total_cells = max(int(len(mapped)), 1)
+
+    # Base count aggregation
     leaf = (
         mapped.groupby(["region_id", "region_name", "acronym", "hemisphere"], as_index=False)
         .size()
         .rename(columns={"size": "count"})
     )
     leaf["confidence"] = leaf["count"].astype(float) / float(total_cells)
+
+    # Optional morphology aggregation (if columns present)
+    _morph_cols = [c for c in ("area_px", "elongation", "mean_intensity") if c in mapped.columns]
+    if _morph_cols:
+        _agg_fns = {c: "mean" for c in _morph_cols}
+        _morph = (
+            mapped.groupby(["region_id", "hemisphere"], as_index=False)
+            .agg(_agg_fns)
+            .rename(columns={c: f"mean_{c}" for c in _morph_cols})
+        )
+        leaf = leaf.merge(_morph, on=["region_id", "hemisphere"], how="left")
 
     if "structure_source" not in mapped.columns:
         empty_hierarchy = pd.DataFrame(

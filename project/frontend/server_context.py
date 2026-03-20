@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -46,17 +47,48 @@ _preview_tasks: dict = {}  # token -> {status, progress, message, result, error}
 _task_lock = threading.Lock()
 _run_state_lock = threading.Lock()
 
-run_state: dict = {
-    "running": False,
-    "done": False,
-    "error": None,
-    "logs": [],
-    "channels": [],
-    "proc": None,
-    "current_channel": None,
-    "history": [],
-    "config_path": None,
-}
+
+def _new_run_state() -> dict:
+    return {
+        "running": False,
+        "done": False,
+        "error": None,
+        "logs": [],
+        "errors": [],
+        "channels": [],
+        "proc": None,
+        "current_channel": None,
+        "history": [],
+        "config_path": None,
+        "startEpoch": None,
+        "job_id": DEFAULT_JOB_ID,
+        "outputs_dir": str(OUTPUT_DIR),
+        "progress": {
+            "phase": "idle",
+            "stepCurrent": 0,
+            "stepTotal": 0,
+            "slicesDone": 0,
+            "slicesTotal": 0,
+            "message": "",
+        },
+    }
+
+
+_job_states: dict[str, dict] = {DEFAULT_JOB_ID: _new_run_state()}
+
+
+def get_job_state(job_id: str | None = None) -> dict:
+    safe_job_id = _sanitize_job_id(job_id)
+    state = _job_states.get(safe_job_id)
+    if state is None:
+        state = _new_run_state()
+        state["job_id"] = safe_job_id
+        state["outputs_dir"] = str(_job_output_dir(safe_job_id))
+        _job_states[safe_job_id] = state
+    return state
+
+
+run_state: dict = _job_states[DEFAULT_JOB_ID]
 
 _learning_lock = threading.Lock()
 learning_state: dict = {
@@ -115,13 +147,88 @@ def _payload_job_id(payload: dict | None = None) -> str:
 
 
 def _query_job_id() -> str:
-    return _sanitize_job_id(request.args.get("jobId", ""))
+    return _sanitize_job_id(request.args.get("job") or request.args.get("jobId", ""))
 
 
-def _append_log(line: str):
-    run_state["logs"].append(line.rstrip())
-    if len(run_state["logs"]) > 500:
-        run_state["logs"] = run_state["logs"][-500:]
+def _append_log(line: str, state: dict | None = None):
+    target = state if state is not None else run_state
+    target["logs"].append(line.rstrip())
+    if len(target["logs"]) > 500:
+        target["logs"] = target["logs"][-500:]
+
+
+def _append_error(
+    message: str,
+    *,
+    step: str = "general",
+    recoverable: bool = True,
+    source: str = "backend",
+    state: dict | None = None,
+) -> None:
+    target = state if state is not None else run_state
+    item = {
+        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+        "message": str(message).strip(),
+        "step": str(step or "general"),
+        "recoverable": bool(recoverable),
+        "source": str(source or "backend"),
+    }
+    target["errors"].append(item)
+    if len(target["errors"]) > 200:
+        target["errors"] = target["errors"][-200:]
+
+
+_PROGRESS_RE = re.compile(r"^\[PROGRESS:(?P<meta>[^\]]+)\]\s*(?P<message>.*)$")
+
+
+def _parse_progress_line(line: str) -> dict[str, object] | None:
+    match = _PROGRESS_RE.match(str(line).strip())
+    if not match:
+        return None
+    meta = match.group("meta")
+    payload: dict[str, object] = {"message": match.group("message").strip()}
+    for chunk in meta.split(":"):
+        if "=" not in chunk:
+            continue
+        key, raw = chunk.split("=", 1)
+        key = key.strip()
+        raw = raw.strip()
+        if key in {"step", "slices"} and "/" in raw:
+            cur, total = raw.split("/", 1)
+            try:
+                payload[f"{key}Current"] = int(cur)
+                payload[f"{key}Total"] = int(total)
+            except Exception:
+                continue
+        else:
+            payload[key] = raw
+    return payload
+
+
+def _apply_progress_update(parsed: dict[str, object], state: dict | None = None) -> None:
+    target = state if state is not None else run_state
+    progress = target.setdefault(
+        "progress",
+        {
+            "phase": "idle",
+            "stepCurrent": 0,
+            "stepTotal": 0,
+            "slicesDone": 0,
+            "slicesTotal": 0,
+            "message": "",
+        },
+    )
+    phase = str(parsed.get("phase", progress.get("phase", "idle"))).strip() or "idle"
+    progress["phase"] = phase
+    progress["message"] = str(parsed.get("message", progress.get("message", "")))
+    if "stepCurrent" in parsed:
+        progress["stepCurrent"] = int(parsed["stepCurrent"])
+    if "stepTotal" in parsed:
+        progress["stepTotal"] = int(parsed["stepTotal"])
+    if "slicesCurrent" in parsed:
+        progress["slicesDone"] = int(parsed["slicesCurrent"])
+    if "slicesTotal" in parsed:
+        progress["slicesTotal"] = int(parsed["slicesTotal"])
 
 
 # ---------------------------------------------------------------------------
@@ -553,27 +660,53 @@ def _build_parent_name_map(structure_csv_path: str) -> dict[int, str]:
 # ---------------------------------------------------------------------------
 
 
-def _runner(config_path: str, input_dir: str, channels: list[str], run_params=None):
+def _runner(
+    config_path: str,
+    input_dir: str,
+    channels: list[str],
+    run_params=None,
+    *,
+    job_id: str = DEFAULT_JOB_ID,
+):
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_state.update(
+    safe_job_id = _sanitize_job_id(job_id)
+    job_out = _job_output_dir(safe_job_id)
+    job_state = get_job_state(safe_job_id)
+    job_state.update(
         {
             "running": True,
             "done": False,
             "error": None,
+            "errors": [],
             "channels": channels,
             "logs": [],
             "startTime": ts,
+            "startEpoch": time.time(),
+            "job_id": safe_job_id,
+            "outputs_dir": str(job_out),
+            "proc": None,
+            "current_channel": None,
+            "config_path": config_path,
+            "progress": {
+                "phase": "queued",
+                "stepCurrent": 0,
+                "stepTotal": 0,
+                "slicesDone": 0,
+                "slicesTotal": 0,
+                "message": "Queued...",
+            },
         }
     )
 
     # Save run params for reproducibility / paper methods section
     if run_params:
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        job_out.mkdir(parents=True, exist_ok=True)
         params_to_save = dict(run_params)
         params_to_save["timestamp"] = ts
         params_to_save["channels"] = channels
+        params_to_save["jobId"] = safe_job_id
         try:
-            (OUTPUT_DIR / f"run_params_{ts}.json").write_text(
+            (job_out / f"run_params_{ts}.json").write_text(
                 json.dumps(params_to_save, indent=2, ensure_ascii=False), encoding="utf-8"
             )
         except Exception:
@@ -581,8 +714,8 @@ def _runner(config_path: str, input_dir: str, channels: list[str], run_params=No
 
     try:
         for ch in channels:
-            run_state["current_channel"] = ch
-            _append_log(f"[run] channel={ch}")
+            job_state["current_channel"] = ch
+            _append_log(f"[run] job={safe_job_id} channel={ch}", state=job_state)
             cmd = [
                 sys.executable,
                 str(PROJECT_ROOT / "scripts" / "main.py"),
@@ -593,6 +726,8 @@ def _runner(config_path: str, input_dir: str, channels: list[str], run_params=No
             ]
             env = os.environ.copy()
             env["BRAINCOUNT_ACTIVE_CHANNEL"] = ch
+            env["BRAINCOUNT_OUTPUT_DIR"] = str(job_out)
+            env["BRAINCOUNT_JOB_ID"] = safe_job_id
 
             p = subprocess.Popen(
                 cmd,
@@ -602,40 +737,71 @@ def _runner(config_path: str, input_dir: str, channels: list[str], run_params=No
                 text=True,
                 env=env,
             )
-            run_state["proc"] = p
+            job_state["proc"] = p
             assert p.stdout is not None
             for line in p.stdout:
-                _append_log(line)
+                parsed = _parse_progress_line(line)
+                if parsed is not None:
+                    _apply_progress_update(parsed, state=job_state)
+                _append_log(line, state=job_state)
             code = p.wait()
-            _append_log(f"[exit] channel={ch} code={code}")
+            _append_log(f"[exit] job={safe_job_id} channel={ch} code={code}", state=job_state)
             if code == 0:
-                leaf = OUTPUT_DIR / "cell_counts_leaf.csv"
+                leaf = job_out / "cell_counts_leaf.csv"
                 if leaf.exists():
-                    shutil.copy2(leaf, OUTPUT_DIR / f"cell_counts_leaf_{ch}.csv")
+                    shutil.copy2(leaf, job_out / f"cell_counts_leaf_{ch}.csv")
             else:
-                run_state["error"] = f"channel {ch} failed with code {code}"
+                job_state["error"] = f"channel {ch} failed with code {code}"
+                _append_error(
+                    job_state["error"],
+                    step=str(job_state.get("progress", {}).get("phase", "pipeline")),
+                    recoverable=False,
+                    state=job_state,
+                )
                 break
 
-        run_state["done"] = run_state["error"] is None
-        run_state["history"].append(
+        job_state["done"] = job_state["error"] is None
+        if job_state["done"]:
+            _apply_progress_update(
+                {
+                    "phase": "done",
+                    "message": "Pipeline completed",
+                    "stepCurrent": job_state.get("progress", {}).get("stepTotal", 0),
+                    "stepTotal": job_state.get("progress", {}).get("stepTotal", 0),
+                    "slicesCurrent": job_state.get("progress", {}).get("slicesTotal", 0),
+                    "slicesTotal": job_state.get("progress", {}).get("slicesTotal", 0),
+                },
+                state=job_state,
+            )
+        job_state["history"].append(
             {
+                "jobId": safe_job_id,
                 "channels": channels,
-                "ok": run_state["error"] is None,
-                "error": run_state["error"],
-                "logCount": len(run_state["logs"]),
+                "ok": job_state["error"] is None,
+                "error": job_state["error"],
+                "logCount": len(job_state["logs"]),
                 "timestamp": ts,
             }
         )
-        if len(run_state["history"]) > 20:
-            run_state["history"] = run_state["history"][-20:]
+        if len(job_state["history"]) > 20:
+            job_state["history"] = job_state["history"][-20:]
     except Exception as exc:
-        run_state["error"] = f"pipeline crashed: {exc}"
-        run_state["done"] = False
-        _append_log(f"[crash] {exc}")
+        job_state["error"] = f"pipeline crashed: {exc}"
+        job_state["done"] = False
+        _append_log(f"[crash] job={safe_job_id} {exc}", state=job_state)
+        _append_error(
+            job_state["error"],
+            step=str(job_state.get("progress", {}).get("phase", "pipeline")),
+            recoverable=False,
+            state=job_state,
+        )
     finally:
-        run_state["running"] = False
-        run_state["proc"] = None
-        run_state["current_channel"] = None
+        job_state["running"] = False
+        job_state["proc"] = None
+        job_state["current_channel"] = None
+        job_state["startEpoch"] = None
+        if job_state.get("error"):
+            job_state.setdefault("progress", {})["phase"] = "error"
 
 
 # ---------------------------------------------------------------------------
@@ -672,6 +838,8 @@ def _run_autopick_worker(token: str, real_path, annotation_path, out_label, kwar
     task = _autopick_tasks[token]
 
     def cb(step: int, total: int, msg: str):
+        if task.get("cancel_requested"):
+            raise RuntimeError("cancelled by user")
         task["step"] = step
         task["total"] = total
         task["message"] = msg
@@ -681,6 +849,15 @@ def _run_autopick_worker(token: str, real_path, annotation_path, out_label, kwar
     try:
         task["status"] = "running"
         res = autopick_best_z(real_path, annotation_path, out_label, progress_cb=cb, **kwargs)
+        if task.get("cancel_requested"):
+            task.update(
+                {
+                    "status": "cancelled",
+                    "message": "Cancelled by user.",
+                    "_finished_at": time.time(),
+                }
+            )
+            return
         task.update(
             {
                 "status": "done",
@@ -691,6 +868,15 @@ def _run_autopick_worker(token: str, real_path, annotation_path, out_label, kwar
             }
         )
     except Exception as e:
+        if "cancelled by user" in str(e).lower():
+            task.update(
+                {
+                    "status": "cancelled",
+                    "message": "Cancelled by user.",
+                    "_finished_at": time.time(),
+                }
+            )
+            return
         task.update(
             {
                 "status": "error",

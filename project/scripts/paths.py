@@ -76,9 +76,11 @@ class RunPaths:
         cls,
         project_root: Path,
         cfg: dict[str, Any],
+        *,
+        outputs_dir: Path | None = None,
     ) -> RunPaths:
         outputs_cfg = cfg.get("outputs", {})
-        outputs = project_root / "outputs"
+        outputs = Path(outputs_dir) if outputs_dir is not None else (project_root / "outputs")
 
         leaf_csv = outputs_cfg.get("leaf_csv", "outputs/cell_counts_leaf.csv")
         hierarchy_csv = outputs_cfg.get("hierarchy_csv", "outputs/cell_counts_hierarchy.csv")

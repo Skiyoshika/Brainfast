@@ -19,6 +19,22 @@ const LANGS = {
     'status.idle': 'Idle',
     'status.running': 'Running...',
     'status.error': 'Error',
+    'errorPanel.title': 'Errors',
+    'errorPanel.empty': 'No errors recorded.',
+    'preflight.title': 'Preflight Check',
+    'preflight.desc.warn': 'Review the structured issues below before starting the pipeline.',
+    'preflight.desc.error': 'Fix the blocking issues below before starting the pipeline.',
+    'preflight.back': 'Back',
+    'preflight.continue': 'Continue Anyway',
+    'progress.phase.queued': 'Queued',
+    'progress.phase.ap_selection': 'AP Selection',
+    'progress.phase.registration': 'Registration',
+    'progress.phase.detection': 'Detection',
+    'progress.phase.dedup': 'Deduplication',
+    'progress.phase.mapping': 'Mapping',
+    'progress.phase.done': 'Done',
+    'progress.phase.error': 'Error',
+    'progress.phase.cancelled': 'Cancelled',
     'btn.guide': '📖 Guide',
     'btn.run': '▶ Run Pipeline',
     'btn.cancel': '✕ Cancel',
@@ -108,6 +124,8 @@ const LANGS = {
     'progress.queued': 'Queued...',
     'progress.running': 'Running: {ch}',
     'progress.slices': 'Processing slice {cur} / {total}',
+    'progress.eta': 'ETA {eta}',
+    'progress.slicesEta': 'Processing slice {cur} / {total} · ETA {eta}',
     'progress.done': 'Done.',
     'progress.cancelled': 'Cancelled.',
     'progress.startFailed': 'Failed to start.',
@@ -120,6 +138,8 @@ const LANGS = {
     'results.title': 'Cell Counts by Brain Region',
     'results.total': '{n} regions total',
     'results.filtered': 'Showing {found} of {total} regions',
+    'results.expandHint': 'Expand to browse and search',
+    'results.tableHint': 'This tree is for browsing hierarchy totals. Use the summary above for interpretation.',
     'compare.title': 'Channel Comparison (Total Cell Count)',
     'history.title': 'Run History',
     'th.region': 'Region Name',
@@ -127,10 +147,55 @@ const LANGS = {
     'th.confidence': 'Confidence',
     'th.pct': '%',
     'th.bar': 'Distribution',
-    'chart.title': 'Cell Distribution — Major Brain Regions',
-    'chart.imgTitle': 'Whole-Brain Cell Count Summary',
+    'chart.title': 'Distribution — Analysis Regions',
+    'chart.imgTitle': 'Cell Count Summary',
+    'summary.title': 'Result Snapshot',
+    'summary.hint': 'Check scope and mapping coverage before reading regional biology.',
+    'summary.sample': 'Sample',
+    'summary.scope': 'Scope',
+    'summary.mode': 'Counting Mode',
+    'summary.detectors': 'Detector',
+    'summary.detected': 'Detected Cells',
+    'summary.mapped': 'Mapped to Atlas',
+    'summary.outside': 'Outside Atlas',
+    'summary.regions': 'Mapped Regions',
+    'summary.topRegion': 'Top Region',
+    'summary.none': 'No summary available yet.',
+    'cellconf.title': 'Cell Count Confidence Samples',
+    'cellconf.hint': 'Three representative raw slices with the final counted-cell markers overlaid.',
+    'cellconf.empty': 'No counted-cell sample images yet.',
+    'cellconf.detector': 'Detector',
+    'cellconf.cells': 'cells',
     'th.channel': 'Channel',
     'th.total': 'Total Count',
+    'reg3d.title': '3D Registration Reports',
+    'reg3d.hint': 'Check the final overview first. Open the summary or metadata only when something looks suspicious.',
+    'reg3d.empty': 'No 3D registration runs found yet.',
+    'reg3d.pipeline': 'Pipeline',
+    'reg3d.updated': 'Updated',
+    'reg3d.hemisphere': 'Hemisphere',
+    'reg3d.target': 'Target',
+    'reg3d.staining': 'Staining Rate',
+    'reg3d.coverage': 'Atlas Coverage',
+    'reg3d.positiveAtlas': 'Positive / Atlas',
+    'reg3d.before': 'Before',
+    'reg3d.after': 'Final',
+    'reg3d.noBefore': 'No pre-refinement overview',
+    'reg3d.openSummary': 'Open Summary',
+    'reg3d.openMetadata': 'Open Metadata',
+    'reg3d.openReport': 'Open HTML Report',
+    'reg3d.summaryTitle': '3D Run Summary',
+    'reg3d.summaryDesc': 'This is the plain-text summary for the selected 3D registration run.',
+    'reg3d.metadataTitle': '3D Run Metadata',
+    'reg3d.metadataDesc': 'This JSON contains the paths, metrics, backend parameters, and staining stats for the selected 3D registration run.',
+    'reg3d.menu': 'More actions',
+    'reg3d.detailInfo': 'Detailed Info',
+    'reg3d.deleteBad': 'Delete Bad Report',
+    'reg3d.pinReport': 'Pin This Report',
+    'reg3d.pinned': 'Pinned',
+    'reg3d.pinDone': 'Report pinned to top.',
+    'reg3d.deleteDone': 'Report removed from active list.',
+    'reg3d.deleteConfirm': 'Move this report out of the active list?',
     'outputs.title': 'Output Files',
     'outputs.hint': 'Click a PNG to preview · Click CSV/JSON to view content',
     'outputs.empty': 'No output files yet',
@@ -138,8 +203,8 @@ const LANGS = {
     'qc.empty': 'No QC images yet. Please run the pipeline in the Registration Workflow tab first.',
     'qc.annotatedSliceTitle': 'Atlas Registration — Annotated Brain Regions',
     'qc.annotatedSliceHint': 'Lightsheet image with Allen CCFv3 region boundaries and labels. Click to view full size.',
-    'qc.bestSliceTitle': 'Raw Lightsheet vs Atlas Registration',
-    'qc.bestSliceHint': 'Side-by-side comparison — click to view full resolution',
+    'qc.bestSliceTitle': 'Registration Slice vs Atlas Registration',
+    'qc.bestSliceHint': 'Registered-slice comparison — click to view full resolution',
     'qc.panelTitle': 'Whole-Brain Registration Overview',
     'qc.panelHint': 'Multi-slice atlas registration panel — click to view full size',
     'tab.qc.title': 'Batch QC Review',
@@ -217,6 +282,8 @@ const LANGS = {
     'toast.cancelNone': 'No pipeline is running',
     'toast.outputsPath': 'Output folder: {path}',
     'toast.qcLoadFailed': 'Failed to load QC images',
+    'toast.runDetailsFailed': 'Failed to open run details.',
+    'outputs.previewDesc': 'Text preview for the selected output file.',
   },
   zh: {
     'nav.workflow': '配准工作流',
@@ -225,6 +292,22 @@ const LANGS = {
     'status.idle': '空闲',
     'status.running': '运行中...',
     'status.error': '错误',
+    'errorPanel.title': '错误面板',
+    'errorPanel.empty': '当前没有记录到错误。',
+    'preflight.title': '运行前检查',
+    'preflight.desc.warn': '运行前请先检查下面这些结构化提示。',
+    'preflight.desc.error': '下面这些阻断问题需要先修复，才能开始运行。',
+    'preflight.back': '返回修改',
+    'preflight.continue': '仍然继续',
+    'progress.phase.queued': '已排队',
+    'progress.phase.ap_selection': 'AP选层',
+    'progress.phase.registration': '配准',
+    'progress.phase.detection': '检测',
+    'progress.phase.dedup': '去重',
+    'progress.phase.mapping': '映射',
+    'progress.phase.done': '完成',
+    'progress.phase.error': '错误',
+    'progress.phase.cancelled': '已取消',
     'btn.guide': '📖 使用指南',
     'btn.run': '▶ 运行流水线',
     'btn.cancel': '✕ 取消',
@@ -314,6 +397,8 @@ const LANGS = {
     'progress.queued': '已排队...',
     'progress.running': '运行中：{ch}',
     'progress.slices': '处理切片 {cur} / {total}',
+    'progress.eta': '预计剩余 {eta}',
+    'progress.slicesEta': '处理切片 {cur} / {total} · 预计剩余 {eta}',
     'progress.done': '完成。',
     'progress.cancelled': '已取消。',
     'progress.startFailed': '启动失败。',
@@ -326,17 +411,64 @@ const LANGS = {
     'results.title': '脑区细胞计数',
     'results.total': '共 {n} 个脑区',
     'results.filtered': '显示 {found} / {total} 个脑区',
+    'results.expandHint': '展开后查看和搜索',
+    'results.tableHint': '这张树表用于浏览层级累计值；真正用于解释分布的请以上方摘要和图表为准。',
     'compare.title': '通道比较（细胞总数）',
     'history.title': '运行历史',
     'th.region': '脑区名称',
     'th.count': '细胞计数',
     'th.pct': '占比',
     'th.bar': '分布',
-    'chart.title': '细胞分布 — 主要脑区',
-    'chart.imgTitle': '全脑细胞计数汇总',
+    'chart.title': '细胞分布 — 分析脑区',
+    'chart.imgTitle': '细胞计数汇总',
+    'summary.title': '结果摘要',
+    'summary.hint': '先确认范围和图谱映射覆盖，再解读脑区分布。',
+    'summary.sample': '样本',
+    'summary.scope': '范围',
+    'summary.mode': '计数模式',
+    'summary.detectors': '检测器',
+    'summary.detected': '检测到的细胞',
+    'summary.mapped': '成功映射到图谱',
+    'summary.outside': '落在图谱外',
+    'summary.regions': '映射到的脑区数',
+    'summary.topRegion': '最高脑区',
+    'summary.none': '当前还没有可用摘要。',
+    'cellconf.title': '细胞计数置信样本',
+    'cellconf.hint': '展示 3 张代表性真实切片，并叠加最终计入统计的细胞标记点。',
+    'cellconf.empty': '暂无细胞计数样本图。',
+    'cellconf.detector': '检测器',
+    'cellconf.cells': '个细胞',
     'th.confidence': '置信度',
     'th.channel': '通道',
     'th.total': '总计数',
+    'reg3d.title': '3D配准报告',
+    'reg3d.hint': '先看最终总览图；只有当结果可疑时，再打开摘要或元数据。',
+    'reg3d.empty': '还没有发现3D配准结果。',
+    'reg3d.pipeline': '流程',
+    'reg3d.updated': '更新时间',
+    'reg3d.hemisphere': '半脑',
+    'reg3d.target': '目标分辨率',
+    'reg3d.staining': '染色率',
+    'reg3d.coverage': '图谱覆盖率',
+    'reg3d.positiveAtlas': '阳性/图谱',
+    'reg3d.before': '细化前',
+    'reg3d.after': '最终结果',
+    'reg3d.noBefore': '没有细化前总览图',
+    'reg3d.openSummary': '打开摘要',
+    'reg3d.openMetadata': '打开元数据',
+    'reg3d.openReport': '打开HTML报告',
+    'reg3d.summaryTitle': '3D运行摘要',
+    'reg3d.summaryDesc': '这是当前3D配准结果的纯文本摘要。',
+    'reg3d.metadataTitle': '3D运行元数据',
+    'reg3d.metadataDesc': '这个JSON包含当前3D配准结果的路径、指标、后端参数和染色率。',
+    'reg3d.menu': '更多操作',
+    'reg3d.detailInfo': '详细信息',
+    'reg3d.deleteBad': '删除不良报告',
+    'reg3d.pinReport': '置顶该报告',
+    'reg3d.pinned': '已置顶',
+    'reg3d.pinDone': '报告已置顶。',
+    'reg3d.deleteDone': '报告已从当前列表移除。',
+    'reg3d.deleteConfirm': '确认将该报告移出当前列表吗？',
     'outputs.title': '输出文件',
     'outputs.hint': '点击PNG预览 · 点击CSV/JSON查看内容',
     'outputs.empty': '暂无输出文件',
@@ -344,8 +476,8 @@ const LANGS = {
     'qc.empty': '暂无QC图片，请先在”配准工作流”标签页运行流水线。',
     'qc.annotatedSliceTitle': '图谱配准 — 脑区标注示例',
     'qc.annotatedSliceHint': '光片图像叠加 Allen CCFv3 脑区边界与标签。点击查看大图。',
-    'qc.bestSliceTitle': '原始光片 vs 图谱配准',
-    'qc.bestSliceHint': '左右对比图 — 点击查看原始分辨率',
+    'qc.bestSliceTitle': '配准切片 vs 图谱配准',
+    'qc.bestSliceHint': '配准后切片左右对比图 — 点击查看原始分辨率',
     'qc.panelTitle': '全脑配准总览',
     'qc.panelHint': '多切片图谱配准面板 — 点击查看大图',
     'tab.qc.title': '批量QC审查',
@@ -423,6 +555,8 @@ const LANGS = {
     'toast.cancelNone': '当前没有运行中的流水线',
     'toast.outputsPath': '输出目录：{path}',
     'toast.qcLoadFailed': 'QC图片加载失败',
+    'toast.runDetailsFailed': '打开运行详情失败。',
+    'outputs.previewDesc': '所选输出文件的文本预览。',
   },
 };
 
@@ -488,10 +622,47 @@ const oneClickScopeEl = document.getElementById('oneClickScope');
 const oneClickStartBtn = document.getElementById('oneClickStartBtn');
 const quickExportBtn = document.getElementById('quickExportBtn');
 const quickExportFormatEl = document.getElementById('quickExportFormat');
+const methodsModalTitleEl = document.getElementById('methodsModalTitle');
+const methodsModalDescEl = document.getElementById('methodsModalDesc');
+const errorPanelToggle = document.getElementById('errorPanelToggle');
+const errorPanelBody = document.getElementById('errorPanelBody');
+const errorPanelList = document.getElementById('errorPanelList');
+const errorPanelEmpty = document.getElementById('errorPanelEmpty');
+const errorBadge = document.getElementById('errorBadge');
+const preflightModal = document.getElementById('preflightModal');
+const preflightModalTitle = document.getElementById('preflightModalTitle');
+const preflightModalDesc = document.getElementById('preflightModalDesc');
+const preflightIssuesEl = document.getElementById('preflightIssues');
+const preflightContinueBtn = document.getElementById('preflightContinueBtn');
+const preflightCancelBtn = document.getElementById('preflightCancelBtn');
+
+const state = {
+  running: false,
+  channel: 'red',
+  runAll: false,
+  allResults: [],
+  cellSummary: null,
+  useHierarchy: false,
+  startEpoch: null,
+  backendErrors: [],
+  frontendErrors: [],
+  activeJobId: localStorage.getItem('idlebrain.activeJobId') || '',
+};
 
 const overlayJobState = {
   jobId: localStorage.getItem('idlebrain.overlayJobId') || '',
 };
+
+state.frontendErrors = loadFrontendErrors();
+renderErrorPanel();
+
+if (errorPanelToggle) {
+  errorPanelToggle.onclick = () => {
+    const willOpen = errorPanelBody?.classList.contains('hidden');
+    errorPanelBody?.classList.toggle('hidden');
+    errorPanelToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  };
+}
 
 function buildOverlayJobId() {
   if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -506,6 +677,21 @@ function getOverlayJobId() {
     localStorage.setItem('idlebrain.overlayJobId', overlayJobState.jobId);
   }
   return overlayJobState.jobId;
+}
+
+function setActiveJobId(jobId) {
+  state.activeJobId = String(jobId || '').trim();
+  if (state.activeJobId) localStorage.setItem('idlebrain.activeJobId', state.activeJobId);
+  else localStorage.removeItem('idlebrain.activeJobId');
+}
+
+function withActiveJobQuery(path, extra = {}) {
+  const url = new URL(path, window.location.origin);
+  if (state.activeJobId) url.searchParams.set('job', state.activeJobId);
+  Object.entries(extra || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
+  });
+  return `${url.pathname}${url.search}`;
 }
 
 function syncOverlayJobId(resp) {
@@ -527,23 +713,142 @@ function withOverlayJobQuery(path, extra = {}) {
 // ================================================================
 // TOAST
 // ================================================================
+const FIELD_ERROR_MAP = {
+  inputDir: 'inputDirError',
+  atlasPath: 'atlasPathError',
+  structPath: 'structPathError',
+};
+const FIELD_INPUT_MAP = {
+  inputDir: 'inputDir',
+  atlasPath: 'atlasPath',
+  structPath: 'structPath',
+};
+const FRONTEND_ERRORS_KEY = 'brainfast.frontendErrors';
+
+function loadFrontendErrors() {
+  try {
+    const raw = sessionStorage.getItem(FRONTEND_ERRORS_KEY);
+    const items = raw ? JSON.parse(raw) : [];
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistFrontendErrors() {
+  try {
+    sessionStorage.setItem(
+      FRONTEND_ERRORS_KEY,
+      JSON.stringify((state.frontendErrors || []).slice(-50)),
+    );
+  } catch {}
+}
+
+function normalizeFieldKey(field) {
+  const raw = String(field || '').trim();
+  if (!raw) return '';
+  const map = {
+    'input.slice_dir': 'inputDir',
+    'inputDir': 'inputDir',
+    'atlasPath': 'atlasPath',
+    'structPath': 'structPath',
+  };
+  return map[raw] || raw;
+}
+
+function renderFieldIssues(issues = []) {
+  const byField = new Map();
+  (issues || []).forEach(issue => {
+    const field = normalizeFieldKey(issue?.field);
+    if (!field || byField.has(field)) return;
+    byField.set(field, String(issue?.message || '').trim());
+  });
+  Object.entries(FIELD_ERROR_MAP).forEach(([field, errorId]) => {
+    const errorEl = document.getElementById(errorId);
+    const inputEl = document.getElementById(FIELD_INPUT_MAP[field] || field);
+    const msg = byField.get(field) || '';
+    if (errorEl) {
+      errorEl.textContent = msg;
+      errorEl.classList.toggle('hidden', !msg);
+    }
+    if (inputEl) inputEl.classList.toggle('field-input-error', !!msg);
+  });
+}
+
+function renderErrorPanel() {
+  const merged = [...(state.backendErrors || []), ...(state.frontendErrors || [])]
+    .filter(item => item && item.message)
+    .sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
+  if (errorPanelList) {
+    errorPanelList.innerHTML = merged
+      .map(item => {
+        const step = escapeHtml(item.step || 'general');
+        const ts = escapeHtml(item.timestamp || '');
+        const message = escapeHtml(item.message || '');
+        const source = escapeHtml(item.source || 'backend');
+        const recoverable = item.recoverable === false ? 'blocking' : 'recoverable';
+        return `
+          <div class="error-item">
+            <div class="error-item-header">
+              <span class="error-item-step">${step}</span>
+              <span class="error-item-time">${ts}</span>
+            </div>
+            <div class="error-item-message">${message}</div>
+            <div class="error-item-source">${source} · ${recoverable}</div>
+          </div>
+        `;
+      })
+      .join('');
+  }
+  if (errorPanelEmpty) errorPanelEmpty.classList.toggle('hidden', merged.length > 0);
+  if (errorBadge) {
+    errorBadge.textContent = String(merged.length);
+    errorBadge.classList.toggle('hidden', merged.length <= 0);
+  }
+}
+
+function pushPersistentError(message, opts = {}) {
+  const item = {
+    timestamp: new Date().toISOString(),
+    message: String(message || '').trim(),
+    step: String(opts.step || 'ui'),
+    recoverable: opts.recoverable !== false,
+    source: String(opts.source || 'frontend'),
+  };
+  if (!item.message) return;
+  state.frontendErrors = [...(state.frontendErrors || []), item].slice(-50);
+  persistFrontendErrors();
+  renderErrorPanel();
+  if (errorPanelBody) {
+    errorPanelBody.classList.remove('hidden');
+    errorPanelToggle?.setAttribute('aria-expanded', 'true');
+  }
+  if (!state.running && statusBadge) {
+    statusBadge.textContent = t('status.error');
+    statusBadge.className = 'status-badge error';
+  }
+}
+
+async function refreshErrorLog() {
+  try {
+    const res = await fetch(withActiveJobQuery('/api/error-log')).then(r => r.json());
+    state.backendErrors = Array.isArray(res?.errors) ? res.errors : [];
+    renderErrorPanel();
+  } catch {}
+}
+
 function showToast(msg, type = 'info', duration = 4500) {
+  if (type === 'error') {
+    pushPersistentError(msg, { step: 'ui', source: 'frontend', recoverable: true });
+    return;
+  }
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
     const icons = { success: 'OK', warning: 'WARN', error: 'ERR', info: 'i' };
     toast.innerHTML = `<span class="toast-icon">${icons[type] || 'i'}</span><span class="toast-msg">${msg}</span>`;
-  if (type === 'error') {
-    const cb = document.createElement('button');
-    cb.className = 'toast-close';
-        cb.textContent = 'x';
-    cb.onclick = () => toast.remove();
-    toast.appendChild(cb);
-  }
   container.appendChild(toast);
-  if (type !== 'error') {
-    setTimeout(() => { toast.classList.add('fade-out'); setTimeout(() => toast.remove(), 380); }, duration);
-  }
+  setTimeout(() => { toast.classList.add('fade-out'); setTimeout(() => toast.remove(), 380); }, duration);
 }
 
 // ================================================================
@@ -624,6 +929,25 @@ function setProgress(p, text) {
   stepText.textContent = text;
   progressPct.textContent = `${Math.round(p)}%`;
 }
+function formatEtaSeconds(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  if (total < 60) return `${total}s`;
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  if (mins < 60) return secs ? `${mins}m ${secs}s` : `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins ? `${hours}h ${remMins}m` : `${hours}h`;
+}
+function getRunEtaSeconds(status) {
+  const done = Number(status?.slicesDone || 0);
+  const total = Number(status?.slicesTotal || 0);
+  const startEpoch = Number(status?.startEpoch || 0);
+  if (!(status?.running) || done <= 0 || total <= done || startEpoch <= 0) return null;
+  const elapsed = Math.max(1, Math.floor(Date.now() / 1000 - startEpoch));
+  const perSlice = elapsed / done;
+  return Math.max(1, Math.round((total - done) * perSlice));
+}
 function setRunning(r) {
   state.running = r;
   statusBadge.textContent = r ? t('status.running') : t('status.idle');
@@ -694,6 +1018,7 @@ async function validatePaths(showMsg = true) {
   });
   try {
     const res = await fetch(`/api/validate?${q}`).then(r => r.json());
+    renderFieldIssues(res.fieldIssues || []);
     if (!res.ok) {
       const issues = res.issues.join('; ');
       validateStatus.textContent = t('toast.validateFail', { issues });
@@ -704,6 +1029,7 @@ async function validatePaths(showMsg = true) {
     } else {
       validateStatus.textContent = t('toast.validateOk');
       validateStatus.className = 'validate-status';
+       renderFieldIssues([]);
       if (!state.running) { statusBadge.textContent = t('status.idle'); statusBadge.className = 'status-badge'; }
     }
     return res.ok;
@@ -828,6 +1154,7 @@ document.getElementById('refreshPreviewBtn').onclick = refreshOverlayPreview;
 // ================================================================
 let _autopickAbortFlag = false;
 let _modalCloseTimer = null;
+let _autopickToken = '';
 
 function _showAutopickModal() {
   const modal = document.getElementById('autopickModal');
@@ -843,9 +1170,11 @@ function _showAutopickModal() {
   document.getElementById('autopickProgressMsg').textContent = 'Starting...';
   document.getElementById('autopickStepText').textContent = '';
   document.getElementById('autopickErrorDetail').classList.add('hidden');
+  document.getElementById('autopickModalActions').style.display = 'flex';
   document.getElementById('autopickModalFooter').classList.add('hidden');
   document.getElementById('autopickModalFooter').style.display = 'none';
   _autopickAbortFlag = false;
+  _autopickToken = '';
   const closeBtn = document.getElementById('autopickModalClose');
   if (closeBtn) closeBtn.onclick = () => {
     _autopickAbortFlag = true;
@@ -892,9 +1221,27 @@ function _showAutopickError(errMsg) {
     detailEl.textContent = errMsg || 'Unknown error';
     detailEl.classList.remove('hidden');
   }
+  const actions = document.getElementById('autopickModalActions');
+  if (actions) actions.style.display = 'none';
   const footer = document.getElementById('autopickModalFooter');
   if (footer) { footer.classList.remove('hidden'); footer.style.display = 'flex'; }
 }
+
+document.getElementById('autopickModalCancel').onclick = async () => {
+  _autopickAbortFlag = true;
+  const msgEl = document.getElementById('autopickProgressMsg');
+  if (msgEl) msgEl.textContent = 'Cancelling...';
+  if (_autopickToken) {
+    try {
+      await fetch('/api/atlas/autopick/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: _autopickToken }),
+      });
+    } catch {}
+  }
+  _scheduleCloseModal(300);
+};
 
 async function _runAutopickAsync(payload) {
   _showAutopickModal();
@@ -929,6 +1276,7 @@ async function _runAutopickAsync(payload) {
     _showAutopickError('No progress token returned from server');
     return null;
   }
+  _autopickToken = token;
 
   // Poll for progress
   while (!_autopickAbortFlag) {
@@ -951,6 +1299,11 @@ async function _runAutopickAsync(payload) {
       _scheduleCloseModal(900);
       return { ok: true, jobId: status.jobId, ...status.result };
     }
+    if (status.status === 'cancelled') {
+      showToast('Auto-pick cancelled.', 'warning', 2500);
+      _scheduleCloseModal(300);
+      return null;
+    }
     if (status.status === 'error') {
       _showAutopickError(status.error || 'Unknown error during autopick');
       return null;
@@ -961,6 +1314,7 @@ async function _runAutopickAsync(payload) {
 
 async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
   _showAutopickModal();
+  document.getElementById('autopickModalActions').style.display = 'none';
   // Update modal title
   const h2 = document.querySelector('#autopickModal h2') || document.querySelector('#autopickModal .modal-title');
   if (h2) h2.textContent = modalTitle || '🧠 Processing...';
@@ -988,6 +1342,7 @@ async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
     return startRes;
   }
   const token = startRes.token;
+  _autopickToken = token;
   while (!_autopickAbortFlag) {
     await new Promise(r => setTimeout(r, 700));
     let status;
@@ -1003,6 +1358,11 @@ async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
       if (status.jobId) syncOverlayJobId({ jobId: status.jobId });
       _scheduleCloseModal(700);
       return { ok: true, ...status };
+    }
+    if (status.status === 'cancelled') {
+      showToast('Task cancelled.', 'warning', 2500);
+      _scheduleCloseModal(300);
+      return null;
     }
     if (status.status === 'error') {
       _showAutopickError(status.error || 'Unknown error');
@@ -1136,41 +1496,136 @@ document.getElementById('landmarkViewBtn').onclick = async () => {
 };
 
 // ================================================================
+// RUN PAYLOAD / PREFLIGHT
+// ================================================================
+function buildRunPayload() {
+  const channels = state.runAll ? ['red', 'green', 'farred'] : [state.channel];
+  return {
+    configPath: '../configs/run_config.template.json',
+    inputDir: document.getElementById('inputDir').value,
+    outputDir: document.getElementById('outputDir').value,
+    atlasPath: document.getElementById('atlasPath').value,
+    structPath: document.getElementById('structPath').value,
+    channels,
+    params: {
+      inputDir: document.getElementById('inputDir').value,
+      outputDir: document.getElementById('outputDir').value,
+      atlasPath: document.getElementById('atlasPath').value,
+      structPath: document.getElementById('structPath').value,
+      realSlicePath: document.getElementById('realSlicePath').value,
+      pixelSizeUm: document.getElementById('pixelSizeUm').value,
+      slicingPlane: document.getElementById('slicingPlane').value,
+      rotateAtlas: document.getElementById('rotateAtlas').value,
+      flipAtlas: document.getElementById('flipAtlas').value,
+      alignMode: document.getElementById('alignMode').value,
+      maxPoints: document.getElementById('maxPoints').value,
+      minDistance: document.getElementById('minDistance').value,
+      ransacResidual: document.getElementById('ransacResidual').value,
+      version: versionText.textContent,
+    },
+  };
+}
+
+function phaseLabel(phase) {
+  const key = `progress.phase.${String(phase || '').trim()}`;
+  const translated = t(key);
+  return translated === key ? String(phase || 'running') : translated;
+}
+
+function computeRunProgress(status) {
+  const progress = status?.progress || {};
+  const stepCurrent = Math.max(0, Number(progress.stepCurrent || 0));
+  const stepTotal = Math.max(0, Number(progress.stepTotal || 0));
+  const slicesDone = Math.max(0, Number(status?.slicesDone || 0));
+  const slicesTotal = Math.max(0, Number(status?.slicesTotal || 0));
+  if (stepCurrent <= 0 || stepTotal <= 0) {
+    if (slicesTotal > 0) return Math.min(96, 20 + Math.round((slicesDone / slicesTotal) * 70));
+    return Math.min(94, 20 + Math.floor((status?.logCount || 0) * 0.6));
+  }
+  const completedSteps = Math.max(0, stepCurrent - 1);
+  const sliceFraction = slicesTotal > 0 && progress.phase === 'registration'
+    ? (slicesDone / slicesTotal)
+    : 0;
+  const pct = ((completedSteps + sliceFraction) / stepTotal) * 100;
+  return Math.max(5, Math.min(progress.phase === 'done' ? 100 : 98, Math.round(pct)));
+}
+
+function showPreflightModal(issues = []) {
+  return new Promise(resolve => {
+    const hasBlocking = (issues || []).some(item => item?.severity === 'error');
+    preflightModalTitle.textContent = t('preflight.title');
+    preflightModalDesc.textContent = hasBlocking ? t('preflight.desc.error') : t('preflight.desc.warn');
+    preflightIssuesEl.innerHTML = (issues || [])
+      .map(item => {
+        const severity = String(item?.severity || 'warning').toLowerCase();
+        const field = escapeHtml(item?.field || 'general');
+        const message = escapeHtml(item?.message || '');
+        return `
+          <div class="preflight-issue ${escapeHtml(severity)}">
+            <div class="preflight-issue-header">
+              <span class="preflight-issue-badge">${escapeHtml(severity)}</span>
+              <span class="preflight-issue-field">${field}</span>
+            </div>
+            <div class="preflight-issue-message">${message}</div>
+          </div>
+        `;
+      })
+      .join('');
+    preflightContinueBtn.classList.toggle('hidden', hasBlocking);
+    preflightModal.classList.remove('hidden');
+
+    const close = result => {
+      preflightModal.classList.add('hidden');
+      preflightContinueBtn.onclick = null;
+      preflightCancelBtn.onclick = null;
+      document.getElementById('preflightModalClose').onclick = null;
+      resolve(result);
+    };
+
+    preflightContinueBtn.onclick = () => close(true);
+    preflightCancelBtn.onclick = () => close(false);
+    document.getElementById('preflightModalClose').onclick = () => close(false);
+  });
+}
+
+async function runPreflightGate(payload) {
+  try {
+    const res = await fetch('/api/pipeline/preflight', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(r => r.json());
+    const issues = Array.isArray(res?.issues) ? res.issues : [];
+    if (!issues.length) return true;
+    return await showPreflightModal(issues);
+  } catch (err) {
+    showToast(`Preflight failed: ${err?.message || err || '?'}`, 'error');
+    return false;
+  }
+}
+
+// ================================================================
 // RUN PIPELINE
 // ================================================================
 document.getElementById('runBtn').onclick = async () => {
   if (state.running) return;
   if (!(await validatePaths(true))) return;
+  const payload = buildRunPayload();
+  if (!(await runPreflightGate(payload))) return;
   setRunning(true);
   setProgress(5, t('progress.queued'));
-  const channels = state.runAll ? ['red', 'green', 'farred'] : [state.channel];
-  const params = {
-    inputDir: document.getElementById('inputDir').value,
-    outputDir: document.getElementById('outputDir').value,
-    atlasPath: document.getElementById('atlasPath').value,
-    structPath: document.getElementById('structPath').value,
-    realSlicePath: document.getElementById('realSlicePath').value,
-    pixelSizeUm: document.getElementById('pixelSizeUm').value,
-    slicingPlane: document.getElementById('slicingPlane').value,
-    rotateAtlas: document.getElementById('rotateAtlas').value,
-    flipAtlas: document.getElementById('flipAtlas').value,
-    alignMode: document.getElementById('alignMode').value,
-    maxPoints: document.getElementById('maxPoints').value,
-    minDistance: document.getElementById('minDistance').value,
-    ransacResidual: document.getElementById('ransacResidual').value,
-    version: versionText.textContent,
-  };
   const res = await fetch('/api/run', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ configPath: '../configs/run_config.template.json',
-      inputDir: document.getElementById('inputDir').value, channels, params }),
+    body: JSON.stringify(payload),
   }).then(r => r.json());
   if (!res.ok) {
     showToast(t('toast.runFailed', { err: res.error || '?' }), 'error');
     setRunning(false); setProgress(0, t('progress.startFailed')); return;
   }
-  setProgress(20, t('progress.running', { ch: channels.join(' + ') }));
-  showToast(t('toast.runStarted', { channels: channels.join(' + ') }), 'info', 5000);
+  setActiveJobId(res.jobId || '');
+  state.startEpoch = Math.floor(Date.now() / 1000);
+  setProgress(20, t('progress.running', { ch: payload.channels.join(' + ') }));
+  showToast(t('toast.runStarted', { channels: payload.channels.join(' + ') }), 'info', 5000);
   await pollLogsUntilDone();
   setProgress(100, t('progress.done'));
   await refreshOutputs();
@@ -1184,9 +1639,10 @@ document.getElementById('runBtn').onclick = async () => {
 async function pollLogsUntilDone() {
   while (true) {
     const [s, logsData] = await Promise.all([
-      fetch('/api/status').then(r => r.json()),
-      fetch('/api/logs').then(r => r.json()),
+      fetch(withActiveJobQuery('/api/status')).then(r => r.json()),
+      fetch(withActiveJobQuery('/api/logs')).then(r => r.json()),
     ]);
+    refreshErrorLog();
     
     // 保护前端的开发者日志不被后端的流水线日志覆盖
     const feLogs = logBox.textContent.split('\n').filter(l => l.includes('❌') || l.includes('⚠️') || l.includes('[ready]'));
@@ -1195,22 +1651,27 @@ async function pollLogsUntilDone() {
     logBox.scrollTop = logBox.scrollHeight;
     
     // Update sidebar slice progress bar (visible at all times)
+    state.startEpoch = Number(s.startEpoch || state.startEpoch || 0) || null;
     _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
 
     if (s.running) {
-      const lastLines = logsData.logs.slice(-10).join('\n');
-      const m = lastLines.match(/slices?\s+(\d+)\s*[\/／]\s*(\d+)/i);
-      if (m) {
-        const cur = Number(m[1]), total = Number(m[2]);
+      const cur = Number(s.slicesDone || 0);
+      const total = Number(s.slicesTotal || 0);
+      const etaSeconds = getRunEtaSeconds(s);
+      const phase = phaseLabel(s.progress?.phase || 'running');
+      const detail = String(s.progress?.message || '').trim() || t('progress.running', { ch: s.currentChannel || '' });
+      if (total > 0) {
         sliceProgress.classList.remove('hidden');
-        sliceProgress.textContent = t('progress.slices', { cur, total });
-        setProgress(20 + Math.round((cur / total) * 75), t('progress.running', { ch: s.currentChannel || '' }));
+        sliceProgress.textContent = etaSeconds != null
+          ? t('progress.slicesEta', { cur, total, eta: formatEtaSeconds(etaSeconds) })
+          : t('progress.slices', { cur, total });
       } else {
-        setProgress(Math.min(94, 20 + Math.floor((s.logCount || 0) * 0.6)), t('progress.running', { ch: s.currentChannel || '' }));
         sliceProgress.classList.add('hidden');
       }
+      setProgress(computeRunProgress(s), `${phase} · ${detail}`);
     }
     if (!s.running) {
+      state.startEpoch = null;
       sliceProgress.classList.add('hidden');
       if (s.error && s.error !== 'cancelled by user') showToast(s.error, 'error');
       break;
@@ -1223,8 +1684,12 @@ async function pollLogsUntilDone() {
 // CANCEL
 // ================================================================
 document.getElementById('cancelBtn').onclick = async () => {
-  const res = await fetch('/api/cancel', { method: 'POST' }).then(r => r.json());
-  if (res.ok) { setRunning(false); setProgress(0, t('progress.cancelled')); sliceProgress.classList.add('hidden'); showToast(t('toast.cancelOk'), 'warning', 3000); }
+  const res = await fetch('/api/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: state.activeJobId || '' }),
+  }).then(r => r.json());
+  if (res.ok) { state.startEpoch = null; setRunning(false); setProgress(0, t('progress.cancelled')); sliceProgress.classList.add('hidden'); showToast(t('toast.cancelOk'), 'warning', 3000); }
   else showToast(t('toast.cancelNone'), 'info');
 };
 
@@ -1232,8 +1697,11 @@ document.getElementById('cancelBtn').onclick = async () => {
 // OPEN OUTPUT FOLDER
 // ================================================================
 document.getElementById('openOutputsBtn').onclick = async () => {
-  const info = await fetch('/api/info').then(r => r.json());
-  showToast(t('toast.outputsPath', { path: info.outputs }), 'info', 8000);
+  const [info, status] = await Promise.all([
+    fetch('/api/info').then(r => r.json()),
+    fetch(withActiveJobQuery('/api/status')).then(r => r.json()).catch(() => ({})),
+  ]);
+  showToast(t('toast.outputsPath', { path: status.outputsDir || info.outputs }), 'info', 8000);
 };
 
 // ================================================================
@@ -1248,10 +1716,10 @@ async function refreshQcAll() {
   try {
     const annSection = document.getElementById('annotatedSliceSection');
     const annImg = document.getElementById('annotatedSliceImg');
-    const ra = await fetch('/api/outputs/demo-annotated-slice', {method:'HEAD'});
+    const ra = await fetch(withActiveJobQuery('/api/outputs/demo-annotated-slice'), {method:'HEAD'});
     if (ra.ok) {
       annSection.style.display = '';
-      annImg.src = `/api/outputs/demo-annotated-slice?${Date.now()}`;
+      annImg.src = withActiveJobQuery('/api/outputs/demo-annotated-slice', { ts: Date.now() });
     }
   } catch {}
 
@@ -1259,10 +1727,10 @@ async function refreshQcAll() {
   try {
     const bestSection = document.getElementById('bestSliceSection');
     const bestImg = document.getElementById('bestSliceImg');
-    const r = await fetch('/api/outputs/demo-best-slice', {method:'HEAD'});
+    const r = await fetch(withActiveJobQuery('/api/outputs/demo-best-slice'), {method:'HEAD'});
     if (r.ok) {
       bestSection.style.display = '';
-      bestImg.src = `/api/outputs/demo-best-slice?${Date.now()}`;
+      bestImg.src = withActiveJobQuery('/api/outputs/demo-best-slice', { ts: Date.now() });
     }
   } catch {}
 
@@ -1271,29 +1739,41 @@ async function refreshQcAll() {
     const panelSection = document.getElementById('demoPanelSection');
     const panelImg = document.getElementById('demoPanelImg');
     const statsBar = document.getElementById('regStatsBar');
-    // Check if panel exists
-    const sliceListRes = await fetch('/api/outputs/reg-slice-list').then(r => r.json());
-    if (sliceListRes.ok && sliceListRes.count > 0) {
+    const panelHead = await fetch(withActiveJobQuery('/api/outputs/demo-panel'), { method: 'HEAD' });
+    if (panelHead.ok) {
       panelSection.style.display = '';
-      panelImg.src = `/api/outputs/demo-panel?${Date.now()}`;
-      // Load registration stats
+      panelImg.src = withActiveJobQuery('/api/outputs/demo-panel', { ts: Date.now() });
+      statsBar.innerHTML = '';
       try {
-        const stats = await fetch('/api/outputs/reg-stats').then(r => r.json());
+        const stats = await fetch(withActiveJobQuery('/api/outputs/reg-stats')).then(r => r.json());
         if (stats.ok) {
-          statsBar.innerHTML = [
-            `<span>✅ <strong>${stats.ok_count}/${stats.total}</strong> slices registered</span>`,
-            `<span>Score mean: <strong>${stats.mean_score}</strong></span>`,
-            `<span>Range: ${stats.min_score} – ${stats.max_score}</span>`,
-          ].join('<span style="color:#444">  |  </span>');
+          if (stats.mode === 'registration_run') {
+            statsBar.innerHTML = [
+              `<span>Pipeline: <strong>${escapeHtml(stats.pipeline || '-')}</strong></span>`,
+              `<span>NCC: <strong>${escapeHtml(formatFixed(stats.ncc, 4))}</strong></span>`,
+              `<span>SSIM: <strong>${escapeHtml(formatFixed(stats.ssim, 4))}</strong></span>`,
+              `<span>Dice: <strong>${escapeHtml(formatFixed(stats.dice, 4))}</strong></span>`,
+              `<span>Staining: <strong>${escapeHtml(formatPercent(stats.staining_rate))}</strong></span>`,
+              `<span>Coverage: <strong>${escapeHtml(formatPercent(stats.atlas_coverage))}</strong></span>`,
+            ].join('<span style="color:#444">  |  </span>');
+          } else {
+            statsBar.innerHTML = [
+              `<span>✅ <strong>${stats.ok_count}/${stats.total}</strong> slices registered</span>`,
+              `<span>Score mean: <strong>${stats.mean_score}</strong></span>`,
+              `<span>Range: ${stats.min_score} – ${stats.max_score}</span>`,
+            ].join('<span style="color:#444">  |  </span>');
+          }
         }
       } catch {}
+    } else {
+      panelSection.style.display = 'none';
     }
   } catch {}
 
   // Load individual QC thumbnails (use registered slice gallery if available)
   try {
     // Prefer the vibrant registered slice overlays
-    const regList = await fetch('/api/outputs/reg-slice-list').then(r => r.json());
+    const regList = await fetch(withActiveJobQuery('/api/outputs/reg-slice-list')).then(r => r.json());
     if (regList.ok && regList.files.length > 0) {
       empty.classList.add('hidden');
       count.textContent = `${regList.count}`;
@@ -1302,7 +1782,7 @@ async function refreshQcAll() {
         const wrap = document.createElement('div');
         wrap.className = 'qc-thumb';
         const img = document.createElement('img');
-        img.src = `/api/outputs/reg-slice/${fname}?${Date.now()}`;
+        img.src = withActiveJobQuery(`/api/outputs/reg-slice/${fname}`, { ts: Date.now() });
         img.alt = fname; img.onerror = () => wrap.remove();
         const label = document.createElement('div');
         label.className = 'qc-thumb-label';
@@ -1310,13 +1790,13 @@ async function refreshQcAll() {
         label.textContent = fname.replace('slice_', '').replace('_overlay.png', '');
         wrap.appendChild(img); wrap.appendChild(label);
         // Click → open side-by-side comparison
-        wrap.onclick = () => openLightbox(`/api/outputs/demo-comparison/${sliceIdx}?${Date.now()}`, `Slice ${sliceIdx} — Raw vs Atlas`);
+        wrap.onclick = () => openLightbox(withActiveJobQuery(`/api/outputs/demo-comparison/${sliceIdx}`, { ts: Date.now() }), `Slice ${sliceIdx} — Raw vs Atlas`);
         grid.appendChild(wrap);
       });
       return;
     }
     // Fallback to qc_overlays
-    const res = await fetch('/api/outputs/qc-list').then(r => r.json());
+    const res = await fetch(withActiveJobQuery('/api/outputs/qc-list')).then(r => r.json());
     if (!res.ok || res.files.length === 0) { grid.innerHTML = ''; empty.classList.remove('hidden'); count.textContent = ''; return; }
     empty.classList.add('hidden');
     count.textContent = `${res.count}`;
@@ -1325,7 +1805,7 @@ async function refreshQcAll() {
       const wrap = document.createElement('div');
       wrap.className = 'qc-thumb';
       const img = document.createElement('img');
-      img.src = `/api/outputs/qc-file/${fname}?${Date.now()}`;
+      img.src = withActiveJobQuery(`/api/outputs/qc-file/${fname}`, { ts: Date.now() });
       img.alt = fname; img.onerror = () => wrap.remove();
       const label = document.createElement('div');
       label.className = 'qc-thumb-label';
@@ -1342,7 +1822,7 @@ async function regenDemoVisuals() {
   const btn = document.getElementById('regenDemoBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Regenerating...'; }
   try {
-    const r = await fetch('/api/outputs/refresh-demo', { method: 'POST' });
+    const r = await fetch(withActiveJobQuery('/api/outputs/refresh-demo'), { method: 'POST' });
     const j = await r.json();
     if (j.ok) {
       showToast('Demo visuals regeneration started. Refreshing in 15s...', 'info');
@@ -1372,31 +1852,34 @@ async function refreshOutputs() {
     let data = null;
     let useHierarchy = false;
     try {
-      const hierText = await fetch('/api/outputs/hierarchy').then(r => r.ok ? r.text() : null);
+      const hierText = await fetch(withActiveJobQuery('/api/outputs/hierarchy')).then(r => r.ok ? r.text() : null);
       if (hierText) { data = parseCsv(hierText); useHierarchy = true; }
     } catch {}
     if (!data) {
-      const leaf = await fetch('/api/outputs/leaf').then(r => r.text());
+      const leaf = await fetch(withActiveJobQuery('/api/outputs/leaf')).then(r => r.text());
       data = parseCsv(leaf);
     }
     state.allResults = data;
     state.useHierarchy = useHierarchy;
+    state.cellSummary = null;
+    await refreshCellSummary();
     renderResultsTable(state.allResults);
 
     // Load static cell count chart
     try {
-      const chartRes = await fetch('/api/outputs/cell-chart', { method: 'HEAD' });
+      const chartRes = await fetch(withActiveJobQuery('/api/outputs/cell-chart'), { method: 'HEAD' });
       const chartSection = document.getElementById('cellChartSection');
       const chartImg = document.getElementById('cellChartImg');
       if (chartRes.ok && chartSection && chartImg) {
         chartSection.style.display = '';
-        chartImg.src = `/api/outputs/cell-chart?${Date.now()}`;
+        chartImg.src = withActiveJobQuery('/api/outputs/cell-chart', { ts: Date.now() });
       }
     } catch {}
+    await refreshDetectionConfidenceSamples();
     compareRows.innerHTML = '';
     for (const ch of ['red', 'green', 'farred']) {
       try {
-        const txt = await fetch(`/api/outputs/leaf/${ch}`).then(r => (r.ok ? r.text() : ''));
+        const txt = await fetch(withActiveJobQuery(`/api/outputs/leaf/${ch}`)).then(r => (r.ok ? r.text() : ''));
         if (!txt) continue;
         const arr = parseCsv(txt);
         const total = arr.reduce((s, x) => s + Number(x.count || 0), 0);
@@ -1405,44 +1888,145 @@ async function refreshOutputs() {
         compareRows.appendChild(tr);
       } catch {}
     }
+    await refreshRegistrationRuns();
     await refreshHistory();
   } catch (err) {
     console.error('Refresh outputs failed:', err);
   }
 }
 
-// Colour palette for chart bars (depth-2 major regions)
-const CHART_COLORS = [
-  '#e57373','#ff9800','#ffeb3b','#66bb6a','#26c6da',
-  '#5c6bc0','#ab47bc','#ec407a','#26a69a','#8d6e63',
-  '#78909c','#ffa726',
-];
+async function refreshCellSummary() {
+  const section = document.getElementById('resultSummarySection');
+  const cards = document.getElementById('resultSummaryCards');
+  const warnings = document.getElementById('resultSummaryWarnings');
+  const lead = document.getElementById('resultSummaryLead');
+  if (!section || !cards || !warnings || !lead) return;
 
-function renderRegionChart(data) {
+  try {
+    const res = await fetch(withActiveJobQuery('/api/outputs/cell-summary')).then(r => r.json());
+    const summary = res?.ok ? res.summary : null;
+    state.cellSummary = summary || null;
+    if (!summary) {
+      section.style.display = 'none';
+      cards.innerHTML = '';
+      warnings.innerHTML = '';
+      lead.textContent = t('summary.none');
+      return;
+    }
+
+    section.style.display = '';
+    lead.textContent = `${summary.slice_summary || '-'} · ${summary.mode_note || ''}`.trim();
+    warnings.innerHTML = '';
+    (summary.warnings || []).forEach((message) => {
+      const item = document.createElement('div');
+      item.className = 'results-warning';
+      item.textContent = String(message || '');
+      warnings.appendChild(item);
+    });
+
+    const topRegion = summary.top_region
+      ? `${summary.top_region.label} · ${Number(summary.top_region.count || 0).toLocaleString()}`
+      : '-';
+    const mappedText = `${Number(summary.mapped_count || 0).toLocaleString()} (${formatPercent(summary.mapped_pct || 0)})`;
+    const outsideText = `${Number(summary.outside_count || 0).toLocaleString()} (${formatPercent(summary.outside_pct || 0)})`;
+    cards.innerHTML = [
+      renderSummaryCard(t('summary.sample'), summary.sample_name || '-', summary.slice_summary || ''),
+      renderSummaryCard(t('summary.scope'), summary.scope_label || '-', summary.scope_kind || ''),
+      renderSummaryCard(t('summary.mode'), summary.counting_mode || '-', summary.mode_note || ''),
+      renderSummaryCard(t('summary.detectors'), summary.detectors || '-', ''),
+      renderSummaryCard(t('summary.detected'), Number(summary.total_detected || 0).toLocaleString(), ''),
+      renderSummaryCard(t('summary.mapped'), mappedText, ''),
+      renderSummaryCard(t('summary.outside'), outsideText, ''),
+      renderSummaryCard(t('summary.regions'), Number(summary.regions_mapped || 0).toLocaleString(), ''),
+      renderSummaryCard(t('summary.topRegion'), topRegion, ''),
+    ].join('');
+  } catch (err) {
+    console.error('Refresh cell summary failed:', err);
+    section.style.display = 'none';
+    cards.innerHTML = '';
+    warnings.innerHTML = '';
+  }
+}
+
+async function refreshDetectionConfidenceSamples() {
+  const section = document.getElementById('cellConfidenceSection');
+  const grid = document.getElementById('cellConfidenceGrid');
+  const empty = document.getElementById('cellConfidenceEmpty');
+  if (!section || !grid || !empty) return;
+
+  try {
+    const res = await fetch(withActiveJobQuery('/api/outputs/detection-samples')).then(r => r.json());
+    if (!res.ok || !Array.isArray(res.samples) || !res.samples.length) {
+      section.style.display = 'none';
+      grid.innerHTML = '';
+      empty.style.display = '';
+      return;
+    }
+
+    section.style.display = '';
+    empty.style.display = 'none';
+    grid.innerHTML = '';
+    res.samples.forEach(sample => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'cell-confidence-card';
+      const title = sample.source_name || `slice ${sample.slice_id ?? ''}`;
+      const subtitle = `${Number(sample.count || 0).toLocaleString()} ${t('cellconf.cells')}`;
+      const detectorText = sample.detectors ? `${t('cellconf.detector')}: ${sample.detectors}` : '';
+      const sampleUrl = withActiveJobQuery(sample.url || '', { ts: Date.now() });
+      card.innerHTML = `
+        <img src="${sampleUrl}" alt="${escapeHtml(title)}" />
+        <div class="cell-confidence-meta">
+          <div class="cell-confidence-title">${escapeHtml(title)}</div>
+          <div class="cell-confidence-subtitle">${escapeHtml(subtitle)}</div>
+          <div class="cell-confidence-detector">${escapeHtml(detectorText)}</div>
+        </div>
+      `;
+      card.onclick = () => openLightbox(sampleUrl, title);
+      grid.appendChild(card);
+    });
+  } catch (err) {
+    console.error('Refresh detection samples failed:', err);
+    section.style.display = 'none';
+  }
+}
+
+function renderSummaryCard(label, value, note = '') {
+  return `
+    <article class="result-summary-card">
+      <div class="result-summary-label">${escapeHtml(label)}</div>
+      <div class="result-summary-value">${escapeHtml(value)}</div>
+      <div class="result-summary-note">${escapeHtml(note || '')}</div>
+    </article>
+  `;
+}
+
+function safeDepth(value) {
+  const parsed = Number.parseInt(value ?? 0, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.min(parsed, 12);
+}
+
+function renderRegionChart(summary) {
   const section = document.getElementById('chartSection');
   const container = document.getElementById('regionChart');
-  if (!data || !data.length) { section.style.display = 'none'; return; }
-  // Pick depth-2 regions with count > 0
-  const regions = data.filter(d => parseInt(d.depth||0) === 2 && Number(d.count||0) > 0)
-                      .sort((a,b) => Number(b.count)-Number(a.count));
+  const regions = Array.isArray(summary?.major_regions) ? summary.major_regions : [];
   if (!regions.length) { section.style.display = 'none'; return; }
-  const total = regions.reduce((s,r) => s + Number(r.count), 0);
   const maxCount = regions[0] ? Number(regions[0].count) : 1;
   section.style.display = '';
   container.innerHTML = '';
-  regions.forEach((r, i) => {
-    const count = Number(r.count);
-    const pct = (count / total * 100).toFixed(1);
+  regions.forEach((r) => {
+    const count = Number(r.count || 0);
+    const pct = Number(r.pct || 0) * 100;
     const barPct = (count / maxCount * 100).toFixed(1);
-    const color = CHART_COLORS[i % CHART_COLORS.length];
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:7px';
+    row.className = 'region-chart-row';
     row.innerHTML = `
-      <div style="width:110px;text-align:right;font-size:0.82em;color:#ccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.region_name||''}">${r.acronym||r.region_name||''}</div>
-      <div style="flex:1;background:#222;border-radius:3px;height:18px;position:relative">
-        <div style="width:${barPct}%;background:${color};height:100%;border-radius:3px;transition:width 0.4s ease"></div>
+      <div class="region-chart-label" title="${escapeHtml(r.label || '')}">${escapeHtml(r.label || '-')}</div>
+      <div class="region-chart-bar">
+        <div class="region-chart-fill" style="width:${barPct}%;background:${escapeHtml(r.color || '#78909C')}"></div>
       </div>
-      <div style="width:80px;font-size:0.82em;color:#aaa">${count.toLocaleString()} <span style="color:#666">(${pct}%)</span></div>`;
+      <div class="region-chart-value">${count.toLocaleString()} <span>(${pct.toFixed(1)}%)</span></div>`;
     container.appendChild(row);
   });
 }
@@ -1451,10 +2035,10 @@ function renderResultsTable(data) {
   resultRows.innerHTML = '';
   const keyword = (document.getElementById('regionSearch')?.value || '').toLowerCase();
   const filtered = keyword ? data.filter(d => (d.region_name || d.region || '').toLowerCase().includes(keyword) || (d.acronym || '').toLowerCase().includes(keyword)) : data;
-  const rootCount = data.find(d => parseInt(d.depth||0)===0);
+  const rootCount = data.find(d => safeDepth(d.depth) === 0);
   const total = rootCount ? Number(rootCount.count||0) : Math.max(...data.map(d=>Number(d.count||0)));
   filtered.forEach(d => {
-    const depth = parseInt(d.depth || 0);
+    const depth = safeDepth(d.depth);
     const indent = state.useHierarchy && !keyword ? '&nbsp;'.repeat(depth * 3) : '';
     const name = d.region_name || d.region || '-';
     const acronym = d.acronym ? `<span style="color:#888;font-size:0.85em"> (${d.acronym})</span>` : '';
@@ -1474,25 +2058,32 @@ function renderResultsTable(data) {
     resultRows.appendChild(tr);
   });
   const meta = document.getElementById('resultsMeta');
-  meta.textContent = keyword
+  const baseMeta = keyword
     ? t('results.filtered', { found: filtered.length, total: data.length })
     : t('results.total', { n: data.length });
-  if (!keyword) renderRegionChart(data);
+  meta.textContent = `${baseMeta} · ${t('results.tableHint')}`;
+  if (!keyword) renderRegionChart(state.cellSummary);
 }
 
 document.getElementById('regionSearch').addEventListener('input', () => renderResultsTable(state.allResults));
 document.getElementById('refreshBtn').onclick = refreshOutputs;
-document.getElementById('exportBtn').onclick   = () => window.open('/api/outputs/leaf', '_blank');
+document.getElementById('exportBtn').onclick   = () => window.open(withActiveJobQuery('/api/outputs/leaf'), '_blank');
 
 // ================================================================
 // METHODS TEXT EXPORT
 // ================================================================
+function openTextModal(title, description, text) {
+  if (methodsModalTitleEl) methodsModalTitleEl.textContent = title;
+  if (methodsModalDescEl) methodsModalDescEl.textContent = description;
+  document.getElementById('methodsText').textContent = text;
+  document.getElementById('methodsModal').classList.remove('hidden');
+}
+
 document.getElementById('exportMethodsBtn').onclick = async () => {
   try {
-    const res = await fetch('/api/export/methods-text').then(r => r.json());
+    const res = await fetch(withActiveJobQuery('/api/export/methods-text')).then(r => r.json());
     if (!res.ok) { showToast(t('toast.methodsFailed'), 'error'); return; }
-    document.getElementById('methodsText').textContent = res.text;
-    document.getElementById('methodsModal').classList.remove('hidden');
+    openTextModal(t('methods.title'), t('methods.desc'), res.text);
   } catch { showToast(t('toast.methodsFailed'), 'error'); }
 };
 document.getElementById('methodsModalClose').onclick  = () => document.getElementById('methodsModal').classList.add('hidden');
@@ -1508,7 +2099,7 @@ document.getElementById('methodsCopyBtn').onclick = async () => {
 // ================================================================
 async function refreshHistory() {
   try {
-    const h = await fetch('/api/history').then(r => r.json());
+    const h = await fetch(withActiveJobQuery('/api/history')).then(r => r.json());
     historyList.innerHTML = '';
     (h.history || []).slice().reverse().forEach(item => {
       const li = document.createElement('li');
@@ -1523,6 +2114,281 @@ async function refreshHistory() {
 }
 
 // ================================================================
+// 3D REGISTRATION REPORTS
+// ================================================================
+function formatRunTimestamp(value) {
+  if (!value) return '-';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
+}
+
+function formatFixed(value, digits = 4) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(digits) : '-';
+}
+
+function formatPercent(value, digits = 1) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${(n * 100).toFixed(digits)}%` : '-';
+}
+
+function metricDeltaInfo(finalValue, beforeValue, lowerIsBetter = false) {
+  const after = Number(finalValue);
+  const before = Number(beforeValue);
+  if (!Number.isFinite(after) || !Number.isFinite(before)) {
+    return { text: 'final only', cls: 'neutral' };
+  }
+  const delta = after - before;
+  if (Math.abs(delta) < 1e-6) {
+    return { text: 'no change', cls: 'neutral' };
+  }
+  const direction = lowerIsBetter ? -delta : delta;
+  return {
+    text: `${delta > 0 ? '+' : ''}${delta.toFixed(4)}`,
+    cls: direction > 0 ? 'good' : 'bad',
+  };
+}
+
+function renderRegistrationMetric(label, finalValue, beforeValue, opts = {}) {
+  const { lowerIsBetter = false, formatter = (v) => formatFixed(v, 4) } = opts;
+  const delta = metricDeltaInfo(finalValue, beforeValue, lowerIsBetter);
+  return `
+    <div class="registration-metric">
+      <div class="registration-metric-label">${escapeHtml(label)}</div>
+      <div class="registration-metric-value">${escapeHtml(formatter(finalValue))}</div>
+      <div class="registration-metric-delta ${delta.cls}">${escapeHtml(delta.text)}</div>
+    </div>
+  `;
+}
+
+function renderRegistrationPreview(url, caption) {
+  if (!url) {
+    return `
+      <div class="registration-preview">
+        <div class="registration-preview-empty">${escapeHtml(caption)}</div>
+      </div>
+    `;
+  }
+  const previewUrl = withActiveJobQuery(url, { ts: Date.now() });
+  return `
+    <div class="registration-preview">
+      <img src="${escapeHtml(previewUrl)}" alt="${escapeHtml(caption)}" data-lightbox-src="${escapeHtml(previewUrl)}" data-lightbox-caption="${escapeHtml(caption)}" />
+      <div class="registration-preview-caption">${escapeHtml(caption)}</div>
+    </div>
+  `;
+}
+
+function renderRegistrationMenu(run) {
+  const detailUrl = run?.artifacts?.report || run?.artifacts?.summary || run?.artifacts?.metadata || '';
+  const detailType = run?.artifacts?.report ? 'link' : 'text';
+  const detailTitle = run?.artifacts?.report ? '' : (run?.artifacts?.summary ? t('reg3d.summaryTitle') : t('reg3d.metadataTitle'));
+  const detailDesc = run?.artifacts?.report ? '' : (run?.artifacts?.summary ? t('reg3d.summaryDesc') : t('reg3d.metadataDesc'));
+  const pinLabel = t('reg3d.pinReport');
+  return `
+    <div class="registration-menu-wrap" data-registration-menu="${escapeHtml(run.name || '')}">
+      <button
+        class="registration-menu-trigger"
+        type="button"
+        aria-label="${escapeHtml(t('reg3d.menu'))}"
+        data-registration-menu-btn="${escapeHtml(run.name || '')}"
+      >⋯</button>
+      <div class="registration-menu-dropdown">
+        <button
+          type="button"
+          class="registration-menu-item"
+          data-registration-detail="${escapeHtml(run.name || '')}"
+          data-detail-url="${escapeHtml(detailUrl)}"
+          data-detail-type="${escapeHtml(detailType)}"
+          data-detail-title="${escapeHtml(detailTitle)}"
+          data-detail-desc="${escapeHtml(detailDesc)}"
+        >${escapeHtml(t('reg3d.detailInfo'))}</button>
+        <button
+          type="button"
+          class="registration-menu-item"
+          data-registration-delete="${escapeHtml(run.name || '')}"
+        >${escapeHtml(t('reg3d.deleteBad'))}</button>
+        <button
+          type="button"
+          class="registration-menu-item"
+          data-registration-pin="${escapeHtml(run.name || '')}"
+        >${escapeHtml(pinLabel)}</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderRegistrationRunCard(run) {
+  const metrics = run.metrics || {};
+  const pre = run.pre_metrics || {};
+  const staining = run.staining_stats || {};
+  const targetText = run.target_um === null || run.target_um === undefined
+    ? 'native'
+    : `${formatFixed(run.target_um, 1)} um`;
+  return `
+    <article class="registration-card">
+      <div class="registration-card-header">
+        <div class="registration-card-header-main">
+          <div class="registration-card-title">${escapeHtml(run.input_name || run.name || 'Unnamed run')}</div>
+          <div class="registration-card-subtitle">${escapeHtml(run.verdict_body || '')}</div>
+        </div>
+        <div class="registration-card-header-side">
+          ${run.pinned ? `<span class="registration-pill registration-pill-pinned">${escapeHtml(t('reg3d.pinned'))}</span>` : ''}
+          <span class="registration-badge ${escapeHtml(run.verdict_tone || 'neutral')}">${escapeHtml(run.verdict_title || '')}</span>
+          ${renderRegistrationMenu(run)}
+        </div>
+      </div>
+
+      <div class="registration-meta">
+        <div class="registration-meta-label">${escapeHtml(t('reg3d.pipeline'))}</div>
+        <div class="registration-meta-value">${escapeHtml(run.pipeline_label || '-')}</div>
+        <div class="registration-meta-label">${escapeHtml(t('reg3d.hemisphere'))}</div>
+        <div class="registration-meta-value">${escapeHtml(run.hemisphere || '-')}</div>
+        <div class="registration-meta-label">${escapeHtml(t('reg3d.target'))}</div>
+        <div class="registration-meta-value">${escapeHtml(targetText)}</div>
+        <div class="registration-meta-label">${escapeHtml(t('reg3d.updated'))}</div>
+        <div class="registration-meta-value">${escapeHtml(formatRunTimestamp(run.updated_at))}</div>
+      </div>
+
+      <div class="registration-preview-grid">
+        ${renderRegistrationPreview(run?.artifacts?.overview_before, run?.artifacts?.overview_before ? t('reg3d.before') : t('reg3d.noBefore'))}
+        ${renderRegistrationPreview(run?.artifacts?.overview, t('reg3d.after'))}
+      </div>
+
+      <div class="registration-metrics-grid">
+        ${renderRegistrationMetric('NCC', metrics.NCC, pre.NCC)}
+        ${renderRegistrationMetric('SSIM', metrics.SSIM, pre.SSIM)}
+        ${renderRegistrationMetric('Dice', metrics.Dice, pre.Dice)}
+        ${renderRegistrationMetric('MSE', metrics.MSE, pre.MSE, { lowerIsBetter: true })}
+        ${renderRegistrationMetric(t('reg3d.staining'), staining.staining_rate, undefined, { formatter: (v) => formatPercent(v) })}
+        ${renderRegistrationMetric(t('reg3d.coverage'), staining.atlas_coverage, undefined, { formatter: (v) => formatPercent(v) })}
+      </div>
+    </article>
+  `;
+}
+
+async function openRegistrationText(url, title, description) {
+  try {
+    const resp = await fetch(withActiveJobQuery(url));
+    if (!resp.ok) throw new Error('request failed');
+    const text = await resp.text();
+    const capped = text.length > 20000 ? `${text.slice(0, 20000)}\n...(truncated)` : text;
+    openTextModal(title, description, capped);
+  } catch (err) {
+    console.error('Open registration text failed:', err);
+    showToast(t('toast.runDetailsFailed'), 'warning');
+  }
+}
+
+function closeRegistrationMenus() {
+  document.querySelectorAll('.registration-menu-wrap.open').forEach((el) => el.classList.remove('open'));
+}
+
+function toggleRegistrationMenu(runName) {
+  const target = Array.from(document.querySelectorAll('.registration-menu-wrap')).find(
+    (el) => el.dataset.registrationMenu === runName
+  );
+  if (!target) return;
+  const nextState = !target.classList.contains('open');
+  closeRegistrationMenus();
+  if (nextState) target.classList.add('open');
+}
+
+async function pinRegistrationRun(runName) {
+  try {
+    const resp = await fetch(withActiveJobQuery(`/api/outputs/registration-run/${encodeURIComponent(runName)}/pin`), {
+      method: 'POST',
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      throw new Error(data?.error || 'pin failed');
+    }
+    showToast(t('reg3d.pinDone'), 'success', 2500);
+    await refreshRegistrationRuns();
+  } catch (err) {
+    console.error('Pin registration run failed:', err);
+    showToast(`${t('toast.runDetailsFailed')} ${err?.message || ''}`.trim(), 'warning');
+  }
+}
+
+async function deleteBadRegistrationRun(runName) {
+  if (!window.confirm(t('reg3d.deleteConfirm'))) return;
+  try {
+    const resp = await fetch(withActiveJobQuery(`/api/outputs/registration-run/${encodeURIComponent(runName)}/delete-bad`), {
+      method: 'POST',
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      throw new Error(data?.error || 'delete failed');
+    }
+    showToast(t('reg3d.deleteDone'), 'success', 2500);
+    await refreshRegistrationRuns();
+  } catch (err) {
+    console.error('Delete registration run failed:', err);
+    showToast(`${t('toast.runDetailsFailed')} ${err?.message || ''}`.trim(), 'warning');
+  }
+}
+
+async function refreshRegistrationRuns() {
+  const grid = document.getElementById('registrationRunsGrid');
+  const empty = document.getElementById('registrationRunsEmpty');
+  if (!grid || !empty) return;
+  try {
+    const res = await fetch(withActiveJobQuery('/api/outputs/registration-runs')).then(r => r.json());
+    const runs = Array.isArray(res?.runs) ? res.runs : [];
+    if (!res.ok || runs.length === 0) {
+      grid.innerHTML = '';
+      empty.classList.remove('hidden');
+      return;
+    }
+
+    empty.classList.add('hidden');
+    grid.innerHTML = runs.map(renderRegistrationRunCard).join('');
+
+    grid.querySelectorAll('[data-lightbox-src]').forEach((img) => {
+      img.onclick = () => openLightbox(img.dataset.lightboxSrc, img.dataset.lightboxCaption || '');
+    });
+    grid.querySelectorAll('[data-registration-menu-btn]').forEach((btn) => {
+      btn.onclick = (event) => {
+        event.stopPropagation();
+        toggleRegistrationMenu(btn.dataset.registrationMenuBtn || '');
+      };
+    });
+    grid.querySelectorAll('[data-registration-detail]').forEach((btn) => {
+      btn.onclick = () => {
+        closeRegistrationMenus();
+        const detailType = btn.dataset.detailType || 'link';
+        const detailUrl = btn.dataset.detailUrl || '';
+        if (!detailUrl) return;
+        if (detailType === 'text') {
+          openRegistrationText(detailUrl, btn.dataset.detailTitle || '', btn.dataset.detailDesc || '');
+          return;
+        }
+        window.open(withActiveJobQuery(detailUrl), '_blank');
+      };
+    });
+    grid.querySelectorAll('[data-registration-delete]').forEach((btn) => {
+      btn.onclick = () => {
+        closeRegistrationMenus();
+        deleteBadRegistrationRun(btn.dataset.registrationDelete || '');
+      };
+    });
+    grid.querySelectorAll('[data-registration-pin]').forEach((btn) => {
+      btn.onclick = () => {
+        closeRegistrationMenus();
+        pinRegistrationRun(btn.dataset.registrationPin || '');
+      };
+    });
+  } catch (err) {
+    console.error('Refresh 3D registration runs failed:', err);
+    grid.innerHTML = '';
+    empty.classList.remove('hidden');
+  }
+}
+
+document.getElementById('refreshRegistrationRunsBtn').onclick = refreshRegistrationRuns;
+document.addEventListener('click', () => closeRegistrationMenus());
+
+// ================================================================
 // INIT
 // ── Slice progress bar (sidebar, always visible) ─────────────────────────────
 function _updateSliceProgressBar(done, total) {
@@ -1532,7 +2398,10 @@ function _updateSliceProgressBar(done, total) {
   if (!wrap) return;
   if (done === 0 && total === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
-  txt.textContent = `${done} / ${total || '?'}`;
+  const etaSeconds = getRunEtaSeconds({ running: state.running, slicesDone: done, slicesTotal: total, startEpoch: state.startEpoch });
+  txt.textContent = etaSeconds != null
+    ? `${done} / ${total || '?'} · ${t('progress.eta', { eta: formatEtaSeconds(etaSeconds) })}`
+    : `${done} / ${total || '?'}`;
   const pct = total > 0 ? Math.round(done / total * 100) : 0;
   bar.style.width = pct + '%';
   // Change color when complete
@@ -1545,13 +2414,17 @@ function _updateSliceProgressBar(done, total) {
 // (covers the background main.py pipeline case)
 async function _pollSliceProgress() {
   try {
-    const s = await fetch('/api/status').then(r => r.json());
+    const s = await fetch(withActiveJobQuery('/api/status')).then(r => r.json());
+    if (Boolean(s.running) !== state.running) setRunning(Boolean(s.running));
+    state.startEpoch = Number(s.startEpoch || (s.running ? state.startEpoch : 0) || 0) || null;
     _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
   } catch {}
 }
 // Check on load + every 30s
 _pollSliceProgress();
 setInterval(_pollSliceProgress, 30000);
+refreshErrorLog();
+setInterval(refreshErrorLog, 5000);
 
 // ================================================================
 async function init() {
@@ -2419,7 +3292,7 @@ function updateManualPairsTable() {
   manualPairsBody.innerHTML = '';
   manualState.pairs.forEach((p, i) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i+1}</td><td>(${Math.round(p.real_x)}, ${Math.round(p.real_y)})</td><td>(${Math.round(p.atlas_x)}, ${Math.round(p.atlas_y)})</td><td><button onclick="removeManualPair(${i})" style="background:transparent;color:var(--danger);border:none;cursor:pointer;">✕?/button></td>`;
+  tr.innerHTML = `<td>${i+1}</td><td>(${Math.round(p.real_x)}, ${Math.round(p.real_y)})</td><td>(${Math.round(p.atlas_x)}, ${Math.round(p.atlas_y)})</td><td><button type="button" aria-label="Remove landmark pair ${i+1}" onclick="removeManualPair(${i})" style="background:transparent;color:var(--danger);border:none;cursor:pointer;">&times;</button></td>`;
     manualPairsBody.appendChild(tr);
   });
   manualPairsWrap.classList.toggle('hidden', manualState.pairs.length === 0);
@@ -2504,7 +3377,7 @@ async function refreshFileList() {
   const grid  = document.getElementById('outputFileGrid');
   const empty = document.getElementById('outputFileEmpty');
   try {
-    const res = await fetch('/api/outputs/file-list').then(r => r.json());
+  const res = await fetch(withActiveJobQuery('/api/outputs/file-list')).then(r => r.json());
     if (!res.ok || res.files.length === 0) { grid.innerHTML = ''; empty.classList.remove('hidden'); return; }
     empty.classList.add('hidden');
     grid.innerHTML = '';
@@ -2523,12 +3396,12 @@ async function refreshFileList() {
 
 async function handleOutputFileClick(f) {
   if (f.ext === '.png') {
-    openLightbox(`/api/outputs/named/${f.name}?${Date.now()}`, f.name);
+        openLightbox(withActiveJobQuery(`/api/outputs/named/${f.name}`, { ts: Date.now() }), f.name);
   } else if (f.ext === '.csv' || f.ext === '.json' || f.ext === '.txt') {
     try {
-      const text = await fetch(`/api/outputs/named/${f.name}`).then(r => r.text());
-      document.getElementById('methodsText').textContent = text.slice(0, 8000) + (text.length > 8000 ? '\n...(truncated)' : '');
-      document.getElementById('methodsModal').classList.remove('hidden');
+        const text = await fetch(withActiveJobQuery(`/api/outputs/named/${f.name}`)).then(r => r.text());
+      const capped = text.slice(0, 8000) + (text.length > 8000 ? '\n...(truncated)' : '');
+      openTextModal(f.name, t('outputs.previewDesc'), capped);
     } catch {}
   }
 }

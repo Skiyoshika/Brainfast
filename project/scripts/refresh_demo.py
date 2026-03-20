@@ -17,6 +17,7 @@ import argparse
 import sys
 from pathlib import Path
 
+import numpy as np
 import tifffile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -125,13 +126,15 @@ def _make_cell_chart():
 
 
 def _make_best_slice(idx: int):
-
-    import numpy as np
-    import tifffile
-    from make_demo_panel import _crop_to_brain, _vibrant_recolor
     from PIL import Image as Im
     from PIL import ImageDraw as ID
     from PIL import ImageFont as IF
+    from scripts.make_demo_panel import (
+        _apply_tissue_alpha,
+        _crop_to_brain,
+        _tissue_support_from_raw,
+        _vibrant_recolor,
+    )
 
     reg_dir = OUTPUT_DIR / "registered_slices"
     ov_path = reg_dir / f"slice_{idx:04d}_overlay.png"
@@ -157,10 +160,18 @@ def _make_best_slice(idx: int):
         np.uint8
     )
     raw_rgb = np.stack([raw_norm] * 3, axis=-1)
+    tmask, talpha = (None, None)
+    if raw_files:
+        try:
+            tmask, talpha = _tissue_support_from_raw(raw_files[min(idx, len(raw_files) - 1)])
+        except Exception:
+            tmask, talpha = (None, None)
 
-    vib = _vibrant_recolor(ov, lbl)
-    raw_crop = _crop_to_brain(raw_rgb, pad=25)
-    vib_crop = _crop_to_brain(vib, pad=25)
+    vib = _vibrant_recolor(ov, lbl, tissue_mask=tmask)
+    if talpha is not None:
+        vib = _apply_tissue_alpha(vib, talpha)
+    raw_crop = _crop_to_brain(raw_rgb, pad=25, mask=tmask)
+    vib_crop = _crop_to_brain(vib, pad=25, mask=tmask)
     H = max(raw_crop.shape[0], vib_crop.shape[0])
 
     def rh(arr, h):
@@ -230,7 +241,6 @@ def main():
     if args.slice is not None:
         best_idx = args.slice
     else:
-        import numpy as np
         from PIL import Image
 
         best_idx, best_score = 0, -1.0

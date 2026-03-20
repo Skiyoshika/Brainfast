@@ -1,306 +1,204 @@
-# Brainfast / 脑图谱配准、人工校准与细胞计数工具
+# Brainfast
 
-## Overview / 项目定位
+Chinese documentation index: [docs/README.zh-CN.md](docs/README.zh-CN.md)
 
-Brainfast 解决的是一个很具体的问题：
-把真实显微切片和 Allen atlas 对齐，并在“能人工复审、能持续学习、能产出统计表”的前提下完成整套工作流。
+## Index
+- [What Brainfast Does](#what-brainfast-does)
+- [Current Scope](#current-scope)
+- [Repository Layout](#repository-layout)
+- [Requirements](#requirements)
+- [Setup](#setup)
+- [Quick Start](#quick-start)
+- [Main Workflows](#main-workflows)
+- [Key Outputs](#key-outputs)
+- [Cell Counting Notes](#cell-counting-notes)
+- [Testing](#testing)
+- [Other Documents](#other-documents)
+- [License](#license)
 
-如果你只想快速跑起来，看下面的“3 分钟开始”。
+## What Brainfast Does
 
-如果你准备继续开发，看“架构图”“项目结构”“当前边界”这几个部分。
+Brainfast is a local workflow for atlas registration and cell counting from microscopy TIFF data.
 
-Brainfast is a practical workflow for atlas alignment, manual correction, calibration learning, and whole-brain cell counting from microscopy TIFF data.
+It covers four practical jobs:
+- 2D slice registration against the Allen atlas
+- manual review and calibration
+- 3D volume registration with report generation
+- Cellpose-based cell detection, deduplication, region mapping, and count aggregation
 
-## Why This Repo Exists / 这个仓库是干什么的
+The project is built for a single workstation. It is not a multi-user service.
 
-- 不只是做一张叠加图，而是要把结果走到 `CSV + QC + 可复核样本`
-- 不只追求“看起来对齐”，还要让脑区映射和层级统计尽量可信
-- 不把人工修正浪费掉，而是沉淀成训练样本继续改进参数
+## Current Scope
 
-## Architecture / 新架构图
+The repository currently supports two main processing paths:
 
-```mermaid
-flowchart LR
-  subgraph UI["Interaction Layer / 交互层"]
-    A["One-Click / Pro UI<br/>一键模式 / 专业模式 / 人工复审"]
-  end
+1. A slice-based pipeline for detection, mapping, and region counts.
+2. A 3D registration pipeline that generates per-run reports, overview images, and QC metrics.
 
-  subgraph APP["Application Layer / 应用层"]
-    B["Flask API + Job Workspace<br/>参数校验 / 文件编排 / 任务隔离"]
-    C["Config + Env Validation<br/>配置与环境检查"]
-  end
+The desktop UI is the main entry point for day-to-day use. The Python scripts remain the most direct way to validate a run, reproduce results, and debug pipeline behavior.
 
-  subgraph REG["Registration Core / 配准核心"]
-    D["Atlas Auto-Pick<br/>自动选层"]
-    E["Tissue-Guided Warp<br/>组织引导线性与非线性配准"]
-    F["Registered Label Postprocess<br/>裁剪 / 拓扑清理 / 边界平滑"]
-    G["Overlay Renderer + Hover Query<br/>叠加渲染 / 鼠标悬停脑区信息"]
-  end
+## Repository Layout
 
-  subgraph LEARN["Calibration Learning Loop / 校准学习闭环"]
-    H["Manual Review<br/>人工复审"]
-    I["Liquify / Manual Landmarks<br/>液化拖拽 / 手动地标"]
-    J["Training Sample Pack<br/>Ori + Label + Show"]
-    K["learn_from_trainset.py"]
-    L["Tuned Params JSON"]
-  end
-
-  subgraph COUNT["Counting & Quantification / 计数与量化"]
-    M["Cell Detection"]
-    N["Cross-slice Dedup"]
-    O["Map Cells to Registered Label"]
-    P["Structure Tree Aggregation"]
-    Q["QC Export"]
-  end
-
-  subgraph OUT["Artifacts / 输出"]
-    R["Preview PNG / Registered Label / CSV / QC / Tuned Params"]
-  end
-
-  A --> B
-  B --> C
-  C --> D --> E --> F --> G --> R
-  G --> H --> I --> J --> K --> L --> E
-  C --> M --> N --> O --> P --> Q --> R
-```
-
-## How To Read This Architecture / 这张图该怎么理解
-
-- 左边是你看到的界面。你点按钮，不是直接改算法，而是先进入 Flask 服务层。
-- 中间是两条主链路：
-  - 配准链：自动选层 -> 配准 -> 标签清理 -> 叠加预览
-  - 计数链：检测 -> 去重 -> 映射 -> 聚合 -> QC
-- 上面那条回路是“人工修正不会白做”的核心：
-  - 你液化或手动打点修正后的结果，会保存成 `Ori + Label + Show`
-  - 后续训练脚本优先用 `Label.tif` 学习，而不是学 UI 颜色线条
-- 输出层不只是一张图，而是整套可追溯结果：预览图、注册标签、统计表、QC、调参结果
-
-## 3-Minute Start / 3 分钟开始
-
-### A. 推荐：先做环境检查
-
-```bash
-cd project
-python scripts/check_env.py --config configs/run_config.template.json
-```
-
-如果你准备跑真实批处理，可以加：
-
-```bash
-python scripts/check_env.py --config configs/run_config.template.json --require-input-dir
-```
-
-### B. 启动图形界面
-
-```bash
-cd frontend
-python server.py
-```
-
-浏览器打开：`http://127.0.0.1:8787`
-
-### C. 命令行最小跑通
-
-```bash
-cd project
-python scripts/main.py --config configs/run_config.template.json --make-sample-tiff outputs/sample_input
-python scripts/main.py --config configs/run_config.template.json --run-real-input outputs/sample_input
-```
-
-## Which Mode Should I Use? / 我该选哪种模式
-
-| 场景 | 推荐模式 | 为什么 |
-| --- | --- | --- |
-| 第一次接触项目，只想先把流程跑通 | 一键模式 | 参数少，能更快看到结果 |
-| 已经知道 atlas、切片、配准策略要怎么调 | 专业模式 | 可以完整控制路径、参数和显示方式 |
-| 自动配准接近正确，但边界还有局部偏差 | 人工复审 + Liquify | 修局部边界最快 |
-| 关键脑区边界偏差明显，需要明确控制对应点 | 手动地标 | 比液化更适合结构级纠偏 |
-
-## Typical Workflow / 推荐操作流程
-
-### 如果你是实验使用者
-
-1. 先填 `real slice`、`atlas annotation`、`structure CSV`
-2. 点击 `Auto Pick`，让系统先找到最可能的 atlas 切片
-3. 点击 `Refresh Preview`，看初始叠加效果
-4. 如果自动结果还行，直接做 `AI Landmark Registration`
-5. 如果边界局部不顺，进入人工复审：
-   - 小范围边界修正，用 `Liquify`
-   - 明确对应点修正，用 `Manual Landmarks`
-6. 点击 `Save Calibration + Learn`
-7. 跑整批计数，最后看 `cell_counts_leaf.csv`、`cell_counts_hierarchy.csv`、`slice_registration_qc.csv`
-
-### 如果你是开发者
-
-1. 先跑环境检查
-2. 用 UI 或 CLI 复现一个最小样例
-3. 先看 `outputs/slice_registration_qc.csv`
-4. 再看注册标签和统计表有没有偏差
-5. 改算法后跑回归测试，避免把现有链路打坏
-
-## What Each Important Button Does / 几个关键按钮到底在做什么
-
-| 按钮 | 背后做的事 |
+| Path | Purpose |
 | --- | --- |
-| `Auto Pick` | 在 `annotation_25.nii.gz` 里挑最接近当前真实切片的 atlas 层 |
-| `Refresh Preview` | 读取真实切片和 atlas 标签，完成配准、标签后处理、叠加渲染 |
-| `AI Landmark Registration` | 基于自动或手动点对做进一步对齐 |
-| `Liquify` | 直接在当前已对齐标签上做局部形变微调 |
-| `Save Calibration + Learn` | 把人工修正固化成训练样本，并触发自动调参 |
-| `Run Pipeline` | 跑整套检测、去重、脑区映射、层级聚合和 QC 导出 |
+| `configs/` | Runtime configs, atlas metadata, and sample configs |
+| `data/` | Local sample slices used for tests and demos |
+| `docs/` | Additional workflow notes |
+| `frontend/` | Flask app, static UI, desktop launcher scripts |
+| `outputs/` | Registration reports, counts, QC files, and temporary runtime artifacts |
+| `scripts/` | Registration, detection, mapping, report generation, and utility scripts |
+| `tests/` | Unit and integration tests |
+| `train_data_set/` | Saved calibration samples used for parameter learning |
 
-## Calibration Learning Loop / 校准学习闭环
+## Requirements
 
-### Training Sample Format / 训练样本格式
+- Python 3.10 or newer
+- Windows is the primary target environment
+- An NVIDIA GPU is strongly recommended for Cellpose-based counting
+- Atlas assets in this repository, including `annotation_25.nii.gz` and the Allen structure CSV/JSON files
 
-- `N_Ori.png`
-  - 原始真实切片的显示图
-- `N_Label.tif`
-  - 人工确认后的真实标签真值
-- `N_Show.png`
-  - 给人看的预览叠加图，主要用于兼容旧样本和人工检查
+## Setup
 
-### Why This Matters / 为什么要这样设计
+All commands below assume the repository root, for example `D:\Brainfast`.
 
-旧做法容易学到 UI 颜色和边界线，而不是学到“真实修正后的标签”。
-
-现在训练器会优先读取 `Label.tif`，只有旧样本没有标签时才回退到 `Show.png`。
-
-### Tuning Command / 调参命令
-
-```bash
-cd project
-python scripts/learn_from_trainset.py --train-dir train_data_set --annotation annotation_25.nii.gz --out-json outputs/trainset_tuned_params.json
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -e ".[advanced,dev]"
 ```
 
-如果参数很多，也可以在 PowerShell 里自行换行。
+Notes:
+- `advanced` installs the optional packages used for Cellpose, ANTs, and SimpleITK-based processing.
+- `dev` installs the test and lint tools.
+- If you only need the UI and basic scripts, `pip install -e .` is enough.
 
-## Main Outputs / 你最关心的输出
+## Quick Start
 
-| 文件 | 用途 |
+### 1. Validate the environment
+
+```powershell
+python project\scripts\check_env.py --config project\configs\run_config.template.json
+```
+
+### 2. Start the UI
+
+Windows launcher:
+
+```powershell
+.\Start_Brainfast.bat
+```
+
+Direct Python entry:
+
+```powershell
+python project\frontend\server.py
+```
+
+Then open `http://127.0.0.1:8787`.
+
+### 3. Run a sample 2D pipeline from the command line
+
+```powershell
+python project\scripts\main.py --config project\configs\run_config_35_quick.json
+```
+
+### 4. Run a sample 3D registration
+
+```powershell
+python project\scripts\run_3d_registration.py --config project\configs\run_config_3d_ants_sample.json
+```
+
+## Main Workflows
+
+### UI Workflow
+
+1. Start Brainfast.
+2. Choose the input slices or volume.
+3. Run registration or counting from the UI.
+4. Review the Results page, registration report cards, and QC plots.
+5. Use manual correction tools only when the automatic result is not good enough.
+
+### 2D Slice Pipeline
+
+The slice pipeline does the following:
+
+1. Extract the active channel from source TIFF files.
+2. Register each slice against the atlas.
+3. Detect cells on the selected slices.
+4. Deduplicate detections across neighboring slices.
+5. Map detections into atlas regions.
+6. Write leaf-level counts, hierarchy counts, and QC files.
+
+### 3D Registration Pipeline
+
+The 3D path does the following:
+
+1. Convert a stack TIFF or a `z*.tif` folder into a NIfTI volume.
+2. Crop the Allen template and annotation to the target AP range and hemisphere.
+3. Register the volume with ANTs or Elastix.
+4. Optionally refine the result with the Laplacian step.
+5. Generate a report page, an overview image, metrics, and staining statistics.
+
+### Manual Calibration Loop
+
+Manual review is part of the workflow, not an afterthought.
+
+- Use liquify and landmark tools when automatic alignment is close but not acceptable.
+- Save useful corrections into `train_data_set/`.
+- Re-run parameter learning when the sample set becomes large enough to justify it.
+
+## Key Outputs
+
+| File or folder | Purpose |
 | --- | --- |
-| `outputs/overlay_preview.png` | 当前预览叠加图 |
-| `outputs/overlay_label_preview.tif` | 当前预览对应的注册标签 |
-| `outputs/cells_detected.csv` | 原始检测结果 |
-| `outputs/cells_dedup.csv` | 去重后的细胞结果 |
-| `outputs/cells_mapped.csv` | 带脑区映射信息的细胞结果 |
-| `outputs/cell_counts_leaf.csv` | 叶子脑区统计 |
-| `outputs/cell_counts_hierarchy.csv` | 层级脑区统计 |
-| `outputs/slice_qc.csv` | 切片级基础 QC |
-| `outputs/slice_registration_qc.csv` | 每张切片的自动选层 / 配准质量 / 耗时记录 |
-| `outputs/trainset_tuned_params.json` | 自动学习得到的参数 |
-| `outputs/manual_calibration/` | 手工校准历史样本 |
+| `outputs/cells_detected.csv` | Raw detections before cross-slice deduplication |
+| `outputs/cells_dedup.csv` | Deduplicated detections |
+| `outputs/cells_mapped.csv` | Detections mapped to atlas regions |
+| `outputs/cell_counts_leaf.csv` | Counts at the leaf region level |
+| `outputs/cell_counts_hierarchy.csv` | Counts aggregated through the Allen structure tree |
+| `outputs/detection_summary.json` | Detector choice, sampling mode, and detection totals |
+| `outputs/detection_samples/` | Three real slice overlays used as confidence checks for counting |
+| `outputs/slice_registration_qc.csv` | Per-slice registration scores and timing |
+| `outputs/index.html` | Generated index of 3D registration reports |
+| `outputs/<run_name>/report.html` | Detailed report page for one 3D registration run |
 
-### About Job Isolation / 关于 job 隔离
+The same report content is also surfaced in the Results page inside the frontend.
 
-预览、液化、人工校准相关输出已经支持按 `jobId` 写入：
+## Cell Counting Notes
 
-- 默认仍可使用 `outputs/`
-- 当 UI 带上 `jobId` 时，会写到 `outputs/jobs/<jobId>/`
+- The current default path uses Cellpose on single slices, not on merged slice averages.
+- If a config explicitly requests Cellpose and Cellpose is unavailable, the run should fail instead of silently switching to a blob detector.
+- GPU execution is strongly preferred. CPU execution is possible, but full-size raw slices are slow.
+- The Results page includes three sample detection overlays so you can inspect whether the count looks believable before trusting the totals.
 
-这样至少能避免多个预览会话互相覆盖同一张 `overlay_preview.png`。
+## Testing
 
-## Repository Layout / 仓库结构
+Run the unit tests:
 
-| 路径 | 说明 |
-| --- | --- |
-| `configs/` | 运行配置、Allen 结构树与结构元数据 |
-| `scripts/` | 配准、渲染、映射、聚合、训练、测试脚本 |
-| `frontend/` | Flask 服务、网页 UI、桌面打包 |
-| `outputs/` | 运行结果、调参结果、QC 导出 |
-| `train_data_set/` | 用于自动学习的样本库 |
-| `tests/` | 当前最小回归测试集 |
-
-## Validation & Regression Tests / 验证与回归
-
-### 环境检查
-
-```bash
-cd project
-python scripts/check_env.py --config configs/run_config.template.json
+```powershell
+pytest project\tests\unit -v
 ```
 
-### 最小回归测试
+Run the full test suite:
 
-```bash
-cd project
-python -m unittest discover -s tests -v
+```powershell
+pytest project\tests -v
 ```
 
-### 调参后批量对比测试
+A practical validation pass before a real run:
 
-```bash
-cd project
-python -m scripts.run_overlay_test --real "<real_c1.tif>" --real "<real_c0.tif>" --annotation "annotation_25.nii.gz" --outputs-root "outputs" --tuned-params-json "outputs/trainset_tuned_params.json"
+```powershell
+python project\scripts\check_env.py --config project\configs\run_config.template.json --require-input-dir
 ```
 
-## Current Boundaries / 当前边界与诚实说明
+## Other Documents
 
-这部分很重要，避免你把它误判成“已经完全云端化的成熟产品”。
+- [Chinese documentation index](docs/README.zh-CN.md)
+- [Frontend notes](frontend/README.md)
+- [Internal 3D sample workflow](docs/internal_3d_sample_workflow.md)
+- [Root repository landing page](../README.md)
 
-### 当前已经比较可靠的部分
+## License
 
-- 配准预览主链路
-- 注册后标签直接映射到脑区
-- 基于 Allen 真实结构树的层级聚合
-- `Label.tif` 优先的训练闭环
-- 最小回归测试与切片级耗时记录
-
-### 当前仍然偏弱的部分
-
-- Flask 服务层仍然偏大，`server.py` 还需要进一步拆分
-- `overlay_render.py` 已拆出一部分，但注册核心仍然不够轻
-- 批处理运行状态和自动学习状态还不是正式 job queue
-- 目前更适合单机研究工作流，不建议直接当成完整云端多用户系统
-
-## Troubleshooting / 常见问题
-
-### 1. 预览失败
-
-先检查：
-
-- `realPath` 是否存在
-- `labelPath` 或 `annotation_25.nii.gz` 是否存在
-- `structure CSV` 是否可读
-- `python scripts/check_env.py --config ...` 是否通过
-
-### 2. 自动选层结果不理想
-
-- 确认 `pixel_size_um_xy` 是否正确
-- 先尝试切换切片面或检查真实切片是否选对 Z
-- 看 `slice_registration_qc.csv` 里的 `best_score`
-
-### 3. 叠加图“看着还行”，但统计不放心
-
-不要只看 PNG。
-
-请同时检查：
-
-- `overlay_label_preview.tif`
-- `cells_mapped.csv`
-- `cell_counts_leaf.csv`
-- `cell_counts_hierarchy.csv`
-
-### 4. 学习效果不稳定
-
-- 先确认训练样本里有没有 `*_Label.tif`
-- 检查样本是不是都集中在同一种切片形态
-- 不要把明显失败的人工校准结果直接收进训练集
-
-## Additional Docs / 其他文档
-
-- [frontend/README.md](frontend/README.md): 前端启动与桌面打包说明
-- `ATLAS_OVERLAY_GUIDE.md`: 简洁操作清单
-- `USER_MANUAL.md`: 更详细的中文使用手册
-
-## License / 许可证
-
-Brainfast is released under GNU AGPL-3.0.
-
-Brainfast 采用 GNU AGPL-3.0 许可证发布。
-
-See [`../LICENSE`](../LICENSE) for full text.
-
----
-
-Last updated / 最后更新: 2026-03-13
+Brainfast is distributed under the GNU AGPL-3.0 license. See [../LICENSE](../LICENSE) for the full text.

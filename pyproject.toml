@@ -23,6 +23,7 @@ dependencies = [
 # pip install -e ".[advanced]"  — enables CellPose GPU detection
 advanced = [
     "SimpleITK>=2.3",
+    "antspyx>=0.6.3",
     "cellpose>=2.2",
 ]
 # pip install -e ".[desktop]"  — for building a Windows EXE

@@ -7,10 +7,13 @@ import json
 import threading
 from pathlib import Path
 
-from project.frontend.api_errors import ERR_INTERNAL, ERR_NOT_FOUND, ERR_INVALID_INPUT, ERR_FILE_NOT_FOUND
 from flask import Blueprint, jsonify, send_from_directory
 
 import project.frontend.server_context as ctx
+from project.frontend.api_errors import (
+    ERR_INTERNAL,
+    ERR_NOT_FOUND,
+)
 from project.frontend.blueprints.api_outputs import _registration_run_dirs
 from project.frontend.services.demo_service import (
     build_cell_summary,
@@ -101,12 +104,24 @@ def outputs_demo_best_slice():
                 generate_registration_best_slice,
             )
         except Exception as exc:
-            return jsonify({"ok": False, "error": f"3D best-slice generation failed: {exc}", "error_code": ERR_INTERNAL}), 500
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": f"3D best-slice generation failed: {exc}",
+                    "error_code": ERR_INTERNAL,
+                }
+            ), 500
 
     outputs_root = _outputs_root()
     fp = outputs_root / "demo_best_slice.jpg"
     if not fp.exists():
-        return jsonify({"ok": False, "error": "Best-slice image not generated yet", "error_code": ERR_NOT_FOUND}), 404
+        return jsonify(
+            {
+                "ok": False,
+                "error": "Best-slice image not generated yet",
+                "error_code": ERR_NOT_FOUND,
+            }
+        ), 404
     return send_from_directory(str(outputs_root), fp.name)
 
 
@@ -148,7 +163,9 @@ def outputs_cell_chart():
     hier_path = outputs_root / "cell_counts_hierarchy.csv"
     cells_path = outputs_root / "cells_mapped.csv"
     if not hier_path.exists():
-        return jsonify({"ok": False, "error": "No hierarchy CSV yet", "error_code": ERR_NOT_FOUND}), 404
+        return jsonify(
+            {"ok": False, "error": "No hierarchy CSV yet", "error_code": ERR_NOT_FOUND}
+        ), 404
     sources = [hier_path]
     if cells_path.exists():
         sources.append(cells_path)
@@ -158,7 +175,13 @@ def outputs_cell_chart():
         try:
             generate_cell_chart(hier_path, chart_path, ctx.PROJECT_ROOT)
         except Exception as exc:
-            return jsonify({"ok": False, "error": f"Chart generation failed: {exc}", "error_code": ERR_INTERNAL}), 500
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": f"Chart generation failed: {exc}",
+                    "error_code": ERR_INTERNAL,
+                }
+            ), 500
     if not chart_path.exists():
         return jsonify({"ok": False, "error": "Chart not found", "error_code": ERR_NOT_FOUND}), 404
     return send_from_directory(str(outputs_root), chart_path.name)
@@ -170,11 +193,19 @@ def outputs_cell_summary():
 
     hier_path = _outputs_root() / "cell_counts_hierarchy.csv"
     if not hier_path.exists():
-        return jsonify({"ok": False, "error": "No hierarchy CSV yet", "error_code": ERR_NOT_FOUND}), 404
+        return jsonify(
+            {"ok": False, "error": "No hierarchy CSV yet", "error_code": ERR_NOT_FOUND}
+        ), 404
     try:
         summary = build_cell_summary(hier_path)
     except Exception as exc:
-        return jsonify({"ok": False, "error": f"Cell summary generation failed: {exc}", "error_code": ERR_INTERNAL}), 500
+        return jsonify(
+            {
+                "ok": False,
+                "error": f"Cell summary generation failed: {exc}",
+                "error_code": ERR_INTERNAL,
+            }
+        ), 500
     return jsonify({"ok": True, "summary": summary})
 
 
@@ -241,7 +272,9 @@ def outputs_demo_comparison(slice_idx: int):
     data_dir = ctx.PROJECT_ROOT / "data" / "35_C0_demo"
     ov_path = reg_dir / f"slice_{slice_idx:04d}_overlay.png"
     if not ov_path.exists():
-        return jsonify({"ok": False, "error": f"slice {slice_idx} not found", "error_code": ERR_NOT_FOUND}), 404
+        return jsonify(
+            {"ok": False, "error": f"slice {slice_idx} not found", "error_code": ERR_NOT_FOUND}
+        ), 404
 
     out_path = outputs_root / f"compare_{slice_idx:04d}.jpg"
     try:
@@ -267,7 +300,13 @@ def outputs_demo_panel():
                 thumb_size=380,
             )
         except Exception as exc:
-            return jsonify({"ok": False, "error": f"3D panel generation failed: {exc}", "error_code": ERR_INTERNAL}), 500
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": f"3D panel generation failed: {exc}",
+                    "error_code": ERR_INTERNAL,
+                }
+            ), 500
 
     import subprocess
     import sys
@@ -305,7 +344,13 @@ def outputs_demo_panel():
                 capture_output=True,
             )
         except Exception as exc:
-            return jsonify({"ok": False, "error": f"Panel generation failed: {exc}", "error_code": ERR_INTERNAL}), 500
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": f"Panel generation failed: {exc}",
+                    "error_code": ERR_INTERNAL,
+                }
+            ), 500
     if not panel_path.exists():
         return jsonify({"ok": False, "error": "Panel not found", "error_code": ERR_NOT_FOUND}), 404
     return send_from_directory(str(outputs_root), panel_path.name)
@@ -321,7 +366,9 @@ def outputs_refresh_demo():
     run_dir = _latest_registration_run()
     script = ctx.PROJECT_ROOT / "scripts" / "refresh_demo.py"
     if run_dir is None and not script.exists():
-        return jsonify({"ok": False, "error": "refresh_demo.py not found", "error_code": ERR_NOT_FOUND}), 404
+        return jsonify(
+            {"ok": False, "error": "refresh_demo.py not found", "error_code": ERR_NOT_FOUND}
+        ), 404
 
     def _run():
         try:
@@ -429,7 +476,9 @@ def outputs_reg_stats():
 
     qc_path = _outputs_root() / "slice_registration_qc.csv"
     if not qc_path.exists():
-        return jsonify({"ok": False, "error": "No registration QC data yet", "error_code": ERR_INTERNAL})
+        return jsonify(
+            {"ok": False, "error": "No registration QC data yet", "error_code": ERR_INTERNAL}
+        )
     try:
         with qc_path.open(newline="", encoding="utf-8") as f:
             rows = list(csv.DictReader(f))

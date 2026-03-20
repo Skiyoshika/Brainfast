@@ -31,6 +31,7 @@ def validate_against_schema(cfg: dict[str, Any]) -> list[dict[str, str]]:
     except Exception:
         return []
 
+
 _PLACEHOLDER_STRINGS = {"", "todo", "tbd", "changeme", "required"}
 
 

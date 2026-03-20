@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
 import shutil
 from datetime import datetime
 from pathlib import Path
 
-from project.frontend.api_errors import ERR_INTERNAL, ERR_NOT_FOUND, ERR_INVALID_INPUT, ERR_FILE_NOT_FOUND
-import io
-import tempfile
-
 from flask import Blueprint, jsonify, send_file, send_from_directory
 
 import project.frontend.server_context as ctx
+from project.frontend.api_errors import (
+    ERR_INTERNAL,
+    ERR_NOT_FOUND,
+)
 
 bp = Blueprint("api_outputs", __name__, url_prefix="/api/outputs")
 RUN_STATE_FILE = ".registration_runs_state.json"
@@ -256,7 +257,9 @@ def outputs_leaf_channel(channel: str):
 def outputs_hierarchy():
     fp = _outputs_root() / "cell_counts_hierarchy.csv"
     if not fp.exists():
-        return jsonify({"ok": False, "error": "hierarchy output not found", "error_code": ERR_NOT_FOUND}), 404
+        return jsonify(
+            {"ok": False, "error": "hierarchy output not found", "error_code": ERR_NOT_FOUND}
+        ), 404
     return send_from_directory(fp.parent, fp.name)
 
 
@@ -264,7 +267,9 @@ def outputs_hierarchy():
 def outputs_registration_qc():
     fp = _outputs_root() / "slice_registration_qc.csv"
     if not fp.exists():
-        return jsonify({"ok": False, "error": "registration QC not found", "error_code": ERR_NOT_FOUND}), 404
+        return jsonify(
+            {"ok": False, "error": "registration QC not found", "error_code": ERR_NOT_FOUND}
+        ), 404
     return send_from_directory(fp.parent, fp.name)
 
 
@@ -368,7 +373,13 @@ def outputs_z_continuity():
     outputs_root = _outputs_root()
     qc_csv = outputs_root / "slice_registration_qc.csv"
     if not qc_csv.exists():
-        return jsonify({"ok": False, "error": "slice_registration_qc.csv not found", "error_code": ERR_NOT_FOUND}), 404
+        return jsonify(
+            {
+                "ok": False,
+                "error": "slice_registration_qc.csv not found",
+                "error_code": ERR_NOT_FOUND,
+            }
+        ), 404
 
     try:
         import pandas as pd
@@ -473,39 +484,61 @@ def outputs_ap_density():
 
     if not leaf_path.exists() or not qc_path.exists():
         return (
-            jsonify({"ok": False, "error": "Required CSV files not found. Run the pipeline first.", "error_code": ERR_NOT_FOUND}),
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "Required CSV files not found. Run the pipeline first.",
+                    "error_code": ERR_NOT_FOUND,
+                }
+            ),
             404,
         )
     try:
         leaf = pd.read_csv(leaf_path)
         qc = pd.read_csv(qc_path)
     except Exception as exc:
-        return jsonify({"ok": False, "error": f"Failed to read CSVs: {exc}", "error_code": ERR_INTERNAL}), 500
+        return jsonify(
+            {"ok": False, "error": f"Failed to read CSVs: {exc}", "error_code": ERR_INTERNAL}
+        ), 500
 
     # Identify the AP column — may be named best_z, atlas_z, ap_index, etc.
     ap_col = next((c for c in ("best_z", "atlas_z", "ap_index", "ap") if c in qc.columns), None)
     if ap_col is None or "slice_id" not in qc.columns or "slice_id" not in leaf.columns:
         return (
-            jsonify({"ok": False, "error": "Required columns not found in QC or leaf CSV.", "error_code": ERR_NOT_FOUND}),
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "Required columns not found in QC or leaf CSV.",
+                    "error_code": ERR_NOT_FOUND,
+                }
+            ),
             400,
         )
 
     # Aggregate leaf counts by slice_id
     per_slice = leaf.groupby("slice_id", as_index=False)["count"].sum()
     # Join with QC to get AP coordinate
-    merged = per_slice.merge(qc[["slice_id", ap_col]].drop_duplicates("slice_id"), on="slice_id", how="left")
+    merged = per_slice.merge(
+        qc[["slice_id", ap_col]].drop_duplicates("slice_id"), on="slice_id", how="left"
+    )
     merged = merged.dropna(subset=[ap_col]).sort_values(ap_col)
     merged[ap_col] = merged[ap_col].astype(int)
 
     ap_slices = [
-        {"ap_index": int(row[ap_col]), "slice_id": int(row["slice_id"]), "cell_count": int(row["count"])}
+        {
+            "ap_index": int(row[ap_col]),
+            "slice_id": int(row["slice_id"]),
+            "cell_count": int(row["count"]),
+        }
         for _, row in merged.iterrows()
     ]
     return jsonify({"ok": True, "ap_slices": ap_slices, "total_slices": len(ap_slices)})
 
+
 # ---------------------------------------------------------------------------
 # Excel export
 # ---------------------------------------------------------------------------
+
 
 @bp.get("/excel")
 def outputs_excel():
@@ -516,9 +549,8 @@ def outputs_excel():
       - RunParams  : run_params_*.json (latest)
     """
     try:
-        import openpyxl
-        from openpyxl import Workbook
         import pandas as pd
+        from openpyxl import Workbook
     except ImportError:
         return (
             jsonify({"ok": False, "error": "openpyxl not installed.", "error_code": ERR_INTERNAL}),
@@ -601,11 +633,17 @@ def outputs_coexpression():
 
     if not red_path.exists() and not green_path.exists():
         return (
-            jsonify({"ok": False, "error": "No per-channel leaf CSVs found.", "error_code": ERR_NOT_FOUND}),
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "No per-channel leaf CSVs found.",
+                    "error_code": ERR_NOT_FOUND,
+                }
+            ),
             404,
         )
 
-    def _load(p: Path, channel: str) -> "pd.DataFrame | None":
+    def _load(p: Path, channel: str) -> pd.DataFrame | None:
         if not p.exists():
             return None
         try:
@@ -621,19 +659,31 @@ def outputs_coexpression():
     red_df = _load(red_path, "red")
     green_df = _load(green_path, "green")
 
-    key_cols = [c for c in ("acronym", "name", "id") if (
-        (red_df is not None and c in red_df.columns) or
-        (green_df is not None and c in green_df.columns)
-    )]
+    key_cols = [
+        c
+        for c in ("acronym", "name", "id")
+        if (
+            (red_df is not None and c in red_df.columns)
+            or (green_df is not None and c in green_df.columns)
+        )
+    ]
     if not key_cols:
         return (
-            jsonify({"ok": False, "error": "Cannot find region key columns.", "error_code": ERR_INTERNAL}),
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "Cannot find region key columns.",
+                    "error_code": ERR_INTERNAL,
+                }
+            ),
             500,
         )
     merge_key = key_cols[0]
 
     if red_df is not None and green_df is not None:
-        merged = red_df.merge(green_df[[merge_key, "count_green"]], on=merge_key, how="outer").fillna(0)
+        merged = red_df.merge(
+            green_df[[merge_key, "count_green"]], on=merge_key, how="outer"
+        ).fillna(0)
     elif red_df is not None:
         merged = red_df.copy()
         merged["count_green"] = 0
@@ -647,4 +697,11 @@ def outputs_coexpression():
             merged[c] = "" if c in ("acronym", "name") else 0
 
     regions = merged[out_cols].to_dict(orient="records")
-    return jsonify({"ok": True, "regions": regions, "channel_red_available": red_path.exists(), "channel_green_available": green_path.exists()})
+    return jsonify(
+        {
+            "ok": True,
+            "regions": regions,
+            "channel_red_available": red_path.exists(),
+            "channel_green_available": green_path.exists(),
+        }
+    )

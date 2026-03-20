@@ -38,8 +38,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from project.frontend.api_errors import ERR_INTERNAL, ERR_NOT_FOUND, ERR_INVALID_INPUT, ERR_FILE_NOT_FOUND
 from flask import Blueprint, jsonify, request
+
+from project.frontend.api_errors import (
+    ERR_INTERNAL,
+    ERR_INVALID_INPUT,
+)
 
 bp = Blueprint("api_compare", __name__)
 
@@ -54,7 +58,9 @@ def compare_regions():
     labels = body.get("labels", [])
 
     if not isinstance(dirs, list) or len(dirs) < 1:
-        return jsonify({"ok": False, "error": "dirs must be a non-empty list", "error_code": ERR_INVALID_INPUT}), 400
+        return jsonify(
+            {"ok": False, "error": "dirs must be a non-empty list", "error_code": ERR_INVALID_INPUT}
+        ), 400
 
     # Normalise labels
     if not isinstance(labels, list) or len(labels) != len(dirs):
@@ -63,7 +69,9 @@ def compare_regions():
     try:
         import pandas as pd
     except ImportError:
-        return jsonify({"ok": False, "error": "pandas not available", "error_code": ERR_INTERNAL}), 500
+        return jsonify(
+            {"ok": False, "error": "pandas not available", "error_code": ERR_INTERNAL}
+        ), 500
 
     # Load each hierarchy CSV
     frames: list[tuple[str, pd.DataFrame]] = []

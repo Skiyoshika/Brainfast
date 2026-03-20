@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import os
 
-from project.frontend.api_errors import ERR_INTERNAL, ERR_NOT_FOUND, ERR_INVALID_INPUT, ERR_FILE_NOT_FOUND
 from flask import Blueprint, jsonify, request
+
+from project.frontend.api_errors import (
+    ERR_INTERNAL,
+)
 
 bp = Blueprint("api_browse", __name__, url_prefix="/api")
 
@@ -24,7 +27,9 @@ _HEADLESS_MSG = (
 @bp.post("/browse/folder")
 def browse_folder():
     if _HEADLESS:
-        return jsonify({"ok": False, "error": _HEADLESS_MSG, "headless": True, "error_code": ERR_INTERNAL}), 200
+        return jsonify(
+            {"ok": False, "error": _HEADLESS_MSG, "headless": True, "error_code": ERR_INTERNAL}
+        ), 200
     try:
         import tkinter as tk
         from tkinter import filedialog
@@ -42,7 +47,9 @@ def browse_folder():
 @bp.post("/browse/file")
 def browse_file():
     if _HEADLESS:
-        return jsonify({"ok": False, "error": _HEADLESS_MSG, "headless": True, "error_code": ERR_INTERNAL}), 200
+        return jsonify(
+            {"ok": False, "error": _HEADLESS_MSG, "headless": True, "error_code": ERR_INTERNAL}
+        ), 200
     try:
         import tkinter as tk
         from tkinter import filedialog

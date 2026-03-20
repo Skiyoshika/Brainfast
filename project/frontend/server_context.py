@@ -86,7 +86,9 @@ def get_job_state(job_id: str | None = None) -> dict:
     if state is None:
         # BUG-3 fix: evict oldest non-running states before adding a new one
         if len(_job_states) >= _MAX_JOB_STATES:
-            evictable = [k for k, v in _job_states.items() if not v.get("running") and k != DEFAULT_JOB_ID]
+            evictable = [
+                k for k, v in _job_states.items() if not v.get("running") and k != DEFAULT_JOB_ID
+            ]
             for k in evictable[: max(1, len(evictable) - 50)]:
                 del _job_states[k]
         state = _new_run_state()

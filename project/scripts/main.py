@@ -699,7 +699,9 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
             ]
         )
         empty.to_csv(outputs_dir / "cells_detected.csv", index=False)
-        _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=empty, atlas_sha256=_atlas_sha256)
+        _write_detection_summary(
+            outputs_dir, sampling=sampling, cfg=cfg, detections=empty, atlas_sha256=_atlas_sha256
+        )
         print("No detections found in real-input run.")
         emit_progress(
             6,
@@ -714,7 +716,9 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
     if not mapped_rows:
         cells = pd.concat(detect_rows, ignore_index=True)
         cells.to_csv(outputs_dir / "cells_detected.csv", index=False)
-        _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=cells, atlas_sha256=_atlas_sha256)
+        _write_detection_summary(
+            outputs_dir, sampling=sampling, cfg=cfg, detections=cells, atlas_sha256=_atlas_sha256
+        )
         print("Detections found, but none could be mapped after registration.")
         emit_progress(
             6,
@@ -748,7 +752,12 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
     deduped.to_csv(outputs_dir / "cells_dedup.csv", index=False)
     write_dedup_stats(stats, outputs_dir)
     _write_detection_summary(
-        outputs_dir, sampling=sampling, cfg=cfg, detections=cells, deduped=deduped, atlas_sha256=_atlas_sha256
+        outputs_dir,
+        sampling=sampling,
+        cfg=cfg,
+        detections=cells,
+        deduped=deduped,
+        atlas_sha256=_atlas_sha256,
     )
 
     deduped.to_csv(outputs_dir / "cells_mapped.csv", index=False)

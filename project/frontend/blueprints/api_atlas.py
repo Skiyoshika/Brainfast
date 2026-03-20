@@ -6,10 +6,12 @@ import threading
 import uuid as _uuid_mod
 from pathlib import Path
 
-from project.frontend.api_errors import ERR_INTERNAL, ERR_NOT_FOUND, ERR_INVALID_INPUT, ERR_FILE_NOT_FOUND
 from flask import Blueprint, jsonify, request
 
 import project.frontend.server_context as ctx
+from project.frontend.api_errors import (
+    ERR_NOT_FOUND,
+)
 
 bp = Blueprint("api_atlas", __name__, url_prefix="/api/atlas")
 
@@ -26,7 +28,13 @@ def atlas_autopick_z():
     slicing_plane = str(payload.get("slicingPlane", "coronal"))
     roi_mode = str(payload.get("roiMode", "auto"))
     if not real_path.exists():
-        return jsonify({"ok": False, "error": f"Real image not found: {real_path}", "error_code": ERR_NOT_FOUND}), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": f"Real image not found: {real_path}",
+                "error_code": ERR_NOT_FOUND,
+            }
+        ), 400
     if not annotation_path.exists():
         return jsonify(
             {"ok": False, "error": f"Atlas annotation not found: {annotation_path}"}

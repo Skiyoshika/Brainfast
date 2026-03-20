@@ -8,6 +8,7 @@ Environment variables read:
     GITHUB_REF_NAME  — e.g. "v0.5.1" (set automatically by GitHub Actions)
     GITHUB_SHA       — full commit SHA (set automatically by GitHub Actions)
 """
+
 from __future__ import annotations
 
 import json

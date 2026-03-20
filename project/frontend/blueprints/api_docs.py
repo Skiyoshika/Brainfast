@@ -7,7 +7,7 @@ Endpoints:
 
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, Response
+from flask import Blueprint, Response, jsonify
 
 bp = Blueprint("api_docs", __name__)
 
@@ -22,7 +22,7 @@ _SPEC: dict = {
         "version": "0.5",
         "description": (
             "REST API for the Brainfast brain-atlas registration and cell-counting tool. "
-            "All endpoints return JSON with at minimum `{\"ok\": true|false}`. "
+            'All endpoints return JSON with at minimum `{"ok": true|false}`. '
             "Error responses also include `error_code` (machine constant) and `error` (human message)."
         ),
         "contact": {"name": "Brainfast", "url": "https://github.com/Skiyoshika/Brainfast"},
@@ -47,17 +47,21 @@ _SPEC: dict = {
                 "responses": {
                     "200": {
                         "description": "Server info",
-                        "content": {"application/json": {"schema": {
-                            "type": "object",
-                            "properties": {
-                                "ok": {"type": "boolean"},
-                                "version": {"type": "string"},
-                                "buildDate": {"type": "string"},
-                                "commit": {"type": "string"},
-                                "outputs": {"type": "string"},
-                                "defaults": {"type": "object"},
-                            },
-                        }}},
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "ok": {"type": "boolean"},
+                                        "version": {"type": "string"},
+                                        "buildDate": {"type": "string"},
+                                        "commit": {"type": "string"},
+                                        "outputs": {"type": "string"},
+                                        "defaults": {"type": "object"},
+                                    },
+                                }
+                            }
+                        },
                     }
                 },
             }
@@ -80,16 +84,20 @@ _SPEC: dict = {
                 "operationId": "preflight",
                 "requestBody": {
                     "required": True,
-                    "content": {"application/json": {"schema": {
-                        "type": "object",
-                        "properties": {
-                            "configPath": {"type": "string"},
-                            "inputDir": {"type": "string"},
-                            "atlasPath": {"type": "string"},
-                            "channels": {"type": "array", "items": {"type": "string"}},
-                            "params": {"type": "object"},
-                        },
-                    }}},
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "configPath": {"type": "string"},
+                                    "inputDir": {"type": "string"},
+                                    "atlasPath": {"type": "string"},
+                                    "channels": {"type": "array", "items": {"type": "string"}},
+                                    "params": {"type": "object"},
+                                },
+                            }
+                        }
+                    },
                 },
                 "responses": {
                     "200": {"description": "Preflight result with structured issue list"},
@@ -104,20 +112,31 @@ _SPEC: dict = {
                 "operationId": "runPipeline",
                 "requestBody": {
                     "required": True,
-                    "content": {"application/json": {"schema": {
-                        "type": "object",
-                        "required": ["configPath"],
-                        "properties": {
-                            "configPath": {"type": "string"},
-                            "inputDir": {"type": "string"},
-                            "outputDir": {"type": "string"},
-                            "jobId": {"type": "string", "default": "default"},
-                            "alignMode": {"type": "string", "enum": ["affine", "nonlinear"]},
-                            "pixelSizeUm": {"type": "number"},
-                            "channels": {"type": "array", "items": {"type": "string"}},
-                            "confidenceThreshold": {"type": "number", "minimum": 0, "maximum": 1},
-                        },
-                    }}},
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["configPath"],
+                                "properties": {
+                                    "configPath": {"type": "string"},
+                                    "inputDir": {"type": "string"},
+                                    "outputDir": {"type": "string"},
+                                    "jobId": {"type": "string", "default": "default"},
+                                    "alignMode": {
+                                        "type": "string",
+                                        "enum": ["affine", "nonlinear"],
+                                    },
+                                    "pixelSizeUm": {"type": "number"},
+                                    "channels": {"type": "array", "items": {"type": "string"}},
+                                    "confidenceThreshold": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 1,
+                                    },
+                                },
+                            }
+                        }
+                    },
                 },
                 "responses": {
                     "200": {"description": "Run started"},
@@ -132,25 +151,35 @@ _SPEC: dict = {
                 "tags": ["pipeline"],
                 "summary": "Unified poll — status + log tail + errors in one request",
                 "operationId": "poll",
-                "parameters": [{"name": "job", "in": "query", "schema": {"type": "string", "default": "default"}}],
+                "parameters": [
+                    {
+                        "name": "job",
+                        "in": "query",
+                        "schema": {"type": "string", "default": "default"},
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "Poll response",
-                        "content": {"application/json": {"schema": {
-                            "type": "object",
-                            "properties": {
-                                "ok": {"type": "boolean"},
-                                "jobId": {"type": "string"},
-                                "running": {"type": "boolean"},
-                                "done": {"type": "boolean"},
-                                "error": {"type": ["string", "null"]},
-                                "slicesDone": {"type": "integer"},
-                                "slicesTotal": {"type": "integer"},
-                                "logTail": {"type": "array", "items": {"type": "string"}},
-                                "errors": {"type": "array"},
-                                "progress": {"type": "object"},
-                            },
-                        }}},
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "ok": {"type": "boolean"},
+                                        "jobId": {"type": "string"},
+                                        "running": {"type": "boolean"},
+                                        "done": {"type": "boolean"},
+                                        "error": {"type": ["string", "null"]},
+                                        "slicesDone": {"type": "integer"},
+                                        "slicesTotal": {"type": "integer"},
+                                        "logTail": {"type": "array", "items": {"type": "string"}},
+                                        "errors": {"type": "array"},
+                                        "progress": {"type": "object"},
+                                    },
+                                }
+                            }
+                        },
                     }
                 },
             }
@@ -170,9 +199,14 @@ _SPEC: dict = {
                 "summary": "Cancel a running pipeline",
                 "operationId": "cancelPipeline",
                 "requestBody": {
-                    "content": {"application/json": {"schema": {
-                        "type": "object", "properties": {"jobId": {"type": "string"}}
-                    }}}
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {"jobId": {"type": "string"}},
+                            }
+                        }
+                    }
                 },
                 "responses": {
                     "200": {"description": "Cancelled"},
@@ -216,7 +250,9 @@ _SPEC: dict = {
                 "responses": {
                     "200": {
                         "description": "Excel file download",
-                        "content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}},
+                        "content": {
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+                        },
                     }
                 },
             }
@@ -230,15 +266,19 @@ _SPEC: dict = {
                 "responses": {
                     "200": {
                         "description": "Z-continuity result",
-                        "content": {"application/json": {"schema": {
-                            "type": "object",
-                            "properties": {
-                                "ok": {"type": "boolean"},
-                                "slices": {"type": "array"},
-                                "outlier_count": {"type": "integer"},
-                                "total_slices": {"type": "integer"},
-                            },
-                        }}},
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "ok": {"type": "boolean"},
+                                        "slices": {"type": "array"},
+                                        "outlier_count": {"type": "integer"},
+                                        "total_slices": {"type": "integer"},
+                                    },
+                                }
+                            }
+                        },
                     }
                 },
             }
@@ -274,14 +314,18 @@ _SPEC: dict = {
                 "operationId": "createProject",
                 "requestBody": {
                     "required": True,
-                    "content": {"application/json": {"schema": {
-                        "type": "object",
-                        "required": ["name"],
-                        "properties": {
-                            "name": {"type": "string"},
-                            "description": {"type": "string"},
-                        },
-                    }}},
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["name"],
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "description": {"type": "string"},
+                                },
+                            }
+                        }
+                    },
                 },
                 "responses": {"200": {"description": "Created project"}},
             },
@@ -291,25 +335,33 @@ _SPEC: dict = {
                 "tags": ["projects"],
                 "summary": "List samples in a project",
                 "operationId": "listSamples",
-                "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "integer"}}],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "integer"}}
+                ],
                 "responses": {"200": {"description": "Sample list"}},
             },
             "post": {
                 "tags": ["projects"],
                 "summary": "Add a sample to a project",
                 "operationId": "addSample",
-                "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "integer"}}],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "integer"}}
+                ],
                 "requestBody": {
                     "required": True,
-                    "content": {"application/json": {"schema": {
-                        "type": "object",
-                        "required": ["name", "config_path"],
-                        "properties": {
-                            "name": {"type": "string"},
-                            "config_path": {"type": "string"},
-                            "output_path": {"type": "string"},
-                        },
-                    }}},
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["name", "config_path"],
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "config_path": {"type": "string"},
+                                    "output_path": {"type": "string"},
+                                },
+                            }
+                        }
+                    },
                 },
                 "responses": {"200": {"description": "Added sample"}},
             },
@@ -320,15 +372,19 @@ _SPEC: dict = {
                 "summary": "Enqueue a sample for batch processing",
                 "operationId": "batchEnqueue",
                 "requestBody": {
-                    "content": {"application/json": {"schema": {
-                        "type": "object",
-                        "properties": {
-                            "jobId": {"type": "string"},
-                            "configPath": {"type": "string"},
-                            "inputDir": {"type": "string"},
-                            "outputDir": {"type": "string"},
-                        },
-                    }}}
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "jobId": {"type": "string"},
+                                    "configPath": {"type": "string"},
+                                    "inputDir": {"type": "string"},
+                                    "outputDir": {"type": "string"},
+                                },
+                            }
+                        }
+                    }
                 },
                 "responses": {"200": {"description": "Enqueued"}},
             }
@@ -348,24 +404,30 @@ _SPEC: dict = {
                 "operationId": "compareRegions",
                 "requestBody": {
                     "required": True,
-                    "content": {"application/json": {"schema": {
-                        "type": "object",
-                        "required": ["dirs"],
-                        "properties": {
-                            "dirs": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "path": {"type": "string"},
-                                        "label": {"type": "string"},
-                                    },
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["dirs"],
+                                "properties": {
+                                    "dirs": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "path": {"type": "string"},
+                                                "label": {"type": "string"},
+                                            },
+                                        },
+                                    }
                                 },
                             }
-                        },
-                    }}},
+                        }
+                    },
                 },
-                "responses": {"200": {"description": "Pivot table (columns = labels, rows = regions)"}},
+                "responses": {
+                    "200": {"description": "Pivot table (columns = labels, rows = regions)"}
+                },
             }
         },
         "/api/openapi.json": {
@@ -395,11 +457,24 @@ _SPEC: dict = {
                     "error_code": {
                         "type": "string",
                         "enum": [
-                            "PIPELINE_ALREADY_RUNNING", "PIPELINE_NOT_RUNNING", "PIPELINE_START_FAILED",
-                            "INVALID_INPUT", "MISSING_FIELD", "CONFIG_NOT_FOUND", "CONFIG_PATH_DENIED",
-                            "PREFLIGHT_FAILED", "NOT_FOUND", "FILE_NOT_FOUND", "JOB_NOT_FOUND",
-                            "PROJECT_NOT_FOUND", "SAMPLE_NOT_FOUND", "ALREADY_EXISTS", "TASK_CONFLICT",
-                            "INTERNAL_ERROR", "IO_ERROR", "DEPENDENCY_ERROR",
+                            "PIPELINE_ALREADY_RUNNING",
+                            "PIPELINE_NOT_RUNNING",
+                            "PIPELINE_START_FAILED",
+                            "INVALID_INPUT",
+                            "MISSING_FIELD",
+                            "CONFIG_NOT_FOUND",
+                            "CONFIG_PATH_DENIED",
+                            "PREFLIGHT_FAILED",
+                            "NOT_FOUND",
+                            "FILE_NOT_FOUND",
+                            "JOB_NOT_FOUND",
+                            "PROJECT_NOT_FOUND",
+                            "SAMPLE_NOT_FOUND",
+                            "ALREADY_EXISTS",
+                            "TASK_CONFLICT",
+                            "INTERNAL_ERROR",
+                            "IO_ERROR",
+                            "DEPENDENCY_ERROR",
                         ],
                     },
                 },

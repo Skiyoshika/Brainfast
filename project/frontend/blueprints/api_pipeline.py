@@ -13,7 +13,6 @@ from flask import Blueprint, jsonify, request, send_from_directory
 
 import project.frontend.server_context as ctx
 from project.frontend.api_errors import (
-    ERR_CONFIG_NOT_FOUND,
     ERR_CONFIG_PATH_DENIED,
     ERR_INTERNAL,
     ERR_INVALID_INPUT,
@@ -60,13 +59,15 @@ def _read_version_info() -> dict[str, str]:
     # Fall back to setuptools-scm generated _version.py
     try:
         import project._version as _v  # type: ignore[import]
+
         return {"version": str(_v.__version__), "build_date": "", "commit": ""}
     except Exception:
         pass
     return fallback
 
 
-_ALLOWED_CONFIG_ROOTS = lambda: (ctx.PROJECT_ROOT / "configs", ctx.OUTPUT_DIR)
+def _ALLOWED_CONFIG_ROOTS():
+    return (ctx.PROJECT_ROOT / "configs", ctx.OUTPUT_DIR)
 
 
 def _resolve_config_path(raw_path: str | None) -> Path:
@@ -228,7 +229,9 @@ def config_schema():
     """
     schema_path = ctx.PROJECT_ROOT / "configs" / "run_config.schema.json"
     if not schema_path.exists():
-        return jsonify({"ok": False, "error": "Schema file not found.", "error_code": "NOT_FOUND"}), 404
+        return jsonify(
+            {"ok": False, "error": "Schema file not found.", "error_code": "NOT_FOUND"}
+        ), 404
     try:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         return jsonify({"ok": True, "schema": schema})
@@ -289,14 +292,27 @@ def run_pipeline():
 
     with ctx._run_state_lock:
         if job_state["running"]:
-            return jsonify({"ok": False, "error": "pipeline already running", "error_code": ERR_PIPELINE_RUNNING, "jobId": job_id}), 409
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "pipeline already running",
+                    "error_code": ERR_PIPELINE_RUNNING,
+                    "jobId": job_id,
+                }
+            ), 409
 
     try:
         config = str(_materialize_runtime_config(payload, job_id=job_id))
     except PermissionError as exc:
         return jsonify({"ok": False, "error": str(exc), "error_code": ERR_CONFIG_PATH_DENIED}), 403
     except Exception as exc:
-        return jsonify({"ok": False, "error": f"failed to build runtime config: {exc}", "error_code": ERR_INVALID_INPUT}), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": f"failed to build runtime config: {exc}",
+                "error_code": ERR_INVALID_INPUT,
+            }
+        ), 400
     input_dir = payload.get("inputDir", "")
     channels = payload.get("channels", ["red"])
     if isinstance(channels, str):
@@ -464,23 +480,25 @@ def poll():
     log_tail = logs[-20:] if len(logs) > 20 else list(logs)
     errors = list(job_state.get("errors", []) or [])
 
-    return jsonify({
-        "ok": True,
-        "jobId": job_id,
-        "running": job_state["running"],
-        "done": job_state["done"],
-        "error": job_state["error"],
-        "slicesDone": slices_done,
-        "slicesTotal": slices_total,
-        "logTail": log_tail,
-        "errors": errors,
-        "progress": {
-            "phase": str(progress.get("phase", "idle")),
-            "stepCurrent": int(progress.get("stepCurrent", 0) or 0),
-            "stepTotal": int(progress.get("stepTotal", 0) or 0),
-            "message": str(progress.get("message", "")),
-        },
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "jobId": job_id,
+            "running": job_state["running"],
+            "done": job_state["done"],
+            "error": job_state["error"],
+            "slicesDone": slices_done,
+            "slicesTotal": slices_total,
+            "logTail": log_tail,
+            "errors": errors,
+            "progress": {
+                "phase": str(progress.get("phase", "idle")),
+                "stepCurrent": int(progress.get("stepCurrent", 0) or 0),
+                "stepTotal": int(progress.get("stepTotal", 0) or 0),
+                "message": str(progress.get("message", "")),
+            },
+        }
+    )
 
 
 @bp.get("/api/export/methods-text")

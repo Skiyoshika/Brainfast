@@ -338,6 +338,16 @@ def build_cell_summary(hier_path: Path) -> dict[str, object]:
         )
 
     top_region = top_regions[0] if top_regions else None
+
+    elapsed_s = 0.0
+    det_summary_path = hier_path.parent / "detection_summary.json"
+    if det_summary_path.exists():
+        try:
+            det = json.loads(det_summary_path.read_text(encoding="utf-8"))
+            elapsed_s = float(det.get("pipeline_elapsed_s", 0))
+        except Exception:
+            pass
+
     return {
         "sample_name": chart["sample_name"],
         "slice_summary": chart["slice_summary"],
@@ -356,6 +366,7 @@ def build_cell_summary(hier_path: Path) -> dict[str, object]:
         "top_regions": top_regions,
         "top_region": top_region,
         "warnings": warnings,
+        "pipeline_elapsed_s": elapsed_s,
     }
 
 

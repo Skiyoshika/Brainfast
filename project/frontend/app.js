@@ -59,6 +59,7 @@ const LANGS = {
     'progress.phase.error': 'Error',
     'progress.phase.cancelled': 'Cancelled',
     'btn.guide': '📖 Guide',
+    'btn.labPreset': '🔬 Lab Preset',
     'btn.run': '▶ Run Pipeline',
     'btn.cancel': '✕ Cancel',
     'btn.openOutputs': '📁 Open Output Folder',
@@ -220,6 +221,7 @@ const LANGS = {
     'summary.outside': 'Outside Atlas',
     'summary.regions': 'Mapped Regions',
     'summary.topRegion': 'Top Region',
+    'summary.runtime': 'Pipeline Runtime',
     'summary.none': 'No summary available yet.',
     'cellconf.title': 'Cell Count Confidence Samples',
     'cellconf.hint': 'Three representative raw slices with the final counted-cell markers overlaid.',
@@ -396,6 +398,7 @@ const LANGS = {
     'progress.phase.error': '错误',
     'progress.phase.cancelled': '已取消',
     'btn.guide': '📖 使用指南',
+    'btn.labPreset': '🔬 实验室预设',
     'btn.run': '▶ 运行流水线',
     'btn.cancel': '✕ 取消',
     'btn.openOutputs': '📁 打开输出目录',
@@ -556,6 +559,7 @@ const LANGS = {
     'summary.outside': '落在图谱外',
     'summary.regions': '映射到的脑区数',
     'summary.topRegion': '最高脑区',
+    'summary.runtime': '流程总耗时',
     'summary.none': '当前还没有可用摘要。',
     'cellconf.title': '细胞计数置信样本',
     'cellconf.hint': '展示 3 张代表性真实切片，并叠加最终计入统计的细胞标记点。',
@@ -1058,6 +1062,43 @@ async function browseFor(targetId, type, filetypes = '') {
 document.querySelectorAll('.btn-browse').forEach(btn => {
   btn.onclick = () => browseFor(btn.dataset.target, btn.dataset.type, btn.dataset.filetypes || '');
 });
+
+// ================================================================
+// PATH PERSISTENCE (localStorage) — survives page refresh
+// ================================================================
+const _PATH_FIELDS = ['inputDir', 'outputDir', 'atlasPath', 'structPath', 'realSlicePath'];
+function _savePathsToStorage() {
+  const obj = {};
+  _PATH_FIELDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) obj[id] = el.value;
+  });
+  localStorage.setItem('bf_paths_v1', JSON.stringify(obj));
+}
+(function _restorePathsFromStorage() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('bf_paths_v1') || '{}');
+    _PATH_FIELDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && saved[id]) el.value = saved[id];
+    });
+  } catch (_) {}
+})();
+_PATH_FIELDS.forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', _savePathsToStorage);
+});
+
+const _labPresetBtn = document.getElementById('loadLabPresetBtn');
+if (_labPresetBtn) {
+  _labPresetBtn.onclick = () => {
+    const pxEl = document.getElementById('pixelSizeUm');
+    const planeEl = document.getElementById('slicingPlane');
+    if (pxEl) { pxEl.value = '5.0'; pxEl.dispatchEvent(new Event('change')); }
+    if (planeEl) { planeEl.value = 'coronal'; planeEl.dispatchEvent(new Event('change')); }
+    showToast(t('toast.presetLoaded'), 'success');
+  };
+}
 
 function applyWorkflowMode(mode) {
   const m = (mode || 'oneclick').toLowerCase();
@@ -2223,6 +2264,12 @@ async function refreshCellSummary() {
       : '-';
     const mappedText = `${Number(summary.mapped_count || 0).toLocaleString()} (${formatPercent(summary.mapped_pct || 0)})`;
     const outsideText = `${Number(summary.outside_count || 0).toLocaleString()} (${formatPercent(summary.outside_pct || 0)})`;
+    const elapsedS = summary.pipeline_elapsed_s || 0;
+    const timingLabel = elapsedS > 0
+      ? (elapsedS >= 60
+          ? `${Math.floor(elapsedS / 60)} min ${Math.round(elapsedS % 60)} s`
+          : `${Math.round(elapsedS)} s`)
+      : '-';
     cards.innerHTML = [
       renderSummaryCard(t('summary.sample'), summary.sample_name || '-', summary.slice_summary || ''),
       renderSummaryCard(t('summary.scope'), summary.scope_label || '-', summary.scope_kind || ''),
@@ -2233,6 +2280,7 @@ async function refreshCellSummary() {
       renderSummaryCard(t('summary.outside'), outsideText, ''),
       renderSummaryCard(t('summary.regions'), Number(summary.regions_mapped || 0).toLocaleString(), ''),
       renderSummaryCard(t('summary.topRegion'), topRegion, ''),
+      renderSummaryCard(t('summary.runtime'), timingLabel, ''),
     ].join('');
   } catch (err) {
     console.error('Refresh cell summary failed:', err);

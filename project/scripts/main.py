@@ -191,6 +191,7 @@ def _write_detection_summary(
     detections: pd.DataFrame,
     deduped: pd.DataFrame | None = None,
     atlas_sha256: str = "",
+    pipeline_elapsed_s: float = 0.0,
 ) -> None:
     det_cfg = cfg.get("detection", {})
     primary = str(det_cfg.get("primary_model", ""))
@@ -226,6 +227,8 @@ def _write_detection_summary(
             }
     if atlas_sha256:
         summary["atlas_sha256"] = atlas_sha256
+    if pipeline_elapsed_s > 0:
+        summary["pipeline_elapsed_s"] = pipeline_elapsed_s
     (outputs_dir / "detection_summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -292,6 +295,7 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
         else (Path(env_output_dir) if env_output_dir else project_root / "outputs")
     )
     outputs_dir.mkdir(parents=True, exist_ok=True)
+    _pipeline_t0 = time.perf_counter()
     annotation_nii = project_root / "annotation_25.nii.gz"
     if not annotation_nii.exists():
         raise FileNotFoundError(f"atlas annotation not found: {annotation_nii}")
@@ -700,7 +704,12 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
         )
         empty.to_csv(outputs_dir / "cells_detected.csv", index=False)
         _write_detection_summary(
-            outputs_dir, sampling=sampling, cfg=cfg, detections=empty, atlas_sha256=_atlas_sha256
+            outputs_dir,
+            sampling=sampling,
+            cfg=cfg,
+            detections=empty,
+            atlas_sha256=_atlas_sha256,
+            pipeline_elapsed_s=round(time.perf_counter() - _pipeline_t0, 1),
         )
         print("No detections found in real-input run.")
         emit_progress(
@@ -717,7 +726,12 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
         cells = pd.concat(detect_rows, ignore_index=True)
         cells.to_csv(outputs_dir / "cells_detected.csv", index=False)
         _write_detection_summary(
-            outputs_dir, sampling=sampling, cfg=cfg, detections=cells, atlas_sha256=_atlas_sha256
+            outputs_dir,
+            sampling=sampling,
+            cfg=cfg,
+            detections=cells,
+            atlas_sha256=_atlas_sha256,
+            pipeline_elapsed_s=round(time.perf_counter() - _pipeline_t0, 1),
         )
         print("Detections found, but none could be mapped after registration.")
         emit_progress(
@@ -758,6 +772,7 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
         detections=cells,
         deduped=deduped,
         atlas_sha256=_atlas_sha256,
+        pipeline_elapsed_s=round(time.perf_counter() - _pipeline_t0, 1),
     )
 
     deduped.to_csv(outputs_dir / "cells_mapped.csv", index=False)

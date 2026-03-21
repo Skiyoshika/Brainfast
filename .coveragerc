@@ -1,0 +1,24 @@
+[run]
+source = project/scripts
+
+# Exclude scripts that require the atlas annotation file (annotation_25.nii.gz),
+# GPU-heavy Cellpose inference, or are standalone data-preparation utilities.
+# These belong in integration tests, not unit tests.
+omit =
+    */overlay_render.py
+    */run_3d_registration.py
+    */main.py
+    */learn_from_trainset.py
+    */refresh_demo.py
+    */run_overlay_test.py
+    */test_single_slice.py
+    */extract_zstack.py
+    */atlas_autopick.py
+    */logging_setup.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    \.\.\.

@@ -1,5 +1,8 @@
 ﻿# IdleBrain root repo ignore rules
 
+# Git worktrees (isolated dev workspaces)
+.worktrees/
+
 # Large local data
 Samples/
 data/

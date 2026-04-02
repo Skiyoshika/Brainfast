@@ -33,7 +33,8 @@ def compute_registration_metrics(fixed_arr: np.ndarray, moving_arr: np.ndarray) 
 
     fixed_flat = fixed.reshape(-1)
     moving_flat = moving.reshape(-1)
-    if np.std(fixed_flat) == 0.0 or np.std(moving_flat) == 0.0:
+    variance_floor = 1e-6
+    if np.std(fixed_flat) < variance_floor or np.std(moving_flat) < variance_floor:
         ncc = 0.0
     else:
         ncc = float(np.corrcoef(fixed_flat, moving_flat)[0, 1])

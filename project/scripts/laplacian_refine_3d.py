@@ -26,6 +26,10 @@ def refine_registered_volume(
     moving_img = nib.load(str(moving_path))
     fixed = np.asarray(fixed_img.dataobj, dtype=np.float32)
     moving = np.asarray(moving_img.dataobj, dtype=np.float32)
+    if fixed.ndim != 3 or moving.ndim != 3:
+        raise ValueError("fixed and moving volumes must both be 3D")
+    if fixed.shape != moving.shape:
+        raise ValueError("fixed and moving volumes must have the same shape")
     refined = moving.copy()
 
     for _ in range(int(iterations)):

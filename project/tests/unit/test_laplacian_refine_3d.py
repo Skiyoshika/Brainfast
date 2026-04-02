@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
 import nibabel as nib
 import numpy as np
 
 from project.scripts.laplacian_refine_3d import refine_registered_volume
+from project.scripts.registration_3d_ants import compute_registration_metrics
 
 
 def test_refine_registered_volume_writes_field_and_final_volume(tmp_path):
@@ -40,3 +42,17 @@ def test_refine_registered_volume_writes_field_and_final_volume(tmp_path):
 
     final_img = nib.load(str(final_registered_path))
     assert final_img.shape == (5, 5, 5)
+
+    field = np.load(str(field_path))
+    assert field.shape == (3, 5, 5, 5)
+    assert field.dtype == np.float32
+
+    with metrics_csv.open(newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+
+    assert rows
+    assert reader.fieldnames == ["metric", "before", "after", "change"]
+    assert {row["metric"] for row in rows} >= set(
+        compute_registration_metrics(fixed_data, moving_data)
+    )

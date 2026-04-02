@@ -1,20 +1,40 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import nibabel as nib
 import numpy as np
 from tifffile import imread
 
+Hemisphere = Literal["left", "right", "right_flipped"]
+
+
+def _crop_affine(
+    affine: np.ndarray,
+    ap_start: int,
+    ml_start: int,
+    ml_size: int,
+    flipped: bool,
+) -> np.ndarray:
+    transform = np.eye(4, dtype=float)
+    transform[0, 3] = float(ap_start)
+    if flipped:
+        transform[2, 2] = -1.0
+        transform[2, 3] = float(ml_start + ml_size - 1)
+    else:
+        transform[2, 3] = float(ml_start)
+    return affine @ transform
+
 
 def build_volume_from_tiffs(
-    slice_dir,
-    output_path,
-    pixel_um_xy,
-    z_spacing_um,
-    target_um=25.0,
-    glob_pattern="z*.tif",
-):
+    slice_dir: Path | str,
+    output_path: Path | str,
+    pixel_um_xy: float,
+    z_spacing_um: float,
+    target_um: float = 25.0,
+    glob_pattern: str = "z*.tif",
+) -> dict[str, object]:
     slice_dir = Path(slice_dir)
     output_path = Path(output_path)
 
@@ -60,13 +80,13 @@ def build_volume_from_tiffs(
 
 
 def prepare_half_template_inputs(
-    template_path,
-    annotation_path,
-    hemisphere,
-    ap_start,
-    ap_end,
-    out_dir,
-):
+    template_path: Path | str,
+    annotation_path: Path | str,
+    hemisphere: Hemisphere,
+    ap_start: int,
+    ap_end: int,
+    out_dir: Path | str,
+) -> dict[str, object]:
     template_path = Path(template_path)
     annotation_path = Path(annotation_path)
     out_dir = Path(out_dir)
@@ -86,18 +106,24 @@ def prepare_half_template_inputs(
     if hemisphere == "right_flipped":
         template_half = template_data[:, :, mid:][:, :, ::-1].copy()
         annotation_half = annotation_data[:, :, mid:][:, :, ::-1].copy()
+        affine = _crop_affine(template_img.affine, ap_start, mid, template_half.shape[2], True)
+        ann_affine = _crop_affine(annotation_img.affine, ap_start, mid, annotation_half.shape[2], True)
     elif hemisphere == "right":
         template_half = template_data[:, :, mid:]
         annotation_half = annotation_data[:, :, mid:]
+        affine = _crop_affine(template_img.affine, ap_start, mid, template_half.shape[2], False)
+        ann_affine = _crop_affine(annotation_img.affine, ap_start, mid, annotation_half.shape[2], False)
     else:
         template_half = template_data[:, :, :mid]
         annotation_half = annotation_data[:, :, :mid]
+        affine = _crop_affine(template_img.affine, ap_start, 0, template_half.shape[2], False)
+        ann_affine = _crop_affine(annotation_img.affine, ap_start, 0, annotation_half.shape[2], False)
 
     tmpl_out = out_dir / "template_half.nii.gz"
     ann_out = out_dir / "annotation_half.nii.gz"
 
-    tmpl_img = nib.Nifti1Image(template_half.astype(np.float32), template_img.affine)
-    ann_img = nib.Nifti1Image(annotation_half.astype(np.int32), annotation_img.affine)
+    tmpl_img = nib.Nifti1Image(template_half.astype(np.float32), affine)
+    ann_img = nib.Nifti1Image(annotation_half.astype(np.int32), ann_affine)
     tmpl_img.header.set_zooms(template_img.header.get_zooms()[:3])
     ann_img.header.set_zooms(annotation_img.header.get_zooms()[:3])
     nib.save(tmpl_img, str(tmpl_out))

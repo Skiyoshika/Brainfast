@@ -23,11 +23,13 @@ import time
 from pathlib import Path
 
 import nibabel as nib
-import numpy as np
-from tifffile import imread
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.paths import bootstrap_sys_path
+from scripts.registration_3d_volume import (
+    build_volume_from_tiffs,
+    prepare_half_template_inputs,
+)
 
 PROJECT_DIR = bootstrap_sys_path()
 
@@ -39,68 +41,6 @@ TEMPLATE_25 = CCF_DATA / "average_template_25.nii.gz"
 PARAMS_RIGID = UCI_DIR / "001_parameters_Rigid.txt"
 PARAMS_BSPLINE = UCI_DIR / "002_parameters_BSpline.txt"
 ANNOTATION = PROJECT_DIR / "annotation_25.nii.gz"
-
-
-def stack_tifs_to_nifti(slice_dir, output_path, pixel_um_xy=5.0, z_spacing_um=25.0, target_um=25.0):
-    slices = sorted(slice_dir.glob("z*.tif"))
-    if not slices:
-        raise FileNotFoundError(f"No z*.tif in {slice_dir}")
-    ds = max(1, round(target_um / pixel_um_xy))
-    print(f"  {len(slices)} slices, XY downsample x{ds} -> {pixel_um_xy * ds:.0f}um/px")
-    stack = []
-    for i, p in enumerate(slices):
-        img = imread(str(p)).astype(np.float32)
-        if img.ndim == 3:
-            img = img[0]
-        stack.append(img[::ds, ::ds])
-        if (i + 1) % 20 == 0:
-            print(f"  {i + 1}/{len(slices)} loaded...")
-    vol = np.stack(stack, axis=0)
-    print(f"  Volume shape: {vol.shape}")
-    lo = float(np.percentile(vol, 1))
-    hi = float(np.percentile(vol, 99.5))
-    vol = np.clip((vol - lo) / max(hi - lo, 1.0) * 65535, 0, 65535).astype(np.uint16)
-    vox_mm = (z_spacing_um / 1000.0, pixel_um_xy * ds / 1000.0, pixel_um_xy * ds / 1000.0)
-    affine = np.diag([vox_mm[0], vox_mm[1], vox_mm[2], 1.0])
-    img_nii = nib.Nifti1Image(vol, affine)
-    img_nii.header.set_zooms(vox_mm)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    nib.save(img_nii, str(output_path))
-    mb = output_path.stat().st_size // 1024 // 1024
-    print(f"  Saved -> {output_path}  ({mb} MB)")
-    return output_path, vol.shape
-
-
-def prepare_cropped_template(full_path, annot_path, hemisphere, ap_start, ap_end, out_dir):
-    """Crop template AND annotation to AP range + hemisphere."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    tmpl_out = out_dir / "template_cropped.nii.gz"
-    ann_out = out_dir / "annotation_cropped.nii.gz"
-
-    for src, dst, is_label in [(full_path, tmpl_out, False), (annot_path, ann_out, True)]:
-        if dst.exists():
-            print(f"  Already exists: {dst.name}")
-            continue
-        img = nib.load(str(src))
-        data = np.asarray(img.dataobj)
-        # AP crop
-        data = data[ap_start : min(ap_end, data.shape[0]), :, :]
-        # ML hemisphere
-        mid = data.shape[2] // 2
-        if hemisphere in ("right", "right_flipped"):
-            data = data[:, :, mid:]
-        else:
-            data = data[:, :, :mid]
-        # Flip ML for right_flipped
-        if hemisphere == "right_flipped":
-            data = data[:, :, ::-1].copy()
-        dtype = np.int32 if is_label else np.float32
-        out_img = nib.Nifti1Image(data.astype(dtype), img.affine)
-        out_img.header.set_zooms((0.025, 0.025, 0.025))
-        nib.save(out_img, str(dst))
-        print(f"  Saved {dst.name}  shape={data.shape}")
-
-    return tmpl_out, ann_out
 
 
 def run_elastix(fixed, moving, out_dir):
@@ -191,7 +131,15 @@ def main():
     brain_nii = out_dir / "brain_25um.nii.gz"
     if not brain_nii.exists():
         print("\n[1/4] Stacking TIFs -> NIfTI...")
-        _, brain_shape = stack_tifs_to_nifti(slice_dir, brain_nii, pixel_um_xy, z_spacing)
+        brain_meta = build_volume_from_tiffs(slice_dir, brain_nii, pixel_um_xy, z_spacing)
+        brain_shape = tuple(brain_meta["shape"])
+        print(
+            f"  {brain_meta['slice_count']} slices, XY downsample x{brain_meta['downsample_factor']}"
+            f" -> {brain_meta['voxel_mm'][1] * 1000:.0f}um/px"
+        )
+        print(f"  Volume shape: {brain_shape}")
+        mb = brain_nii.stat().st_size // 1024 // 1024
+        print(f"  Saved -> {brain_nii}  ({mb} MB)")
     else:
         brain_shape = nib.load(str(brain_nii)).shape
         print(f"\n[1/4] Brain NIfTI exists: {brain_nii}  shape={brain_shape}")
@@ -206,9 +154,13 @@ def main():
 
     # 2. Cropped template + annotation
     print(f"\n[2/4] Cropping template + annotation to AP range + {hemisphere}...")
-    tmpl_cropped, ann_cropped = prepare_cropped_template(
+    half_meta = prepare_half_template_inputs(
         TEMPLATE_25, ANNOTATION, hemisphere, ap_start, ap_end, out_dir
     )
+    tmpl_cropped = half_meta["template_path"]
+    ann_cropped = half_meta["annotation_path"]
+    print(f"  Saved template_half.nii.gz  shape={tuple(half_meta['shape'])}")
+    print(f"  Saved annotation_half.nii.gz  shape={tuple(half_meta['shape'])}")
 
     # 3. Elastix
     elastix_out = out_dir / "elastix"

@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, call, patch
 
 import numpy as np
 import pytest
+from PIL import Image
 
 
 # ---------------------------------------------------------------------------
@@ -31,9 +32,8 @@ class TestRenderLandmarkPreview:
 
     @patch("scripts.slice_select.select_real_slice_2d")
     @patch("scripts.slice_select.select_label_slice_2d")
-    @patch("project.frontend.services.alignment_service.imwrite")
     @patch("project.frontend.services.alignment_service.imread")
-    def test_writes_side_by_side_png(self, mock_imread, mock_imwrite, mock_label_sel, mock_real_sel, tmp_path):
+    def test_writes_side_by_side_png(self, mock_imread, mock_label_sel, mock_real_sel, tmp_path):
         from project.frontend.services.alignment_service import render_landmark_preview
 
         fake_img = np.zeros((100, 100), dtype=np.uint8)
@@ -46,16 +46,15 @@ class TestRenderLandmarkPreview:
         n = render_landmark_preview(Path("real.tif"), Path("atlas.tif"), pairs_csv, out)
 
         assert n == 2
-        mock_imwrite.assert_called_once()
-        written = mock_imwrite.call_args[0][1]
-        # side-by-side: width = 100 + 8 + 100 = 208
-        assert written.shape == (100, 208, 3)
+        assert out.exists()
+        with Image.open(out) as img:
+            assert img.format == "PNG"
+            assert img.size == (208, 100)
 
     @patch("scripts.slice_select.select_real_slice_2d")
     @patch("scripts.slice_select.select_label_slice_2d")
-    @patch("project.frontend.services.alignment_service.imwrite")
     @patch("project.frontend.services.alignment_service.imread")
-    def test_empty_pairs_writes_blank_canvas(self, mock_imread, mock_imwrite, mock_label_sel, mock_real_sel, tmp_path):
+    def test_empty_pairs_writes_blank_canvas(self, mock_imread, mock_label_sel, mock_real_sel, tmp_path):
         import pandas as pd
         from project.frontend.services.alignment_service import render_landmark_preview
 
@@ -70,7 +69,33 @@ class TestRenderLandmarkPreview:
         n = render_landmark_preview(Path("r.tif"), Path("a.tif"), pairs_csv, out)
 
         assert n == 0
-        mock_imwrite.assert_called_once()
+        assert out.exists()
+        with Image.open(out) as img:
+            assert img.format == "PNG"
+            assert img.size == (168, 80)
+            assert np.asarray(img).max() == 0
+
+    @patch("scripts.slice_select.select_real_slice_2d")
+    @patch("scripts.slice_select.select_label_slice_2d")
+    @patch("project.frontend.services.alignment_service.imread")
+    def test_writes_browser_readable_png(
+        self, mock_imread, mock_label_sel, mock_real_sel, tmp_path
+    ):
+        from PIL import Image
+        from project.frontend.services.alignment_service import render_landmark_preview
+
+        fake_img = np.zeros((32, 32), dtype=np.uint8)
+        mock_imread.return_value = fake_img
+        mock_real_sel.return_value = (fake_img, {})
+        mock_label_sel.return_value = (fake_img, {})
+
+        pairs_csv = self._make_pairs_csv(tmp_path)
+        out = tmp_path / "preview.png"
+
+        n = render_landmark_preview(Path("real.tif"), Path("atlas.tif"), pairs_csv, out)
+
+        assert n == 2
+        assert Image.open(out).format == "PNG"
 
 
 class TestProposeAlignmentLandmarks:
@@ -197,3 +222,108 @@ class TestGenerateDemoComparison:
 
         with pytest.raises(FileNotFoundError):
             generate_demo_comparison(0, reg_dir, data_dir, out)
+
+
+def test_latest_stage_progress_reads_active_output_dir(tmp_path, monkeypatch):
+    import project.frontend.server_context as ctx
+
+    out_dir = tmp_path / "run_3d"
+    out_dir.mkdir()
+    (out_dir / "pipeline_progress.json").write_text(
+        (
+            '{'
+            '"stageName":"Truth Export",'
+            '"stageIndex":5,'
+            '"stageCount":6,'
+            '"percent":82,'
+            '"message":"Exporting slices",'
+            '"artifacts":{"truth_dir":"truth_export"}'
+            "}"
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ctx, "active_output_dir", lambda: out_dir)
+
+    progress = ctx.latest_stage_progress()
+
+    assert progress["stageName"] == "Truth Export"
+    assert progress["stageIndex"] == 5
+    assert progress["stageCount"] == 6
+    assert progress["percent"] == 82
+    assert progress["artifacts"]["truth_dir"] == "truth_export"
+
+
+def test_outputs_volume_reg_stats_uses_active_output_dir(tmp_path, monkeypatch):
+    import project.frontend.server_context as ctx
+    from project.frontend.server import create_app
+
+    out_dir = tmp_path / "run_volume_qc"
+    out_dir.mkdir()
+    (out_dir / "volume_registration_qc.csv").write_text(
+        "metric,value\nNCC,0.912\nSSIM,0.843\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ctx, "active_output_dir", lambda: out_dir)
+
+    app = create_app()
+    app.testing = True
+    with app.test_client() as client:
+        res = client.get("/api/outputs/volume-reg-stats")
+
+    assert res.status_code == 200
+    assert res.mimetype in {"text/csv", "application/vnd.ms-excel"}
+    assert "NCC,0.912" in res.get_data(as_text=True)
+
+
+def test_active_output_dir_prefers_recent_progress_markers_over_completed_runs(tmp_path, monkeypatch):
+    import project.frontend.server_context as ctx
+
+    project_root = tmp_path
+    outputs_root = project_root / "outputs"
+    progress_dir = outputs_root / "whole_brain_in_progress"
+    completed_dir = outputs_root / "older_completed"
+    progress_dir.mkdir(parents=True)
+    completed_dir.mkdir(parents=True)
+
+    (progress_dir / "pipeline_progress.json").write_text(
+        '{"stageName":"ANTS Registration","stageIndex":3,"stageCount":6,"percent":42}',
+        encoding="utf-8",
+    )
+    (completed_dir / "cell_counts_hierarchy.csv").write_text(
+        "region,count\nroot,1\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(ctx, "PROJECT_ROOT", project_root)
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", outputs_root)
+    monkeypatch.setitem(ctx.run_state, "outputDir", "")
+    monkeypatch.setitem(ctx.run_state, "runName", "")
+
+    assert ctx.active_output_dir() == progress_dir
+
+
+def test_active_output_dir_recovers_volume_qc_runs_without_completed_markers(tmp_path, monkeypatch):
+    import project.frontend.server_context as ctx
+
+    project_root = tmp_path
+    outputs_root = project_root / "outputs"
+    volume_qc_dir = outputs_root / "whole_brain_volume_qc"
+    completed_dir = outputs_root / "older_completed"
+    volume_qc_dir.mkdir(parents=True)
+    completed_dir.mkdir(parents=True)
+
+    (volume_qc_dir / "volume_registration_qc.csv").write_text(
+        "metric,value\nNCC,0.912\n",
+        encoding="utf-8",
+    )
+    (completed_dir / "cell_counts_hierarchy.csv").write_text(
+        "region,count\nroot,1\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(ctx, "PROJECT_ROOT", project_root)
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", outputs_root)
+    monkeypatch.setitem(ctx.run_state, "outputDir", "")
+    monkeypatch.setitem(ctx.run_state, "runName", "")
+
+    assert ctx.active_output_dir() == volume_qc_dir

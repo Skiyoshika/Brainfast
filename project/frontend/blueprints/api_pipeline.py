@@ -1,14 +1,15 @@
-"""api_pipeline.py — Pipeline run/status/cancel/logs/history routes."""
+"""api_pipeline.py - Pipeline run/status/cancel/logs/history routes."""
 
 from __future__ import annotations
 
-import json
 import threading
 from pathlib import Path
 
-from flask import Blueprint, jsonify, request, send_from_directory
+from flask import Blueprint, current_app, jsonify, request, send_from_directory
 
 import project.frontend.server_context as ctx
+from project.frontend.app_metadata import read_version_info
+from project.scripts.asset_bootstrap import atlas_asset_status
 
 bp = Blueprint("api_pipeline", __name__)
 
@@ -20,15 +21,25 @@ def index():
 
 @bp.get("/api/info")
 def info():
+    assets = atlas_asset_status(ctx.PROJECT_ROOT)
     default_atlas = ctx.PROJECT_ROOT / "annotation_25.nii.gz"
     default_struct = ctx.DEFAULT_STRUCTURE_SOURCE
+    version_info = read_version_info(ctx.PROJECT_ROOT)
     return jsonify(
         {
             "app": "BrainfastUI",
-            "version": "0.3.0-desktop",
+            "version": version_info["version"],
+            "buildDate": version_info["build_date"],
+            "commit": version_info["commit"],
+            "repository": version_info["repository"],
+            "releasesPage": version_info["releases_page"],
             "frontend": str(ctx.ROOT),
             "project": str(ctx.PROJECT_ROOT),
-            "outputs": str(ctx.OUTPUT_DIR),
+            "outputs": str(ctx.active_output_dir()),
+            "limits": {
+                "maxContentLengthBytes": int(current_app.config.get("MAX_CONTENT_LENGTH") or 0)
+            },
+            "assets": assets,
             "defaults": {
                 "atlasPath": str(default_atlas),
                 "structPath": str(default_struct) if default_struct.exists() else "",
@@ -71,25 +82,30 @@ def run_pipeline():
     channels = payload.get("channels", ["red"])
     if isinstance(channels, str):
         channels = [channels]
-
+    output_name = str(payload.get("outputName", "")).strip()
     run_params = payload.get("params", {})
+    output_dir = str(payload.get("outputDir") or run_params.get("outputDir") or "").strip()
+
     with ctx._run_state_lock:
         ctx.run_state["config_path"] = config
-    t = threading.Thread(
-        target=ctx._runner, args=(config, input_dir, channels, run_params), daemon=True
+
+    worker = threading.Thread(
+        target=ctx._runner,
+        args=(config, input_dir, channels, run_params, output_name, output_dir),
+        daemon=True,
     )
-    t.start()
+    worker.start()
     return jsonify({"ok": True, "started": True})
 
 
 @bp.get("/api/status")
 def status():
-    # Count how many slices have been registered (overlay files present)
-    reg_dir = ctx.OUTPUT_DIR / "registered_slices"
+    out_dir = ctx.active_output_dir()
+    reg_dir = out_dir / "registered_slices"
+    merged_dir = out_dir / "tmp_merged"
     slices_done = len(list(reg_dir.glob("slice_*_overlay.png"))) if reg_dir.exists() else 0
-    # Count total input slices (merged dir)
-    merged_dir = ctx.OUTPUT_DIR / "tmp_merged"
     slices_total = len(list(merged_dir.glob("*.tif"))) if merged_dir.exists() else 0
+    stage = ctx.latest_stage_progress(out_dir)
     return jsonify(
         {
             "running": ctx.run_state["running"],
@@ -100,6 +116,9 @@ def status():
             "logCount": len(ctx.run_state["logs"]),
             "slicesDone": slices_done,
             "slicesTotal": slices_total,
+            "outputDir": ctx.run_state.get("outputDir", str(out_dir)),
+            "runName": ctx.run_state.get("runName", ""),
+            "stage": stage,
         }
     )
 
@@ -107,9 +126,9 @@ def status():
 @bp.post("/api/cancel")
 def cancel():
     with ctx._run_state_lock:
-        p = ctx.run_state.get("proc")
-        if p and ctx.run_state.get("running"):
-            p.terminate()
+        proc = ctx.run_state.get("proc")
+        if proc and ctx.run_state.get("running"):
+            proc.terminate()
             ctx.run_state["error"] = "cancelled by user"
             ctx.run_state["running"] = False
             ctx.run_state["done"] = False
@@ -132,13 +151,7 @@ def history():
 
 @bp.get("/api/export/methods-text")
 def export_methods_text():
-    params_files = sorted(ctx.OUTPUT_DIR.glob("run_params_*.json"), reverse=True)
-    params = {}
-    if params_files:
-        try:
-            params = json.loads(params_files[0].read_text(encoding="utf-8"))
-        except Exception:
-            pass
+    params = ctx.latest_run_params()
     align_mode = params.get("alignMode", "affine")
     align_cn = "仿射变换 (affine)" if align_mode == "affine" else "非线性变换 (nonlinear/TPS)"
     align_en = "affine" if align_mode == "affine" else "nonlinear (thin-plate spline)"
@@ -147,21 +160,22 @@ def export_methods_text():
     ch_str = ", ".join(channels)
     ts = params.get("timestamp", "—")
     text_cn = (
-        f"【方法段落参考（中文）】\n"
+        "【方法段落参考（中文）】\n"
         f"脑图谱配准使用 Brainfast v0.3 完成（运行时间：{ts}）。"
         f"显微图像分辨率为 {pixel_size} μm/像素。"
         f"图谱配准参照 Allen 小鼠脑图谱（CCFv3，annotation_25.nii.gz，体素间距 25 μm），"
-        f"采用{align_cn}方法对切片进行空间配准。配准质量通过边缘 SSIM（结构相似性指标）评估。"
-        f"细胞检测采用 Cellpose 算法；去重后按图谱分级脑区统计细胞数量。荧光通道：{ch_str}。"
+        f"采用{align_cn}对切片进行空间配准。"
+        "配准质量通过边缘 SSIM（结构相似性指标）评估。"
+        f"细胞检测采用 Cellpose 或配置指定的检测器；去重后按图谱脑区分层统计细胞数量。荧光通道：{ch_str}。"
     )
     text_en = (
-        f"\n【Methods paragraph reference (English)】\n"
+        "\n\n[Methods Paragraph Reference (English)]\n"
         f"Brain atlas registration was performed using Brainfast v0.3 (run: {ts}). "
         f"Microscopy images were acquired at {pixel_size} μm/pixel. "
-        f"Section registration was carried out against the Allen Mouse Brain Atlas "
+        "Section registration was carried out against the Allen Mouse Brain Atlas "
         f"(CCFv3, annotation_25.nii.gz, 25 μm voxel spacing) using {align_en} transformation. "
-        f"Alignment quality was evaluated by edge-SSIM. "
-        f"Cell detection used the Cellpose algorithm; deduplicated cells were assigned to "
+        "Alignment quality was evaluated by edge-SSIM. "
+        "Cell detection used Cellpose or the configured detector; deduplicated cells were assigned to "
         f"atlas regions and counts were aggregated hierarchically. Channels: {ch_str}."
     )
     return jsonify({"ok": True, "text": text_cn + text_en, "params": params})

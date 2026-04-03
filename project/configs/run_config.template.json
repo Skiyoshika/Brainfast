@@ -9,7 +9,8 @@
     "slice_spacing_um": 25.0,
     "bit_depth": 16,
     "channel_map": {"red": 0, "green": 1, "farred": 2},
-    "active_channel": "red"
+    "active_channel": "red",
+    "slicing_plane": "coronal"
   },
   "target": {
     "marker": "unspecified",
@@ -22,12 +23,28 @@
   },
   "registration": {
     "mode": "2d_slice_with_3d_smoothness",
+    "scope": "whole",
+    "whole_brain_backend": "miki_3d",
+    "truth_source": "3d_registered_volume",
+    "template_path": "configs/allen_ref_cache/average_template_25.nii.gz",
+    "annotation_path": "annotation_25.nii.gz",
+    "atlas_hemisphere": "left",
+    "ants_transform": "SyN",
+    "random_seed": 42,
+    "laplacian_lambda": 0.18,
+    "laplacian_maxiter": 100,
     "auto_first": true,
     "fail_score_threshold": 0.65,
     "landmark_fallback": true,
     "landmark_max_slices": 5
   },
   "detection": {
+    "mode": "cellpose",
+    "reporter_intensity_threshold_pct": 95.0,
+    "reporter_min_area_px": 8.0,
+    "reporter_max_area_px": 2000.0,
+    "marker_channel": "",
+    "marker_intensity_threshold_pct": 95.0,
     "primary_model": "cellpose_cyto2",
     "secondary_model": "cellpose_nuclei",
     "merge_primary_secondary": false,

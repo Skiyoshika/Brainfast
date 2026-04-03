@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -11,11 +12,13 @@ import pandas as pd
 from tifffile import imread, imwrite
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scripts.paths import bootstrap_sys_path
+from scripts.paths import bootstrap_sys_path, ensure_runtime_cache_dirs
 
 PROJECT_ROOT = bootstrap_sys_path()
+ensure_runtime_cache_dirs(PROJECT_ROOT)
 
 try:
+    from scripts.asset_bootstrap import default_structure_source
     from scripts.atlas_autopick import autopick_best_z, refine_atlas_z_by_size
     from scripts.atlas_mapper import (
         map_cells_with_registered_label_slice,
@@ -24,23 +27,36 @@ try:
     from scripts.dedup import apply_dedup_kdtree, write_dedup_stats
     from scripts.detect import detect_cells
     from scripts.exceptions import ConfigError
-    from scripts.map_and_aggregate import aggregate_by_region, map_cells_to_regions, write_outputs
+    from scripts.map_and_aggregate import (
+        aggregate_by_region,
+        compute_region_areas_from_label_tif,
+        map_cells_to_regions,
+        write_outputs,
+    )
     from scripts.overlay_render import render_overlay
     from scripts.preprocess import merge_every_n_slices
     from scripts.qc import export_slice_qc
     from scripts.registration_adapter import bootstrap_registration_assets
+    from scripts.whole_brain_3d import run_whole_brain_3d
 except Exception:
+    from asset_bootstrap import default_structure_source
     from atlas_autopick import autopick_best_z, refine_atlas_z_by_size
     from atlas_mapper import map_cells_with_registered_label_slice
     from config_validation import config_value, load_config, validate_runtime_config
     from dedup import apply_dedup_kdtree, write_dedup_stats
     from detect import detect_cells
     from exceptions import ConfigError
-    from map_and_aggregate import aggregate_by_region, map_cells_to_regions, write_outputs
+    from map_and_aggregate import (
+        aggregate_by_region,
+        compute_region_areas_from_label_tif,
+        map_cells_to_regions,
+        write_outputs,
+    )
     from overlay_render import render_overlay
     from preprocess import merge_every_n_slices
     from qc import export_slice_qc
     from registration_adapter import bootstrap_registration_assets
+    from whole_brain_3d import run_whole_brain_3d
 
 
 def _validated_float(cfg: dict, dotted_key: str) -> float:
@@ -59,9 +75,9 @@ def _resolve_structure_source(project_root: Path) -> Path:
     registration_csv = project_root / "outputs" / "registration" / "structure_tree.csv"
     if registration_csv.exists():
         return registration_csv
-    fallback_csv = project_root / "configs" / "allen_mouse_structure_graph.csv"
-    if fallback_csv.exists():
-        return fallback_csv
+    fallback = default_structure_source(project_root)
+    if fallback is not None and fallback.exists():
+        return fallback
     raise FileNotFoundError(
         "structure ontology source not found in outputs/registration or project/configs"
     )
@@ -151,6 +167,30 @@ def _make_sample_tiffs(out_dir: Path, n: int = 12, h: int = 256, w: int = 256) -
         imwrite(str(out_dir / f"slice_{i:04d}.tif"), arr)
 
 
+def _refresh_demo_visuals(
+    project_root: Path,
+    outputs_dir: Path,
+    raw_dir: Path | None = None,
+) -> None:
+    refresh_script = project_root / "scripts" / "refresh_demo.py"
+    if not refresh_script.exists():
+        return
+
+    print("\nAuto-running refresh_demo.py to regenerate demo visuals...")
+    cmd = [sys.executable, str(refresh_script), "--outputs-dir", str(outputs_dir)]
+    if raw_dir is not None:
+        cmd.extend(["--raw-dir", str(raw_dir)])
+
+    try:
+        subprocess.run(
+            cmd,
+            cwd=str(project_root),
+            timeout=180,
+        )
+    except Exception as _e:
+        print(f"[warn] refresh_demo.py failed: {_e}")
+
+
 def run_demo(cfg: dict):
     project_root = _project_root()
     outputs_dir = project_root / "outputs"
@@ -180,13 +220,147 @@ def run_demo(cfg: dict):
     print("Demo pipeline complete: kdtree dedup + mapping + aggregation outputs generated")
 
 
-def run_real_input(cfg: dict, input_dir: Path):
-    project_root = _project_root()
-    outputs_dir = project_root / "outputs"
+def _quantify_against_exported_truth(
+    *,
+    truth_rows: list[dict],
+    cfg: dict,
+    outputs_dir: Path,
+    **_kwargs,
+) -> dict:
+    outputs_dir = Path(outputs_dir)
     outputs_dir.mkdir(parents=True, exist_ok=True)
-    annotation_nii = project_root / "annotation_25.nii.gz"
-    if not annotation_nii.exists():
-        raise FileNotFoundError(f"atlas annotation not found: {annotation_nii}")
+    structure_csv = _resolve_structure_source(_project_root())
+
+    truth_rows = list(truth_rows or [])
+    input_cfg = cfg.get("input", {})
+    dedup_cfg = cfg.get("dedup", {})
+    pixel_size_um = float(input_cfg.get("pixel_size_um_xy", 25.0))
+    slice_spacing_um = float(input_cfg.get("slice_spacing_um", 25.0))
+    slicing_plane = str(input_cfg.get("slicing_plane", "coronal")).lower()
+    neighbor_slices = int(dedup_cfg.get("neighbor_slices", 1))
+    r_xy_um = float(dedup_cfg.get("r_xy_um", 6.0))
+
+    mapped_rows: list[pd.DataFrame] = []
+    registration_rows: list[dict] = []
+    next_id = 1
+    for fallback_index, truth_row in enumerate(truth_rows):
+        slice_id = int(truth_row.get("slice_id", fallback_index))
+        real_slice_path = Path(truth_row["real_slice_path"])
+        registered_label_path = Path(truth_row["registered_label_path"])
+        overlay_path = truth_row.get("overlay_path", "")
+
+        detections = detect_cells(real_slice_path, cfg)
+        if detections is None or detections.empty:
+            detection_count = 0
+        else:
+            detections = detections.copy()
+            detections["slice_id"] = slice_id
+            detections["cell_id"] = range(next_id, next_id + len(detections))
+            next_id += len(detections)
+            mapped_rows.append(
+                map_cells_with_registered_label_slice(
+                    detections,
+                    registered_label_tif=registered_label_path,
+                    structure_csv=structure_csv,
+                    atlas_slice_index=slice_id,
+                    slicing_plane=slicing_plane,
+                    registration_score=1.0,
+                    registration_method="3d_truth_export",
+                )
+            )
+            detection_count = len(detections)
+
+        registration_rows.append(
+            {
+                "slice_id": slice_id,
+                "slice_path": str(real_slice_path),
+                "registered_label_path": str(registered_label_path),
+                "overlay_path": str(overlay_path),
+                "registration_method": "3d_truth_export",
+                "score_type": "volume_truth_export",
+                "registration_ok": True,
+                "best_score": 1.0,
+                "best_z": slice_id,
+                "slicing_plane": slicing_plane,
+                "detected_cells": detection_count,
+            }
+        )
+
+    if mapped_rows:
+        mapped = pd.concat(mapped_rows, ignore_index=True)
+    else:
+        mapped = pd.DataFrame(
+            columns=[
+                "cell_id",
+                "slice_id",
+                "x",
+                "y",
+                "score",
+                "region_id",
+                "region_name",
+                "acronym",
+                "hemisphere",
+                "mapping_status",
+                "atlas_slice_index",
+                "slicing_plane",
+                "registration_method",
+                "registered_label_path",
+                "structure_id_path",
+                "structure_source",
+            ]
+        )
+
+    deduped, _stats = apply_dedup_kdtree(
+        mapped,
+        neighbor_slices=neighbor_slices,
+        pixel_size_um=pixel_size_um,
+        slice_spacing_um=slice_spacing_um,
+        r_xy_um=r_xy_um,
+    )
+    deduped.to_csv(outputs_dir / "cells_mapped.csv", index=False)
+
+    leaf, hierarchy = aggregate_by_region(deduped)
+    write_outputs(leaf, hierarchy, outputs_dir)
+
+    pd.DataFrame(registration_rows).to_csv(outputs_dir / "slice_registration_qc.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "truth_source": "3d_registered_volume",
+                "score_type": "volume_truth_export",
+                "registration_method": "3d_truth_export",
+                "slice_count": len(truth_rows),
+                "mapped_cell_count": int(len(mapped)),
+                "deduped_cell_count": int(len(deduped)),
+            }
+        ]
+    ).to_csv(outputs_dir / "volume_registration_qc.csv", index=False)
+
+    return {
+        "cells_mapped_csv": str(outputs_dir / "cells_mapped.csv"),
+        "truth_source": "3d_registered_volume",
+        "slice_registration_qc_csv": str(outputs_dir / "slice_registration_qc.csv"),
+        "volume_registration_qc_csv": str(outputs_dir / "volume_registration_qc.csv"),
+    }
+
+
+def run_real_input(
+    cfg: dict,
+    input_dir: Path,
+    output_name: str | None = None,
+    output_dir: Path | None = None,
+):
+    project_root = _project_root()
+    run_name = (
+        str(output_name).strip() if output_name and str(output_name).strip() else Path(input_dir).name
+    )
+    if output_dir is not None:
+        outputs_dir = Path(output_dir)
+        run_name = run_name or outputs_dir.name
+    else:
+        outputs_dir = project_root / "outputs" / run_name
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[output -> {outputs_dir}]")
     slice_glob = cfg.get("input", {}).get("slice_glob", "*.tif")
     files = _collect_slice_files(input_dir, slice_glob)
     if not files:
@@ -199,8 +373,39 @@ def run_real_input(cfg: dict, input_dir: Path):
     n_merge = int(cfg.get("input", {}).get("slice_interval_n", 5))
     merged_files = merge_every_n_slices(channel_files, outputs_dir / "tmp_merged", n=n_merge)
 
+    reg_cfg = cfg.get("registration", {})
+    scope = str(reg_cfg.get("scope", "")).lower().strip()
+    whole_brain_backend = str(reg_cfg.get("whole_brain_backend", "")).lower().strip()
+    if scope == "whole" and whole_brain_backend == "miki_3d":
+        cfg = dict(cfg)
+        if "quantify_fn" not in cfg:
+            cfg["quantify_fn"] = lambda **kwargs: _quantify_against_exported_truth(**kwargs)
+        return run_whole_brain_3d(
+            cfg=cfg,
+            input_dir=input_dir,
+            outputs_dir=outputs_dir,
+            merged_slice_paths=merged_files,
+        )
+
+    # Extract marker channel for colocalization (if configured)
+    _marker_channel_name = str(cfg.get("detection", {}).get("marker_channel", "")).lower().strip()
+    _merged_marker_files: list[Path] = []
+    if _marker_channel_name:
+        _cmap = cfg.get("input", {}).get("channel_map", {"red": 0, "green": 1, "farred": 2})
+        _marker_ch_idx = int(_cmap.get(_marker_channel_name, 1))
+        _marker_ch_dir = outputs_dir / "tmp_marker_channel"
+        _marker_channel_files = _extract_channel_to_tmp(files, _marker_ch_dir, _marker_ch_idx)
+        _merged_marker_files = merge_every_n_slices(
+            _marker_channel_files, outputs_dir / "tmp_marker_merged", n=n_merge
+        )
+
+    annotation_nii = project_root / "annotation_25.nii.gz"
+    if not annotation_nii.exists():
+        raise FileNotFoundError(f"atlas annotation not found: {annotation_nii}")
+
     px_um = _validated_float(cfg, "input.pixel_size_um_xy")
     spacing_um = _validated_float(cfg, "input.slice_spacing_um")
+    slicing_plane = str(cfg.get("input", {}).get("slicing_plane", "coronal")).lower()
     neighbor = _validated_int(cfg, "dedup.neighbor_slices")
     rxy = _validated_float(cfg, "dedup.r_xy_um")
     structure_csv = _resolve_structure_source(project_root)
@@ -274,6 +479,7 @@ def run_real_input(cfg: dict, input_dir: Path):
     detect_rows = []
     mapped_rows = []
     registration_rows = []
+    region_area_rows = []
     next_id = 1
     for sid, mp in enumerate(merged_files):
         det = detect_cells(mp, cfg)
@@ -356,7 +562,7 @@ def run_real_input(cfg: dict, input_dir: Path):
                 "best_score_type": score_type,
                 "label_slice_tif": str(auto_label_path),
                 "shape": list(vol.shape),
-                "slicing_plane": "coronal",
+                "slicing_plane": slicing_plane,
                 "slice_shape": list(best_slice.shape),
                 "roi_mode": "fixed",
                 "roi_bbox": [0, 0, 0, 0],
@@ -372,7 +578,7 @@ def run_real_input(cfg: dict, input_dir: Path):
                 out_label_tif=auto_label_path,
                 z_step=2,
                 pixel_size_um=px_um,
-                slicing_plane="coronal",
+                slicing_plane=slicing_plane,
                 roi_mode="auto",
                 z_range=atlas_z_range,
             )
@@ -462,6 +668,12 @@ def run_real_input(cfg: dict, input_dir: Path):
                 ),
             )
         )
+        if registered_label_path.exists():
+            try:
+                area_df = compute_region_areas_from_label_tif(registered_label_path, sid, px_um)
+                region_area_rows.append(area_df)
+            except Exception as _e:
+                print(f"[warn] region area computation failed for slice {sid}: {_e}")
 
     registration_qc_path = outputs_dir / "slice_registration_qc.csv"
     pd.DataFrame(registration_rows).to_csv(registration_qc_path, index=False)
@@ -495,6 +707,56 @@ def run_real_input(cfg: dict, input_dir: Path):
     leaf, hierarchy = aggregate_by_region(deduped)
     write_outputs(leaf, hierarchy, outputs_dir)
 
+    # Write region areas (pixels per region per slice → mm²)
+    region_areas_path = outputs_dir / "region_areas.csv"
+    if region_area_rows:
+        pd.concat(region_area_rows, ignore_index=True).to_csv(region_areas_path, index=False)
+
+    # Generate paper-style AAV summary (representative slice + density)
+    try:
+        from scripts.paper_aav_summary import generate_paper_aav_summary
+    except Exception:
+        try:
+            from paper_aav_summary import generate_paper_aav_summary
+        except Exception:
+            generate_paper_aav_summary = None
+    if generate_paper_aav_summary is not None and region_areas_path.exists():
+        try:
+            generate_paper_aav_summary(
+                cells_mapped_csv=outputs_dir / "cells_mapped.csv",
+                region_areas_csv=region_areas_path,
+                out_csv=outputs_dir / "paper_aav_region_summary.csv",
+            )
+        except Exception as _e:
+            print(f"[warn] paper_aav_summary failed: {_e}")
+
+    # Colocalization analysis (only when marker_channel is configured)
+    if _merged_marker_files:
+        _marker_tifs: dict[int, Path] = {
+            sid: _merged_marker_files[sid]
+            for sid in range(len(_merged_marker_files))
+            if sid < len(_merged_marker_files)
+        }
+        _coloc_thr = float(cfg.get("detection", {}).get("marker_intensity_threshold_pct", 95.0))
+        try:
+            from scripts.colocalization import run_colocalization
+        except Exception:
+            try:
+                from colocalization import run_colocalization
+            except Exception:
+                run_colocalization = None
+        if run_colocalization is not None:
+            try:
+                run_colocalization(
+                    cells_mapped_csv=outputs_dir / "cells_mapped.csv",
+                    marker_tifs=_marker_tifs,
+                    out_dir=outputs_dir,
+                    marker_intensity_threshold_pct=_coloc_thr,
+                )
+                print("[main] Colocalization complete: cells_colocalization.csv + colocalization_summary.csv")
+            except Exception as _e:
+                print(f"[warn] colocalization failed: {_e}")
+
     cells_mapped_path = outputs_dir / "cells_mapped.csv"
     slice_qc_path = outputs_dir / "slice_qc.csv"
     export_slice_qc(cells_mapped_path, slice_qc_path)
@@ -512,21 +774,22 @@ def run_real_input(cfg: dict, input_dir: Path):
         f"Real-input end-to-end complete: detected={len(cells)}, dedup={len(deduped)} -> outputs/cell_counts_leaf.csv + QC"
     )
 
-    # Auto-regenerate demo visuals (panel, annotated slice, chart) after pipeline completes
-    refresh_script = project_root / "scripts" / "refresh_demo.py"
-    if refresh_script.exists():
-        import subprocess
-        import sys as _sys
-
-        print("\nAuto-running refresh_demo.py to regenerate demo visuals...")
+    # Generate paper-style report
+    try:
+        from scripts.export_paper_report import generate_paper_report
+    except Exception:
         try:
-            subprocess.run(
-                [_sys.executable, str(refresh_script)],
-                cwd=str(project_root),
-                timeout=180,
-            )
+            from export_paper_report import generate_paper_report
+        except Exception:
+            generate_paper_report = None
+    if generate_paper_report is not None:
+        try:
+            generate_paper_report(outputs_dir)
         except Exception as _e:
-            print(f"[warn] refresh_demo.py failed: {_e}")
+            print(f"[warn] export_paper_report failed: {_e}")
+
+    # Auto-regenerate demo visuals (panel, annotated slice, chart) after pipeline completes
+    _refresh_demo_visuals(project_root, outputs_dir, input_dir)
 
 
 def main():
@@ -553,6 +816,18 @@ def main():
         help="Bootstrap registration assets from legacy repo",
     )
     parser.add_argument(
+        "--output-name",
+        type=str,
+        default="",
+        help="Output subfolder name under outputs/. Defaults to input folder name.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="",
+        help="Explicit output directory. Overrides --output-name when provided.",
+    )
+    parser.add_argument(
         "--debug", action="store_true", help="Enable DEBUG-level logging to console and log file"
     )
     args = parser.parse_args()
@@ -563,7 +838,15 @@ def main():
     try:
         from scripts.logging_setup import configure_logging
 
-        _outputs_dir = _project_root() / "outputs"
+        if (args.output_dir or "").strip():
+            _outputs_dir = Path(args.output_dir).expanduser()
+            if not _outputs_dir.is_absolute():
+                _outputs_dir = (_project_root() / _outputs_dir).resolve()
+        else:
+            _run_name = (args.output_name or "").strip() or (
+                Path(args.run_real_input).name if args.run_real_input else "outputs"
+            )
+            _outputs_dir = _project_root() / "outputs" / _run_name
         configure_logging(_outputs_dir, debug=getattr(args, "debug", False))
     except Exception:
         pass  # logging is optional; don't block pipeline startup
@@ -618,7 +901,12 @@ def main():
         return
 
     if args.run_real_input:
-        run_real_input(cfg, Path(args.run_real_input))
+        run_real_input(
+            cfg,
+            Path(args.run_real_input),
+            output_name=args.output_name or None,
+            output_dir=Path(args.output_dir).expanduser() if (args.output_dir or "").strip() else None,
+        )
         return
 
     print("MVP skeleton only: registration/mapping integration pending.")

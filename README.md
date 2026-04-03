@@ -76,6 +76,13 @@ flowchart LR
   - 校准学习闭环
   - 输出文件解释
   - 回归测试命令
+- [REPRODUCE.md](REPRODUCE.md)
+  - 5 步端到端复现说明
+  - 软件级最小复现 + 本地样本复现实例
+- [CITATION.cff](CITATION.cff)
+  - 标准软件引用元数据
+- [CODE_SIGNING.md](CODE_SIGNING.md)
+  - Windows desktop code-signing setup for release builds
 - `project/scripts/`
   - 配准、渲染、映射、聚合、训练、测试主逻辑
 - `project/frontend/`
@@ -85,6 +92,9 @@ flowchart LR
 
 当前版本已经从“研究原型”推进到“可验证、可继续开发的工程原型”：
 
+- Whole-brain automatic runs now use the native 3D volume-first truth path (`miki_3d`).
+- Key 3D artifacts include `outputs/volume/input_volume.nii.gz`, `outputs/template_prep/template_half.nii.gz`, `outputs/template_prep/annotation_half.nii.gz`, `outputs/ants_registration/ants_result.nii.gz`, `outputs/ants_registration/annotation_registered.nii.gz`, `outputs/laplacian_refinement/final_registered.nii.gz`, `outputs/truth_export/slice_*_registered_label.tif`, `outputs/truth_export/slice_*_overlay.png`, `outputs/slice_registration_qc.csv`, and `outputs/volume_registration_qc.csv`.
+- The 2D workflow remains available for preview and manual correction only.
 - 结果链路比之前更可信，去掉了伪映射和伪层级统计
 - 训练闭环已改成 `Label.tif` 真值优先
 - 增加了最小回归测试

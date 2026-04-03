@@ -24,6 +24,16 @@ from PIL import Image
 from scipy.ndimage import gaussian_filter, map_coordinates
 from tifffile import imread
 
+try:
+    from project.scripts.asset_bootstrap import default_structure_source
+except Exception:
+    from scripts.asset_bootstrap import default_structure_source
+
+try:
+    from project.scripts.pipeline_progress import read_stage_progress
+except Exception:
+    from scripts.pipeline_progress import read_stage_progress
+
 # ---------------------------------------------------------------------------
 # Paths – populated by server.py (thin orchestrator) before any request
 # ---------------------------------------------------------------------------
@@ -31,12 +41,157 @@ ROOT: Path = Path(__file__).resolve().parent  # frontend dir
 PROJECT_ROOT: Path = ROOT.parent  # project dir
 OUTPUT_DIR: Path = PROJECT_ROOT / "outputs"
 
+
+def active_output_dir() -> Path:
+    """Return the most recently used run output dir.
+
+    Priority:
+    1. Explicit run_state['outputDir'] set during/after a pipeline run this session
+    2. run_state['runName'] under outputs/
+    3. Most recent output dir with active-progress or QC markers
+    4. Most recent output dir with completed-results markers
+    5. OUTPUT_DIR itself (fallback)
+    """
+    explicit = str(run_state.get("outputDir", "")).strip()
+    if explicit:
+        candidate = Path(explicit).expanduser()
+        if candidate.exists():
+            return candidate
+    run_name = run_state.get("runName", "")
+    if run_name:
+        candidate = PROJECT_ROOT / "outputs" / run_name
+        if candidate.exists():
+            return candidate
+    base = PROJECT_ROOT / "outputs"
+    if base.exists():
+        discovered = _discover_recent_output_dir(base)
+        if discovered is not None:
+            return discovered
+        run_dirs = [d for d in base.iterdir() if d.is_dir()]
+        if run_dirs:
+            return max(run_dirs, key=lambda d: d.stat().st_mtime)
+    return OUTPUT_DIR
+
+
+def _directory_marker_score(directory: Path) -> tuple[int, float, float] | None:
+    if not directory.exists() or not directory.is_dir():
+        return None
+
+    marker_groups = (
+        (3, ("pipeline_progress.json",)),
+        (2, ("volume_registration_qc.csv",)),
+        (1, ("cell_counts_hierarchy.csv", "slice_registration_qc.csv", "cell_counts_leaf.csv")),
+    )
+    best_score: tuple[int, float, float] | None = None
+    for priority, marker_names in marker_groups:
+        marker_mtime = 0.0
+        for marker_name in marker_names:
+            marker_path = directory / marker_name
+            if marker_path.exists():
+                try:
+                    marker_mtime = max(marker_mtime, float(marker_path.stat().st_mtime))
+                except OSError:
+                    continue
+        if marker_mtime <= 0.0:
+            continue
+        try:
+            dir_mtime = float(directory.stat().st_mtime)
+        except OSError:
+            dir_mtime = 0.0
+        candidate = (priority, marker_mtime, dir_mtime)
+        if best_score is None or candidate > best_score:
+            best_score = candidate
+    return best_score
+
+
+def _discover_recent_output_dir(base: Path) -> Path | None:
+    if not base.exists():
+        return None
+
+    candidate_dirs: set[Path] = set()
+    if _directory_marker_score(base) is not None:
+        candidate_dirs.add(base)
+
+    for marker_name in (
+        "pipeline_progress.json",
+        "volume_registration_qc.csv",
+        "cell_counts_hierarchy.csv",
+        "slice_registration_qc.csv",
+        "cell_counts_leaf.csv",
+    ):
+        try:
+            for marker_path in base.rglob(marker_name):
+                if marker_path.is_file():
+                    candidate_dirs.add(marker_path.parent)
+        except Exception:
+            continue
+
+    best_dir: Path | None = None
+    best_score: tuple[int, float, float] | None = None
+    for directory in candidate_dirs:
+        score = _directory_marker_score(directory)
+        if score is None:
+            continue
+        if best_score is None or score > best_score:
+            best_score = score
+            best_dir = directory
+    return best_dir
+
+
+def latest_run_params(out_dir: Path | None = None) -> dict:
+    """Return the most recent saved run params for *out_dir* if available."""
+    target_dir = out_dir or active_output_dir()
+    if not target_dir.exists():
+        return {}
+    params_files = sorted(target_dir.glob("run_params_*.json"), reverse=True)
+    if not params_files:
+        return {}
+    try:
+        return json.loads(params_files[0].read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def latest_input_dir(out_dir: Path | None = None) -> Path | None:
+    """Resolve the input directory recorded for the most recent run."""
+    params = latest_run_params(out_dir)
+    raw = str(params.get("inputDir", "")).strip()
+    if not raw:
+        return None
+    path = Path(raw).expanduser()
+    return path if path.exists() else None
+
+
+def latest_stage_progress(out_dir: Path | None = None) -> dict:
+    """Return the latest persisted stage progress for *out_dir*."""
+    target_dir = out_dir or active_output_dir()
+    try:
+        return read_stage_progress(target_dir)
+    except Exception:
+        return {}
+
+
+def open_folder_in_shell(path: Path) -> None:
+    """Open *path* in the OS file explorer."""
+    target = Path(path).expanduser()
+    if sys.platform.startswith("win"):
+        os.startfile(str(target))  # type: ignore[attr-defined]
+        return
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", str(target)])
+        return
+    subprocess.Popen(["xdg-open", str(target)])
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 MAX_CALIB_SAMPLES = int(os.environ.get("IDLEBRAIN_MAX_CALIB_SAMPLES", "180"))
 DEFAULT_STRUCTURE_SOURCE = PROJECT_ROOT / "configs" / "allen_mouse_structure_graph.csv"
 DEFAULT_JOB_ID = "default"
+
+_resolved_structure_source = default_structure_source(PROJECT_ROOT)
+if _resolved_structure_source is not None:
+    DEFAULT_STRUCTURE_SOURCE = _resolved_structure_source
 
 # ---------------------------------------------------------------------------
 # Shared mutable state
@@ -553,8 +708,28 @@ def _build_parent_name_map(structure_csv_path: str) -> dict[int, str]:
 # ---------------------------------------------------------------------------
 
 
-def _runner(config_path: str, input_dir: str, channels: list[str], run_params=None):
+def _runner(
+    config_path: str,
+    input_dir: str,
+    channels: list[str],
+    run_params=None,
+    output_name: str = "",
+    output_dir: str = "",
+):
+    global OUTPUT_DIR
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    explicit_output_dir = str(output_dir).strip()
+    if explicit_output_dir:
+        requested = Path(explicit_output_dir).expanduser()
+        OUTPUT_DIR = requested if requested.is_absolute() else (PROJECT_ROOT / requested).resolve()
+    else:
+        _input_name = Path(input_dir).name if input_dir else ""
+        run_name = str(output_name).strip() if str(output_name).strip() else (_input_name or ts)
+        OUTPUT_DIR = PROJECT_ROOT / "outputs" / run_name
+    run_name = str(output_name).strip() or OUTPUT_DIR.name or ts
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
     run_state.update(
         {
             "running": True,
@@ -563,6 +738,8 @@ def _runner(config_path: str, input_dir: str, channels: list[str], run_params=No
             "channels": channels,
             "logs": [],
             "startTime": ts,
+            "outputDir": str(OUTPUT_DIR),
+            "runName": run_name,
         }
     )
 
@@ -591,6 +768,10 @@ def _runner(config_path: str, input_dir: str, channels: list[str], run_params=No
                 "--run-real-input",
                 input_dir,
             ]
+            if explicit_output_dir:
+                cmd.extend(["--output-dir", str(OUTPUT_DIR)])
+            else:
+                cmd.extend(["--output-name", run_name])
             env = os.environ.copy()
             env["BRAINCOUNT_ACTIVE_CHANNEL"] = ch
 

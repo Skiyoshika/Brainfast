@@ -14,6 +14,7 @@ let currentLang = localStorage.getItem('idlebrain.lang') || 'en';
 const LANGS = {
   en: {
     'nav.workflow': 'Registration Workflow',
+    'nav.manualTiff': 'Manual TIFF Check',
     'nav.qc': 'Batch QC Review',
     'nav.results': 'Results',
     'status.idle': 'Idle',
@@ -134,6 +135,20 @@ const LANGS = {
     'outputs.title': 'Output Files',
     'outputs.hint': 'Click a PNG to preview · Click CSV/JSON to view content',
     'outputs.empty': 'No output files yet',
+    'wb3d.status.title': '3D Registration Status',
+    'wb3d.status.notice': 'Whole-brain automatic truth comes from the 3D pipeline. The 2D tools elsewhere remain preview and manual-correction helpers only.',
+    'wb3d.status.idle': 'Waiting for a whole-brain 3D run',
+    'wb3d.status.stage': 'Stage {current}/{total}',
+    'wb3d.status.running': 'Running',
+    'wb3d.status.done': 'Done',
+    'wb3d.status.pending': 'Pending',
+    'wb3d.status.failed': 'Failed',
+    'wb3d.qc.title': '3D QC Summary',
+    'wb3d.qc.loading': 'Loading volume registration QC...',
+    'wb3d.qc.empty': 'Volume QC will appear after the 3D pipeline writes volume_registration_qc.csv.',
+    'wb3d.slice.title': 'Slice Inspector',
+    'wb3d.slice.hint': 'These overlays are exported from the final 3D truth volume. The 2D tools below remain auxiliary.',
+    'wb3d.slice.empty': 'No exported 3D slice overlays yet. Run the whole-brain 3D pipeline first.',
     'qc.hint': 'Click any image to enlarge. Generated after running the pipeline.',
     'qc.empty': 'No QC images yet. Please run the pipeline in the Registration Workflow tab first.',
     'qc.annotatedSliceTitle': 'Atlas Registration — Annotated Brain Regions',
@@ -142,6 +157,7 @@ const LANGS = {
     'qc.bestSliceHint': 'Side-by-side comparison — click to view full resolution',
     'qc.panelTitle': 'Whole-Brain Registration Overview',
     'qc.panelHint': 'Multi-slice atlas registration panel — click to view full size',
+    'tab.manualTiff.title': 'Manual TIFF Check',
     'tab.qc.title': 'Batch QC Review',
     'tab.results.title': 'Results',
     'ph.outputDir': '(default: outputs/)',
@@ -217,9 +233,39 @@ const LANGS = {
     'toast.cancelNone': 'No pipeline is running',
     'toast.outputsPath': 'Output folder: {path}',
     'toast.qcLoadFailed': 'Failed to load QC images',
+
+    'manualCount.title': 'Manual TIFF Check',
+    'manualCount.desc': 'Open a source TIFF directly for visual inspection and manual counting. Use the mouse wheel to move through Z slices.',
+    'manualCount.source': 'Manual Count Source TIFF',
+    'manualCount.zoom': 'Zoom',
+    'manualCount.palette': 'Display',
+    'manualCount.palette.gray': 'Gray',
+    'manualCount.palette.green': 'Green',
+    'manualCount.palette.magenta': 'Magenta',
+    'manualCount.palette.amber': 'Amber',
+    'manualCount.palette.turbo': 'Turbo',
+    'manualCount.load': 'Load TIFF',
+    'manualCount.export': 'Export Count CSV',
+    'manualCount.undo': 'Undo Last Point',
+    'manualCount.clearSlice': 'Clear Current Z',
+    'manualCount.clearAll': 'Clear All Points',
+    'manualCount.z': 'Z',
+    'manualCount.sliceCount': 'Current Z',
+    'manualCount.totalCount': 'Total',
+    'manualCount.placeholder': 'Load a TIFF to start manual counting.',
+    'manualCount.help': 'Left click adds a count. Right click removes the nearest count. Mouse wheel moves through Z slices.',
+    'manualCount.ready': 'Loaded {name}. Mouse wheel changes Z. Left click adds a point.',
+    'manualCount.needPath': 'Please choose a TIFF source first',
+    'manualCount.loadFail': 'Failed to load TIFF: {err}',
+    'manualCount.noPoints': 'No manual count points to export',
+    'manualCount.exported': 'Manual count CSV exported',
+    'manualCount.pathChanged': 'Switched TIFF source. Previous manual points were cleared.',
+    'manualCount.sliceCleared': 'Cleared points on current Z',
+    'manualCount.allCleared': 'Cleared all manual count points',
   },
   zh: {
     'nav.workflow': '配准工作流',
+    'nav.manualTiff': '手动TIFF检查',
     'nav.qc': '批量QC审查',
     'nav.results': '统计结果',
     'status.idle': '空闲',
@@ -340,6 +386,20 @@ const LANGS = {
     'outputs.title': '输出文件',
     'outputs.hint': '点击PNG预览 · 点击CSV/JSON查看内容',
     'outputs.empty': '暂无输出文件',
+    'wb3d.status.title': '3D配准状态',
+    'wb3d.status.notice': '全脑自动真值来自3D流水线。其他2D工具仅作为预览和手动修正辅助。',
+    'wb3d.status.idle': '等待全脑3D运行',
+    'wb3d.status.stage': '阶段 {current}/{total}',
+    'wb3d.status.running': '运行中',
+    'wb3d.status.done': '完成',
+    'wb3d.status.pending': '等待中',
+    'wb3d.status.failed': '失败',
+    'wb3d.qc.title': '3D QC摘要',
+    'wb3d.qc.loading': '正在加载体素配准QC...',
+    'wb3d.qc.empty': '当3D流水线写入 volume_registration_qc.csv 后，这里会显示体素级QC摘要。',
+    'wb3d.slice.title': '切片检查器',
+    'wb3d.slice.hint': '这些叠加图来自最终的3D真值体。下面的2D工具仅作为辅助。',
+    'wb3d.slice.empty': '尚无导出的3D切片叠加图，请先运行全脑3D流水线。',
     'qc.hint': '点击图片可放大。运行流水线后生成。',
     'qc.empty': '暂无QC图片，请先在”配准工作流”标签页运行流水线。',
     'qc.annotatedSliceTitle': '图谱配准 — 脑区标注示例',
@@ -348,6 +408,7 @@ const LANGS = {
     'qc.bestSliceHint': '左右对比图 — 点击查看原始分辨率',
     'qc.panelTitle': '全脑配准总览',
     'qc.panelHint': '多切片图谱配准面板 — 点击查看大图',
+    'tab.manualTiff.title': '手动TIFF检查',
     'tab.qc.title': '批量QC审查',
     'tab.results.title': '统计结果',
     'ph.outputDir': '（默认：outputs/）',
@@ -423,6 +484,35 @@ const LANGS = {
     'toast.cancelNone': '当前没有运行中的流水线',
     'toast.outputsPath': '输出目录：{path}',
     'toast.qcLoadFailed': 'QC图片加载失败',
+
+    'manualCount.title': '手动TIFF检查',
+    'manualCount.desc': '直接打开源TIFF进行人眼检查和手动计数，可用鼠标滚轮切换Z层。',
+    'manualCount.source': '手动检查源TIFF',
+    'manualCount.zoom': '缩放',
+    'manualCount.palette': '显示',
+    'manualCount.palette.gray': '灰度',
+    'manualCount.palette.green': '绿色',
+    'manualCount.palette.magenta': '洋红',
+    'manualCount.palette.amber': '琥珀',
+    'manualCount.palette.turbo': 'Turbo 伪彩',
+    'manualCount.load': '加载TIFF',
+    'manualCount.export': '导出计数CSV',
+    'manualCount.undo': '撤销上一个点',
+    'manualCount.clearSlice': '清空当前Z层',
+    'manualCount.clearAll': '清空全部点',
+    'manualCount.z': 'Z',
+    'manualCount.sliceCount': '当前Z层',
+    'manualCount.totalCount': '总数',
+    'manualCount.placeholder': '加载TIFF后即可开始手动检查。',
+    'manualCount.help': '左键添加计数点，右键删除最近的点，鼠标滚轮切换Z层。',
+    'manualCount.ready': '已加载 {name}。可滚轮切换Z层，左键添加计数点。',
+    'manualCount.needPath': '请先选择一个TIFF源文件',
+    'manualCount.loadFail': '加载TIFF失败：{err}',
+    'manualCount.noPoints': '当前没有可导出的手动计数点',
+    'manualCount.exported': '手动计数CSV已导出',
+    'manualCount.pathChanged': '已切换TIFF源文件，之前的手动计数点已清空。',
+    'manualCount.sliceCleared': '已清空当前Z层的计数点',
+    'manualCount.allCleared': '已清空全部手动计数点',
   },
 };
 
@@ -481,6 +571,14 @@ const compareRows   = document.getElementById('compareRows');
 const historyList   = document.getElementById('historyList');
 const versionText   = document.getElementById('versionText');
 const sliceProgress = document.getElementById('sliceProgress');
+const wholeBrainStageList = document.getElementById('wholeBrainStageList');
+const wholeBrainStageMeta = document.getElementById('wholeBrainStageMeta');
+const volumeQcSummaryEl = document.getElementById('volumeQcSummary');
+const volumeQcSourceEl = document.getElementById('volumeQcSource');
+const sliceInspectorGrid = document.getElementById('sliceInspectorGrid');
+const sliceInspectorEmpty = document.getElementById('sliceInspectorEmpty');
+const sliceInspectorCount = document.getElementById('sliceInspectorCount');
+const qcAllCount = document.getElementById('qcAllCount');
 const validateStatus = document.getElementById('validateStatus');
 const workflowModeEl = document.getElementById('workflowMode');
 const oneClickSourcePathEl = document.getElementById('oneClickSourcePath');
@@ -578,7 +676,7 @@ document.querySelectorAll('.nav-btn[data-tab]').forEach(btn => {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
-    if (btn.dataset.tab === 'results') refreshOutputs();
+    if (btn.dataset.tab === 'results') refreshOutputsAndFiles();
     if (btn.dataset.tab === 'qc')      refreshQcAll();
   };
 });
@@ -1196,6 +1294,7 @@ async function pollLogsUntilDone() {
     
     // Update sidebar slice progress bar (visible at all times)
     _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
+    renderWholeBrain3dStage(s.stage || null);
 
     if (s.running) {
       const lastLines = logsData.logs.slice(-10).join('\n');
@@ -1237,12 +1336,215 @@ document.getElementById('openOutputsBtn').onclick = async () => {
 };
 
 // ================================================================
+// 3D WHOLE-BRAIN QC SURFACES
+// ================================================================
+const WHOLE_BRAIN_STAGE_NAMES = [
+  'Volume Build',
+  'Template Prep',
+  'ANTS Registration',
+  'Laplacian Refinement',
+  'Truth Export',
+  'Quantification',
+];
+
+let latestWholeBrainStage = null;
+
+function renderWholeBrain3dStage(stage) {
+  latestWholeBrainStage = stage || null;
+  if (!wholeBrainStageList) return;
+
+  const activeName = String(stage?.stageName || '').trim();
+  const activeIndex = Number(stage?.stageIndex || 0);
+  const stageCount = Number(stage?.stageCount || WHOLE_BRAIN_STAGE_NAMES.length);
+  const activePercent = Number(stage?.percent || 0);
+  const hasActiveStage = !!activeName;
+
+  if (wholeBrainStageMeta) {
+    if (!hasActiveStage) {
+      wholeBrainStageMeta.textContent = t('wb3d.status.idle');
+    } else {
+      wholeBrainStageMeta.textContent = t('wb3d.status.stage', {
+        current: activeIndex || 1,
+        total: stageCount || WHOLE_BRAIN_STAGE_NAMES.length,
+      });
+    }
+  }
+
+  wholeBrainStageList.innerHTML = '';
+  WHOLE_BRAIN_STAGE_NAMES.forEach((name, idx) => {
+    const isActive = activeName === name;
+    const isDone = hasActiveStage && (idx + 1 < activeIndex || (isActive && activePercent >= 100));
+    const isFuture = hasActiveStage && !isActive && !isDone && idx + 1 > activeIndex;
+    const pct = isDone ? 100 : (isActive ? Math.max(0, Math.min(100, activePercent)) : 0);
+    const row = document.createElement('div');
+    row.className = `stage-row${isActive ? ' active' : ''}${isDone ? ' done' : ''}${isFuture ? ' future' : ''}${stage?.error && isActive ? ' error' : ''}`;
+    row.innerHTML = `
+      <div class="stage-head">
+        <div class="stage-title">
+          <span class="stage-index">${idx + 1}</span>
+          <div>
+            <div class="stage-name"></div>
+            <div class="stage-sub"></div>
+          </div>
+        </div>
+        <span class="stage-status"></span>
+      </div>
+      <div class="stage-bar"><div></div></div>
+    `;
+    row.querySelector('.stage-name').textContent = name;
+    row.querySelector('.stage-status').textContent = isActive
+      ? (stage?.error ? t('wb3d.status.failed') : (pct >= 100 ? t('wb3d.status.done') : t('wb3d.status.running')))
+      : (isDone ? t('wb3d.status.done') : t('wb3d.status.pending'));
+    const stageSub = row.querySelector('.stage-sub');
+    const artifactText = stage?.artifacts && typeof stage.artifacts === 'object'
+      ? Object.entries(stage.artifacts)
+          .filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '')
+          .map(([key, value]) => `${key}: ${value}`)
+          .join(' · ')
+      : '';
+    if (isActive && (stage?.message || artifactText)) {
+      stageSub.textContent = [stage.message, artifactText].filter(Boolean).join(' · ');
+    } else if (isDone) {
+      stageSub.textContent = t('wb3d.status.done');
+    } else {
+      stageSub.textContent = '';
+    }
+    row.querySelector('.stage-bar > div').style.width = `${pct}%`;
+    wholeBrainStageList.appendChild(row);
+  });
+}
+
+function _parseSimpleCsvRows(text) {
+  const lines = String(text || '').trim().split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(part => part.trim());
+  const rows = [];
+  for (const line of lines.slice(1)) {
+    const cols = line.split(',').map(part => part.trim());
+    if (headers.length <= 1) {
+      rows.push({ key: headers[0] || 'value', value: cols[0] || '' });
+      continue;
+    }
+    const key = cols[0] || headers[0] || 'metric';
+    const value = cols.slice(1).join(', ').trim() || cols[0] || '';
+    rows.push({ key, value });
+  }
+  return rows;
+}
+
+function renderVolumeQcSummary(text) {
+  if (!volumeQcSummaryEl) return;
+  volumeQcSummaryEl.innerHTML = '';
+  const rows = _parseSimpleCsvRows(text);
+  if (volumeQcSourceEl) {
+    volumeQcSourceEl.textContent = rows.length ? 'volume_registration_qc.csv' : '';
+  }
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'volume-qc-empty';
+    empty.textContent = t('wb3d.qc.empty');
+    volumeQcSummaryEl.appendChild(empty);
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'volume-qc-list';
+  rows.slice(0, 12).forEach(row => {
+    const item = document.createElement('div');
+    item.className = 'volume-qc-item';
+    const key = document.createElement('span');
+    key.className = 'volume-qc-key';
+    key.textContent = row.key;
+    const value = document.createElement('strong');
+    value.className = 'volume-qc-val';
+    value.textContent = row.value;
+    item.appendChild(key);
+    item.appendChild(value);
+    list.appendChild(item);
+  });
+  volumeQcSummaryEl.appendChild(list);
+}
+
+async function refreshVolumeQcSummary() {
+  if (!volumeQcSummaryEl) return;
+  if (volumeQcSourceEl) {
+    volumeQcSourceEl.textContent = t('wb3d.qc.loading');
+  }
+  try {
+    const res = await fetch('/api/outputs/volume-reg-stats');
+    if (!res.ok) {
+      renderVolumeQcSummary('');
+      return;
+    }
+    renderVolumeQcSummary(await res.text());
+  } catch {
+    renderVolumeQcSummary('');
+  }
+}
+
+function _renderSliceInspectorGrid(payload) {
+  if (!sliceInspectorGrid || !sliceInspectorEmpty || !sliceInspectorCount) return;
+  const regList = payload?.regList || null;
+  const items = regList?.ok && Array.isArray(regList.files) && regList.files.length > 0
+    ? regList.files.map(name => ({
+        name,
+        source: '3d',
+      }))
+    : [];
+
+  sliceInspectorGrid.innerHTML = '';
+  if (!items.length) {
+    sliceInspectorEmpty.classList.remove('hidden');
+    sliceInspectorCount.textContent = '';
+    if (qcAllCount) qcAllCount.textContent = '';
+    return;
+  }
+
+  sliceInspectorEmpty.classList.add('hidden');
+  sliceInspectorCount.textContent = `${items.length}`;
+  if (qcAllCount) qcAllCount.textContent = `${items.length} slices`;
+  items.forEach(entry => {
+    const wrap = document.createElement('div');
+    wrap.className = 'qc-thumb';
+    const img = document.createElement('img');
+    const is3d = entry.source === '3d';
+    img.src = is3d ? `/api/outputs/reg-slice/${entry.name}?${Date.now()}` : `/api/outputs/qc-file/${entry.name}?${Date.now()}`;
+    img.alt = entry.name;
+    img.onerror = () => wrap.remove();
+    const label = document.createElement('div');
+    label.className = 'qc-thumb-label';
+    label.textContent = is3d
+      ? entry.name.replace('slice_', '').replace('_overlay.png', '')
+      : entry.name.replace('overlay_', '').replace('.png', '');
+    wrap.appendChild(img);
+    wrap.appendChild(label);
+    wrap.onclick = () => {
+      if (is3d) {
+        openLightbox(img.src, entry.name);
+      } else {
+        openLightbox(img.src, entry.name);
+      }
+    };
+    sliceInspectorGrid.appendChild(wrap);
+  });
+}
+
+async function refreshSliceInspector() {
+  if (!sliceInspectorGrid || !sliceInspectorEmpty || !sliceInspectorCount) return;
+  try {
+    const regList = await fetch('/api/outputs/reg-slice-list').then(r => r.json());
+    _renderSliceInspectorGrid({ regList });
+  } catch {
+    _renderSliceInspectorGrid({});
+  }
+}
+
+// ================================================================
 // BATCH QC ALL
 // ================================================================
 async function refreshQcAll() {
-  const grid = document.getElementById('qcAllGrid');
-  const empty = document.getElementById('qcEmpty');
-  const count = document.getElementById('qcAllCount');
+  renderWholeBrain3dStage(latestWholeBrainStage);
+  await Promise.all([refreshVolumeQcSummary(), refreshSliceInspector()]);
 
   // Load annotated slice (region labels)
   try {
@@ -1290,51 +1592,6 @@ async function refreshQcAll() {
     }
   } catch {}
 
-  // Load individual QC thumbnails (use registered slice gallery if available)
-  try {
-    // Prefer the vibrant registered slice overlays
-    const regList = await fetch('/api/outputs/reg-slice-list').then(r => r.json());
-    if (regList.ok && regList.files.length > 0) {
-      empty.classList.add('hidden');
-      count.textContent = `${regList.count}`;
-      grid.innerHTML = '';
-      regList.files.forEach(fname => {
-        const wrap = document.createElement('div');
-        wrap.className = 'qc-thumb';
-        const img = document.createElement('img');
-        img.src = `/api/outputs/reg-slice/${fname}?${Date.now()}`;
-        img.alt = fname; img.onerror = () => wrap.remove();
-        const label = document.createElement('div');
-        label.className = 'qc-thumb-label';
-        const sliceIdx = parseInt(fname.replace('slice_','').replace('_overlay.png','')) || 0;
-        label.textContent = fname.replace('slice_', '').replace('_overlay.png', '');
-        wrap.appendChild(img); wrap.appendChild(label);
-        // Click → open side-by-side comparison
-        wrap.onclick = () => openLightbox(`/api/outputs/demo-comparison/${sliceIdx}?${Date.now()}`, `Slice ${sliceIdx} — Raw vs Atlas`);
-        grid.appendChild(wrap);
-      });
-      return;
-    }
-    // Fallback to qc_overlays
-    const res = await fetch('/api/outputs/qc-list').then(r => r.json());
-    if (!res.ok || res.files.length === 0) { grid.innerHTML = ''; empty.classList.remove('hidden'); count.textContent = ''; return; }
-    empty.classList.add('hidden');
-    count.textContent = `${res.count}`;
-    grid.innerHTML = '';
-    res.files.forEach(fname => {
-      const wrap = document.createElement('div');
-      wrap.className = 'qc-thumb';
-      const img = document.createElement('img');
-      img.src = `/api/outputs/qc-file/${fname}?${Date.now()}`;
-      img.alt = fname; img.onerror = () => wrap.remove();
-      const label = document.createElement('div');
-      label.className = 'qc-thumb-label';
-      label.textContent = fname.replace('overlay_', '').replace('.png', '');
-      wrap.appendChild(img); wrap.appendChild(label);
-      wrap.onclick = () => openLightbox(img.src, fname);
-      grid.appendChild(wrap);
-    });
-  } catch { showToast(t('toast.qcLoadFailed'), 'warning'); }
 }
 document.getElementById('refreshQcAllBtn').onclick = refreshQcAll;
 
@@ -1547,6 +1804,10 @@ async function _pollSliceProgress() {
   try {
     const s = await fetch('/api/status').then(r => r.json());
     _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
+    renderWholeBrain3dStage(s.stage || null);
+    if (!s.running) {
+      await refreshVolumeQcSummary();
+    }
   } catch {}
 }
 // Check on load + every 30s
@@ -1634,13 +1895,16 @@ async function checkSliceIs3D(path) {
 }
 
 document.getElementById('realSlicePath').addEventListener('change', e => {
-  checkSliceIs3D(e.target.value);
+  const path = String(e.target.value || '').trim();
+  seedManualCountSourceFromWorkflow(path);
+  checkSliceIs3D(path);
 });
 
 if (oneClickSourcePathEl2) {
   oneClickSourcePathEl2.addEventListener('change', e => {
     const path = String(e.target.value || '').trim();
     document.getElementById('realSlicePath').value = path;
+    seedManualCountSourceFromWorkflow(path);
     if (oneClickStartBtn) oneClickStartBtn.dataset.zConfirmed = '0';
     if (path) checkSliceIs3D(path);
   });
@@ -1685,6 +1949,370 @@ zExtractBtn.onclick = async () => {
     showToast(t('toast.zExtractFail', { err: '?' }), 'error'); 
   }
 };
+
+
+// ================================================================
+// MANUAL COUNT VIEWER
+// ================================================================
+const manualCountSourcePathEl = document.getElementById('manualCountSourcePath');
+const manualCountLoadBtn = document.getElementById('manualCountLoadBtn');
+const manualCountExportBtn = document.getElementById('manualCountExportBtn');
+const manualCountUndoBtn = document.getElementById('manualCountUndoBtn');
+const manualCountClearSliceBtn = document.getElementById('manualCountClearSliceBtn');
+const manualCountClearAllBtn = document.getElementById('manualCountClearAllBtn');
+const manualCountViewport = document.getElementById('manualCountViewport');
+const manualCountStage = document.getElementById('manualCountStage');
+const manualCountPlaceholder = document.getElementById('manualCountPlaceholder');
+const manualCountImg = document.getElementById('manualCountImg');
+const manualCountCanvas = document.getElementById('manualCountCanvas');
+const manualCountCtx = manualCountCanvas?.getContext('2d');
+const manualCountZoomEl = document.getElementById('manualCountZoom');
+const manualCountZoomValueEl = document.getElementById('manualCountZoomValue');
+const manualCountPaletteEl = document.getElementById('manualCountPalette');
+const manualCountZTextEl = document.getElementById('manualCountZText');
+const manualCountSliceCountEl = document.getElementById('manualCountSliceCount');
+const manualCountTotalCountEl = document.getElementById('manualCountTotalCount');
+const manualCountStatusEl = document.getElementById('manualCountStatus');
+
+const manualCountState = {
+  path: '',
+  points: [],
+  z: 0,
+  zMax: 0,
+  is3d: false,
+  loaded: false,
+  loading: false,
+  naturalWidth: 0,
+  naturalHeight: 0,
+  zoom: Number(manualCountZoomEl?.value || 1),
+  palette: String(manualCountPaletteEl?.value || 'green'),
+  renderSeq: 0,
+  nextPointId: 1,
+};
+
+function manualCountBaseName(path) {
+  const parts = String(path || '').split(/[\/]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : String(path || '');
+}
+
+function manualCountCurrentPoints() {
+  return manualCountState.points
+    .filter(point => point.z === manualCountState.z)
+    .sort((a, b) => a.id - b.id);
+}
+
+function updateManualCountSummary() {
+  if (manualCountZTextEl) {
+    manualCountZTextEl.textContent = `${manualCountState.z} / ${manualCountState.zMax}`;
+  }
+  if (manualCountSliceCountEl) {
+    manualCountSliceCountEl.textContent = String(manualCountCurrentPoints().length);
+  }
+  if (manualCountTotalCountEl) {
+    manualCountTotalCountEl.textContent = String(manualCountState.points.length);
+  }
+}
+
+function setManualCountStatus(message) {
+  if (manualCountStatusEl) {
+    manualCountStatusEl.textContent = message || t('manualCount.placeholder');
+  }
+}
+
+function applyManualCountZoom(zoomValue) {
+  const zoom = Math.min(2.5, Math.max(0.25, Number(zoomValue) || 1));
+  manualCountState.zoom = zoom;
+  if (manualCountZoomEl) manualCountZoomEl.value = zoom.toFixed(2);
+  if (manualCountZoomValueEl) manualCountZoomValueEl.textContent = `${zoom.toFixed(2)}?`;
+  if (!manualCountState.loaded) return;
+  const width = Math.max(1, Math.round(manualCountState.naturalWidth * zoom));
+  const height = Math.max(1, Math.round(manualCountState.naturalHeight * zoom));
+  manualCountStage.style.width = `${width}px`;
+  manualCountStage.style.height = `${height}px`;
+  manualCountImg.style.width = `${width}px`;
+  manualCountImg.style.height = `${height}px`;
+  manualCountCanvas.style.width = `${width}px`;
+  manualCountCanvas.style.height = `${height}px`;
+  redrawManualCountCanvas();
+}
+
+function manualCountCanvasCoords(evt) {
+  const rect = manualCountCanvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  const x = ((evt.clientX - rect.left) / rect.width) * manualCountState.naturalWidth;
+  const y = ((evt.clientY - rect.top) / rect.height) * manualCountState.naturalHeight;
+  return {
+    x: Math.max(0, Math.min(manualCountState.naturalWidth, x)),
+    y: Math.max(0, Math.min(manualCountState.naturalHeight, y)),
+  };
+}
+
+function redrawManualCountCanvas() {
+  if (!manualCountCtx || !manualCountState.loaded) return;
+  manualCountCtx.clearRect(0, 0, manualCountCanvas.width, manualCountCanvas.height);
+  const points = manualCountCurrentPoints();
+  if (!points.length) return;
+  manualCountCtx.save();
+  manualCountCtx.lineWidth = 3;
+  manualCountCtx.font = '24px "Segoe UI", sans-serif';
+  manualCountCtx.textBaseline = 'middle';
+  manualCountCtx.textAlign = 'left';
+  points.forEach((point, index) => {
+    manualCountCtx.beginPath();
+    manualCountCtx.fillStyle = 'rgba(255, 91, 91, 0.92)';
+    manualCountCtx.strokeStyle = 'rgba(255, 255, 255, 0.98)';
+    manualCountCtx.arc(point.x, point.y, 12, 0, Math.PI * 2);
+    manualCountCtx.fill();
+    manualCountCtx.stroke();
+
+    const label = String(index + 1);
+    manualCountCtx.lineWidth = 5;
+    manualCountCtx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+    manualCountCtx.strokeText(label, point.x + 18, point.y);
+    manualCountCtx.fillStyle = 'rgba(255, 255, 255, 0.98)';
+    manualCountCtx.fillText(label, point.x + 18, point.y);
+    manualCountCtx.lineWidth = 3;
+  });
+  manualCountCtx.restore();
+}
+
+function csvEscape(value) {
+  const raw = String(value ?? '');
+  if (!/[",\n]/.test(raw)) return raw;
+  return `"${raw.replace(/"/g, '""')}"`;
+}
+
+function seedManualCountSourceFromWorkflow(path) {
+  const nextPath = String(path || '').trim();
+  if (!nextPath || !manualCountSourcePathEl) return;
+  const currentValue = String(manualCountSourcePathEl.value || '').trim();
+  if (!currentValue || currentValue === manualCountState.path) {
+    manualCountSourcePathEl.value = nextPath;
+  }
+}
+
+async function renderManualCountSlice() {
+  if (!manualCountState.path) return;
+  const seq = ++manualCountState.renderSeq;
+  const params = new URLSearchParams({
+    path: manualCountState.path,
+    kind: 'real',
+    z: String(manualCountState.z),
+    palette: manualCountState.palette,
+  });
+  const previewUrl = `/api/align/manual-image?${params.toString()}`;
+  manualCountState.loading = true;
+  try {
+    const probe = new Image();
+    await new Promise((resolve, reject) => {
+      probe.onload = resolve;
+      probe.onerror = () => reject(new Error('image decode failed'));
+      probe.src = previewUrl;
+    });
+    if (seq !== manualCountState.renderSeq) return;
+    manualCountImg.src = probe.src;
+    manualCountState.naturalWidth = probe.naturalWidth || probe.width || 1;
+    manualCountState.naturalHeight = probe.naturalHeight || probe.height || 1;
+    manualCountCanvas.width = manualCountState.naturalWidth;
+    manualCountCanvas.height = manualCountState.naturalHeight;
+    manualCountPlaceholder.classList.add('hidden');
+    manualCountStage.classList.remove('hidden');
+    applyManualCountZoom(manualCountState.zoom);
+    updateManualCountSummary();
+    redrawManualCountCanvas();
+    setManualCountStatus(t('manualCount.ready', { name: manualCountBaseName(manualCountState.path) }));
+  } finally {
+    if (seq === manualCountState.renderSeq) {
+      manualCountState.loading = false;
+    }
+  }
+}
+
+async function loadManualCountStack({ preserveZ = false } = {}) {
+  const path = String(manualCountSourcePathEl?.value || '').trim();
+  if (!path) {
+    setManualCountStatus(t('manualCount.needPath'));
+    showToast(t('manualCount.needPath'), 'warning');
+    return;
+  }
+
+  manualCountLoadBtn.disabled = true;
+  try {
+    const info = await fetch(`/api/slice/info?path=${encodeURIComponent(path)}`).then(r => r.json());
+    if (!info.ok) throw new Error(info.error || 'unknown error');
+
+    const pathChanged = manualCountState.path && manualCountState.path !== path;
+    manualCountState.path = path;
+    manualCountState.is3d = Boolean(info.is3d);
+    manualCountState.zMax = Math.max(0, Number(info.z_count || 1) - 1);
+    manualCountState.z = preserveZ ? Math.min(manualCountState.z, manualCountState.zMax) : 0;
+    manualCountState.loaded = true;
+
+    if (pathChanged) {
+      manualCountState.points = [];
+      manualCountState.nextPointId = 1;
+      showToast(t('manualCount.pathChanged'), 'info', 3500);
+    }
+
+    updateManualCountSummary();
+    await renderManualCountSlice();
+    manualCountViewport.focus();
+  } catch (err) {
+    console.error('loadManualCountStack failed:', err);
+    const msg = t('manualCount.loadFail', { err: err?.message || '?' });
+    setManualCountStatus(msg);
+    showToast(msg, 'error', 5000);
+  } finally {
+    manualCountLoadBtn.disabled = false;
+  }
+}
+
+manualCountLoadBtn.onclick = () => loadManualCountStack();
+
+if (manualCountSourcePathEl) {
+  manualCountSourcePathEl.addEventListener('change', () => {
+    const nextPath = String(manualCountSourcePathEl.value || '').trim();
+    if (!nextPath) return;
+    if (manualCountState.loaded && manualCountState.path && manualCountState.path !== nextPath) {
+      setManualCountStatus(t('manualCount.pathChanged'));
+    }
+  });
+}
+
+if (manualCountZoomEl) {
+  manualCountZoomEl.addEventListener('input', () => applyManualCountZoom(manualCountZoomEl.value));
+}
+
+if (manualCountPaletteEl) {
+  manualCountPaletteEl.addEventListener('change', async () => {
+    manualCountState.palette = String(manualCountPaletteEl.value || 'green');
+    if (!manualCountState.loaded) return;
+    try {
+      await renderManualCountSlice();
+    } catch (err) {
+      const msg = t('manualCount.loadFail', { err: err?.message || '?' });
+      setManualCountStatus(msg);
+      showToast(msg, 'error', 5000);
+    }
+  });
+}
+
+manualCountViewport.addEventListener('wheel', async evt => {
+  if (!manualCountState.loaded || manualCountState.zMax <= 0) return;
+  evt.preventDefault();
+  if (manualCountState.loading) return;
+  const direction = evt.deltaY > 0 ? 1 : -1;
+  const nextZ = Math.max(0, Math.min(manualCountState.zMax, manualCountState.z + direction));
+  if (nextZ === manualCountState.z) return;
+  manualCountState.z = nextZ;
+  updateManualCountSummary();
+  try {
+    await renderManualCountSlice();
+  } catch (err) {
+    const msg = t('manualCount.loadFail', { err: err?.message || '?' });
+    setManualCountStatus(msg);
+    showToast(msg, 'error', 5000);
+  }
+}, { passive: false });
+
+manualCountCanvas.addEventListener('click', evt => {
+  if (!manualCountState.loaded || evt.button !== 0) return;
+  const coords = manualCountCanvasCoords(evt);
+  if (!coords) return;
+  manualCountState.points.push({
+    id: manualCountState.nextPointId++,
+    z: manualCountState.z,
+    x: Number(coords.x.toFixed(2)),
+    y: Number(coords.y.toFixed(2)),
+  });
+  updateManualCountSummary();
+  redrawManualCountCanvas();
+});
+
+manualCountCanvas.addEventListener('contextmenu', evt => {
+  evt.preventDefault();
+  if (!manualCountState.loaded) return;
+  const coords = manualCountCanvasCoords(evt);
+  if (!coords) return;
+  const currentPoints = manualCountCurrentPoints();
+  if (!currentPoints.length) return;
+  const nearest = currentPoints.reduce((best, point) => {
+    const dist2 = ((point.x - coords.x) ** 2) + ((point.y - coords.y) ** 2);
+    return !best || dist2 < best.dist2 ? { point, dist2 } : best;
+  }, null);
+  const removeThreshold = Math.max(12, 48 / Math.max(manualCountState.zoom, 0.25));
+  if (!nearest || nearest.dist2 > removeThreshold ** 2) return;
+  manualCountState.points = manualCountState.points.filter(point => point.id !== nearest.point.id);
+  updateManualCountSummary();
+  redrawManualCountCanvas();
+});
+
+manualCountUndoBtn.onclick = () => {
+  if (!manualCountState.points.length) return;
+  manualCountState.points.pop();
+  updateManualCountSummary();
+  redrawManualCountCanvas();
+};
+
+manualCountClearSliceBtn.onclick = () => {
+  if (!manualCountState.points.length) return;
+  const before = manualCountState.points.length;
+  manualCountState.points = manualCountState.points.filter(point => point.z !== manualCountState.z);
+  if (manualCountState.points.length !== before) {
+    updateManualCountSummary();
+    redrawManualCountCanvas();
+    showToast(t('manualCount.sliceCleared'), 'info', 2500);
+    setManualCountStatus(t('manualCount.sliceCleared'));
+  }
+};
+
+manualCountClearAllBtn.onclick = () => {
+  if (!manualCountState.points.length) return;
+  manualCountState.points = [];
+  manualCountState.nextPointId = 1;
+  updateManualCountSummary();
+  redrawManualCountCanvas();
+  showToast(t('manualCount.allCleared'), 'info', 2500);
+  setManualCountStatus(t('manualCount.allCleared'));
+};
+
+manualCountExportBtn.onclick = () => {
+  if (!manualCountState.points.length) {
+    showToast(t('manualCount.noPoints'), 'warning');
+    return;
+  }
+  const ordered = manualCountState.points.slice().sort((a, b) => a.z - b.z || a.id - b.id);
+  const sliceCounters = new Map();
+  const lines = ['source_path,z,x,y,point_index,slice_point_index'];
+  ordered.forEach((point, index) => {
+    const slicePointIndex = (sliceCounters.get(point.z) || 0) + 1;
+    sliceCounters.set(point.z, slicePointIndex);
+    lines.push([
+      csvEscape(manualCountState.path),
+      point.z,
+      point.x.toFixed(2),
+      point.y.toFixed(2),
+      index + 1,
+      slicePointIndex,
+    ].join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const stem = manualCountBaseName(manualCountState.path).replace(/\.[^.]+$/, '') || 'manual_count';
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${stem}_manual_counts.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+  setManualCountStatus(t('manualCount.exported'));
+  showToast(t('manualCount.exported'), 'success', 3000);
+};
+
+updateManualCountSummary();
+applyManualCountZoom(manualCountState.zoom);
+setManualCountStatus(t('manualCount.placeholder'));
 
 // ================================================================
 // CANVAS DRAWING EDITOR

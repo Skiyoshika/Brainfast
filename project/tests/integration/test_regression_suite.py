@@ -18,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.atlas_autopick import autopick_best_z
+from scripts.asset_bootstrap import default_structure_source
 from scripts.atlas_mapper import map_cells_with_registered_label_slice
 from scripts.dedup import apply_dedup_kdtree
 from scripts.learn_from_trainset import _load_target_for_sample, _pair_ids
@@ -25,6 +26,7 @@ from scripts.map_and_aggregate import aggregate_by_region
 from scripts.overlay_render import render_overlay
 from scripts.structure_tree import load_structure_table, parse_structure_id_path
 from scripts.detect import detect_cells
+from scripts import main
 
 
 def _write_gray_png(path: Path, arr: np.ndarray) -> None:
@@ -36,7 +38,10 @@ def _write_gray_png(path: Path, arr: np.ndarray) -> None:
 class MappingAggregationRegressionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.structure_csv = PROJECT_ROOT / "configs" / "allen_mouse_structure_graph.csv"
+        structure_csv = default_structure_source(PROJECT_ROOT)
+        if structure_csv is None or not structure_csv.exists():
+            raise RuntimeError("failed to locate a structure source for regression tests")
+        cls.structure_csv = structure_csv
         cls.structure_df = load_structure_table(cls.structure_csv)
         candidates = cls.structure_df[
             (cls.structure_df["id"] != 997)
@@ -159,10 +164,10 @@ class TrainsetLearningRegressionTests(unittest.TestCase):
 class SyntheticPipelineSmokeTests(unittest.TestCase):
     def test_synthetic_slice_end_to_end(self) -> None:
         annotation = PROJECT_ROOT / "annotation_25.nii.gz"
-        structure_csv = PROJECT_ROOT / "configs" / "allen_mouse_structure_graph.csv"
+        structure_csv = default_structure_source(PROJECT_ROOT)
         if not annotation.exists():
             self.skipTest(f"missing atlas annotation: {annotation}")
-        if not structure_csv.exists():
+        if structure_csv is None or not structure_csv.exists():
             self.skipTest(f"missing structure csv: {structure_csv}")
 
         with tempfile.TemporaryDirectory() as td:
@@ -231,6 +236,7 @@ class SyntheticPipelineSmokeTests(unittest.TestCase):
 
             self.assertTrue(registered_label_path.exists())
             self.assertTrue(overlay_png.exists())
+            self.assertEqual(Image.open(overlay_png).format, "PNG")
             self.assertIn("warp", diagnostic)
             self.assertIn("timings_ms", diagnostic)
             self.assertGreater(float(diagnostic["timings_ms"].get("total", 0.0)), 0.0)
@@ -260,6 +266,107 @@ class SyntheticPipelineSmokeTests(unittest.TestCase):
             self.assertFalse((leaf["region_id"] == 997).any())
             self.assertTrue((mapped["mapping_status"] == "ok").any())
             self.assertGreater(len(hierarchy), 0)
+
+
+class WholeBrainTruthExportRegressionTests(unittest.TestCase):
+    def test_volume_truth_export_writes_expected_qc_semantics(self) -> None:
+        structure_csv = default_structure_source(PROJECT_ROOT)
+        if structure_csv is None or not structure_csv.exists():
+            self.skipTest("missing structure ontology source")
+        structure_df = load_structure_table(structure_csv)
+        region = structure_df[
+            (structure_df["id"] != 997)
+            & structure_df["structure_id_path"].astype(str).str.len().gt(8)
+        ].iloc[0]
+
+        with tempfile.TemporaryDirectory() as td:
+            tmpdir = Path(td)
+            outputs_dir = tmpdir / "outputs"
+            outputs_dir.mkdir()
+
+            real_slice_a = tmpdir / "real_a.tif"
+            real_slice_b = tmpdir / "real_b.tif"
+            registered_label_a = tmpdir / "registered_label_a.tif"
+            registered_label_b = tmpdir / "registered_label_b.tif"
+            overlay_a = tmpdir / "overlay_a.png"
+            overlay_b = tmpdir / "overlay_b.png"
+
+            imwrite(str(real_slice_a), np.zeros((16, 16), dtype=np.uint16))
+            imwrite(str(real_slice_b), np.zeros((16, 16), dtype=np.uint16))
+            label = np.zeros((16, 16), dtype=np.int32)
+            label[4:10, 4:10] = int(region["id"])
+            imwrite(str(registered_label_a), label)
+            imwrite(str(registered_label_b), label)
+            overlay_a.write_bytes(b"")
+            overlay_b.write_bytes(b"")
+
+            truth_rows = [
+                {
+                    "slice_id": 0,
+                    "real_slice_path": str(real_slice_a),
+                    "registered_label_path": str(registered_label_a),
+                    "overlay_path": str(overlay_a),
+                },
+                {
+                    "slice_id": 1,
+                    "real_slice_path": str(real_slice_b),
+                    "registered_label_path": str(registered_label_b),
+                    "overlay_path": str(overlay_b),
+                },
+            ]
+
+            cfg = {
+                "input": {
+                    "pixel_size_um_xy": 5.0,
+                    "slice_spacing_um": 25.0,
+                },
+                "dedup": {
+                    "neighbor_slices": 1,
+                    "r_xy_um": 6.0,
+                },
+            }
+
+            def fake_detect_cells(real_path: Path, _cfg: dict) -> pd.DataFrame:
+                if Path(real_path).name == real_slice_a.name:
+                    return pd.DataFrame(
+                        [
+                            {
+                                "cell_id": 1,
+                                "x": 5.0,
+                                "y": 5.0,
+                                "score": 10.0,
+                            }
+                        ]
+                    )
+                return pd.DataFrame(columns=["cell_id", "x", "y", "score"])
+
+            original_detect_cells = main.detect_cells
+            original_structure_source = main._resolve_structure_source
+            try:
+                main.detect_cells = fake_detect_cells
+                main._resolve_structure_source = lambda _project_root: structure_csv
+                result = main._quantify_against_exported_truth(
+                    truth_rows=truth_rows,
+                    cfg=cfg,
+                    outputs_dir=outputs_dir,
+                )
+            finally:
+                main.detect_cells = original_detect_cells
+                main._resolve_structure_source = original_structure_source
+
+            self.assertEqual(result["truth_source"], "3d_registered_volume")
+            self.assertTrue(Path(result["cells_mapped_csv"]).exists())
+
+            mapped = pd.read_csv(outputs_dir / "cells_mapped.csv")
+            slice_qc = pd.read_csv(outputs_dir / "slice_registration_qc.csv")
+            volume_qc = pd.read_csv(outputs_dir / "volume_registration_qc.csv")
+
+            self.assertEqual(len(mapped), 1)
+            self.assertEqual(len(slice_qc), 2)
+            self.assertEqual(set(slice_qc["registration_method"]), {"3d_truth_export"})
+            self.assertEqual(set(slice_qc["score_type"]), {"volume_truth_export"})
+            self.assertEqual(str(volume_qc.loc[0, "truth_source"]), "3d_registered_volume")
+            self.assertEqual(str(volume_qc.loc[0, "score_type"]), "volume_truth_export")
 
 
 if __name__ == "__main__":

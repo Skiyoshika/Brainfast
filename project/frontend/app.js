@@ -9,7 +9,7 @@
 // ================================================================
 // LANGUAGE / i18n
 // ================================================================
-let currentLang = localStorage.getItem('idlebrain.lang') || 'en';
+let currentLang = localStorage.getItem('brainfast.lang') || 'en';
 
 const LANGS = {
   en: {
@@ -20,36 +20,36 @@ const LANGS = {
     'status.idle': 'Idle',
     'status.running': 'Running...',
     'status.error': 'Error',
-    'btn.guide': '📖 Guide',
-    'btn.run': '▶ Run Pipeline',
-    'btn.cancel': '✕ Cancel',
-    'btn.openOutputs': '📁 Open Output Folder',
-    'btn.copy': '📋 Copy to Clipboard',
+    'btn.guide': '<i data-lucide="book-open" class="btn-icon"></i> Guide',
+    'btn.run': '<i data-lucide="play" class="btn-icon"></i> Run Pipeline',
+    'btn.cancel': '<i data-lucide="x" class="btn-icon"></i> Cancel',
+    'btn.openOutputs': '<i data-lucide="folder" class="btn-icon"></i> Open Output Folder',
+    'btn.copy': '<i data-lucide="clipboard-copy" class="btn-icon"></i> Copy to Clipboard',
     'btn.close': 'Close',
-    'btn.refreshResults': '🔁 Refresh',
-    'btn.exportCsv': '⬇️ Export CSV',
-    'btn.exportMethods': '📝 Export Methods Text',
+    'btn.refreshResults': '<i data-lucide="refresh-cw" class="btn-icon"></i> Refresh',
+    'btn.exportCsv': '<i data-lucide="download" class="btn-icon"></i> Export CSV',
+    'btn.exportMethods': '<i data-lucide="file-text" class="btn-icon"></i> Export Methods Text',
     'btn.browse': 'Browse',
-    'btn.savePreset': '💾 Save Config',
-    'btn.loadPreset': '📂 Load Config',
-    'btn.autoPick': '🎯 Auto-pick Atlas Slice',
-    'btn.refreshPreview': '🖼️ Refresh Preview',
+    'btn.savePreset': '<i data-lucide="save" class="btn-icon"></i> Save Config',
+    'btn.loadPreset': '<i data-lucide="folder-open" class="btn-icon"></i> Load Config',
+    'btn.autoPick': '<i data-lucide="crosshair" class="btn-icon"></i> Auto-pick Atlas Slice',
+    'btn.refreshPreview': '<i data-lucide="image" class="btn-icon"></i> Refresh Preview',
     'btn.extractSlice': '✓ Confirm Layer & Continue',
-    'btn.aiAlign': '🤖 AI Landmark Registration',
-    'btn.landmarkView': '🗺️ View Landmark Map',
-    'btn.startManual': '📌 Enter Manual Mode',
-    'btn.applyManual': '✕ Apply Manual Landmarks',
-    'btn.clearManual': '🗑 Clear Manual Points',
-    'btn.undo': '↗ Undo',
-    'btn.scalebar': '↔ Scale',
-    'btn.clearAnnotations': '🗑 Clear All',
-    'btn.exportFigure': '↙ Export Figure',
-    'btn.refreshQc': '🔁 Refresh',
-    'btn.regenDemo': '⚙️ Regen Demo',
-    'ch.red': '🔴 Red',
-    'ch.green': '🟢 Green',
-    'ch.farred': '🟠 Far-Red',
-    'ch.all': '▶ All Channels',
+    'btn.aiAlign': '<i data-lucide="bot" class="btn-icon"></i> AI Landmark Registration',
+    'btn.landmarkView': '<i data-lucide="map" class="btn-icon"></i> View Landmark Map',
+    'btn.startManual': '<i data-lucide="pin" class="btn-icon"></i> Enter Manual Mode',
+    'btn.applyManual': '<i data-lucide="check" class="btn-icon"></i> Apply Manual Landmarks',
+    'btn.clearManual': '<i data-lucide="trash-2" class="btn-icon"></i> Clear Manual Points',
+    'btn.undo': '<i data-lucide="undo-2" class="btn-icon"></i> Undo',
+    'btn.scalebar': '<i data-lucide="ruler" class="btn-icon"></i> Scale',
+    'btn.clearAnnotations': '<i data-lucide="trash-2" class="btn-icon"></i> Clear All',
+    'btn.exportFigure': '<i data-lucide="download" class="btn-icon"></i> Export Figure',
+    'btn.refreshQc': '<i data-lucide="refresh-cw" class="btn-icon"></i> Refresh',
+    'btn.regenDemo': '<i data-lucide="settings" class="btn-icon"></i> Regen Demo',
+    'ch.red': '<span class="channel-dot channel-dot-red"></span> Red',
+    'ch.green': '<span class="channel-dot channel-dot-green"></span> Green',
+    'ch.farred': '<span class="channel-dot channel-dot-farred"></span> Far-Red',
+    'ch.all': '<i data-lucide="layers" class="btn-icon"></i> All Channels',
     'chname.red': 'Red',
     'chname.green': 'Green',
     'chname.farred': 'Far-Red',
@@ -101,8 +101,8 @@ const LANGS = {
     'opt.heightLock': 'Height-lock',
     'opt.affine': 'Affine (fast, small deformation)',
     'opt.nonlinear': 'Nonlinear (slow, large deformation)',
-    'adv.options': 'Advanced Options ▶',
-    'adv.params': 'Advanced Parameters ▶',
+    'adv.options': 'Advanced Options',
+    'adv.params': 'Advanced Parameters',
     'required': 'Required',
     'progress.slicesLabel': 'Slices registered',
     'progress.waiting': 'Waiting to start...',
@@ -162,10 +162,10 @@ const LANGS = {
     'tab.results.title': 'Results',
     'ph.outputDir': '(default: outputs/)',
     'ph.atlasLabelPath': '(auto-filled by Auto-pick)',
-    'ph.regionSearch': '🔍 Search region name...',
+    'ph.regionSearch': 'Search region name...',
     'preview.placeholder': 'Preview will appear here after clicking "Refresh Preview"',
     'align.placeholder': 'Alignment comparison will appear here after running AI registration',
-    'manual.title': '✏️ Manual Landmark Correction',
+    'manual.title': '<i data-lucide="pen-tool" class="icon-inline"></i> Manual Landmark Correction',
     'manual.desc': 'Click corresponding points on real and atlas slices to add correction landmarks',
     'manual.realSide': 'Real Slice → click to mark point',
     'manual.atlasSide': 'Atlas Slice → click corresponding point',
@@ -185,15 +185,15 @@ const LANGS = {
     'lightbox.overlay': 'Overlay Preview',
     'lightbox.compare': 'Before / After Comparison',
     'lightbox.landmark': 'Landmark Map ({n} points)',
-    'guide.title': '📖 Getting Started Guide',
+    'guide.title': '<i data-lucide="book-open" class="icon-inline"></i> Getting Started Guide',
     'guide.step1': '<strong>Step 1 → Configure Paths:</strong> Click "Browse" to select your TIFF folder, Atlas annotation file, and brain region CSV. Fields marked "Required" must be filled in.',
     'guide.step2': '<strong>Step 2 → Preview Atlas:</strong> Set the slicing plane (usually Coronal), pixel size (default 0.65 µm), click "Auto-pick Atlas Slice", then "Refresh Preview" to check the initial overlay.',
     'guide.step3': '<strong>Step 3 → AI Registration:</strong> Choose the mode (Affine for small deformation; Nonlinear for tears/large warping), then click "AI Landmark Registration". Check the quality panel to confirm SSIM improved.',
     'guide.step4': '<strong>Step 4 → Run Pipeline:</strong> Select the fluorescence channel, then click "Run Pipeline". After completion, switch to the "Results" tab to view per-region cell counts.',
     'guide.step5': '<strong>Export:</strong> In the Results tab, click "Export CSV" for data. Click "Export Methods Text" to get a pre-written Methods paragraph you can paste directly into your paper.',
-    'guide.tip': '💡 Tip: All run parameters are automatically saved to outputs/run_params_YYYYMMDD_HHMMSS.json for reproducibility.',
+    'guide.tip': '<i data-lucide="lightbulb" class="icon-inline"></i> Tip: All run parameters are automatically saved to outputs/run_params_YYYYMMDD_HHMMSS.json for reproducibility.',
     'guide.ok': 'Got it → Start Using',
-    'methods.title': '📝 Methods Paragraph',
+    'methods.title': '<i data-lucide="file-text" class="icon-inline"></i> Methods Paragraph',
     'methods.desc': 'The following text is auto-generated from your most recent run parameters. Edit as needed before pasting into your Methods section.',
     'methods.loading': 'Loading...',
     'text.dialog': 'Enter annotation text:',
@@ -271,36 +271,36 @@ const LANGS = {
     'status.idle': '空闲',
     'status.running': '运行中...',
     'status.error': '错误',
-    'btn.guide': '📖 使用指南',
-    'btn.run': '▶ 运行流水线',
-    'btn.cancel': '✕ 取消',
-    'btn.openOutputs': '📁 打开输出目录',
-    'btn.copy': '📋 复制到剪贴板',
+    'btn.guide': '<i data-lucide="book-open" class="btn-icon"></i> 使用指南',
+    'btn.run': '<i data-lucide="play" class="btn-icon"></i> 运行流水线',
+    'btn.cancel': '<i data-lucide="x" class="btn-icon"></i> 取消',
+    'btn.openOutputs': '<i data-lucide="folder" class="btn-icon"></i> 打开输出目录',
+    'btn.copy': '<i data-lucide="clipboard-copy" class="btn-icon"></i> 复制到剪贴板',
     'btn.close': '关闭',
-    'btn.refreshResults': '🔁 刷新',
-    'btn.exportCsv': '⬇️ 导出CSV',
-    'btn.exportMethods': '📝 导出方法段落',
+    'btn.refreshResults': '<i data-lucide="refresh-cw" class="btn-icon"></i> 刷新',
+    'btn.exportCsv': '<i data-lucide="download" class="btn-icon"></i> 导出CSV',
+    'btn.exportMethods': '<i data-lucide="file-text" class="btn-icon"></i> 导出方法段落',
     'btn.browse': '浏览',
-    'btn.savePreset': '💾 保存配置',
-    'btn.loadPreset': '📂 加载配置',
-    'btn.autoPick': '🎯 自动选取图谱层',
-    'btn.refreshPreview': '🖼️ 刷新预览',
+    'btn.savePreset': '<i data-lucide="save" class="btn-icon"></i> 保存配置',
+    'btn.loadPreset': '<i data-lucide="folder-open" class="btn-icon"></i> 加载配置',
+    'btn.autoPick': '<i data-lucide="crosshair" class="btn-icon"></i> 自动选取图谱层',
+    'btn.refreshPreview': '<i data-lucide="image" class="btn-icon"></i> 刷新预览',
     'btn.extractSlice': '✓ 确认选层并继续',
-    'btn.aiAlign': '🤖 AI地标配准',
-    'btn.landmarkView': '🗺️ 查看地标图',
-    'btn.startManual': '📌 进入手动模式',
-    'btn.applyManual': '✕ 应用手动地标',
-    'btn.clearManual': '🗑 清除手动点',
-    'btn.undo': '↗ 撤销',
-    'btn.scalebar': '↔ 比例尺',
-    'btn.clearAnnotations': '🗑 清除全部',
-    'btn.exportFigure': '↙ 导出图片',
-    'btn.refreshQc': '🔁 刷新',
-    'btn.regenDemo': '⚙️ 重新生成演示图',
-    'ch.red': '🔴 红通道',
-    'ch.green': '🟢 绿通道',
-    'ch.farred': '🟠 远红通道',
-    'ch.all': '▶ 全部通道',
+    'btn.aiAlign': '<i data-lucide="bot" class="btn-icon"></i> AI地标配准',
+    'btn.landmarkView': '<i data-lucide="map" class="btn-icon"></i> 查看地标图',
+    'btn.startManual': '<i data-lucide="pin" class="btn-icon"></i> 进入手动模式',
+    'btn.applyManual': '<i data-lucide="check" class="btn-icon"></i> 应用手动地标',
+    'btn.clearManual': '<i data-lucide="trash-2" class="btn-icon"></i> 清除手动点',
+    'btn.undo': '<i data-lucide="undo-2" class="btn-icon"></i> 撤销',
+    'btn.scalebar': '<i data-lucide="ruler" class="btn-icon"></i> 比例尺',
+    'btn.clearAnnotations': '<i data-lucide="trash-2" class="btn-icon"></i> 清除全部',
+    'btn.exportFigure': '<i data-lucide="download" class="btn-icon"></i> 导出图片',
+    'btn.refreshQc': '<i data-lucide="refresh-cw" class="btn-icon"></i> 刷新',
+    'btn.regenDemo': '<i data-lucide="settings" class="btn-icon"></i> 重新生成演示图',
+    'ch.red': '<span class="channel-dot channel-dot-red"></span> 红通道',
+    'ch.green': '<span class="channel-dot channel-dot-green"></span> 绿通道',
+    'ch.farred': '<span class="channel-dot channel-dot-farred"></span> 远红通道',
+    'ch.all': '<i data-lucide="layers" class="btn-icon"></i> 全部通道',
     'chname.red': '红通道',
     'chname.green': '绿通道',
     'chname.farred': '远红通道',
@@ -352,8 +352,8 @@ const LANGS = {
     'opt.heightLock': '锁定高度',
     'opt.affine': '仿射变换（快速，适合小变形）',
     'opt.nonlinear': '非线性（较慢，适合大变形）',
-    'adv.options': '高级选项 ▶',
-    'adv.params': '高级参数 ▶',
+    'adv.options': '高级选项',
+    'adv.params': '高级参数',
     'required': '必填',
     'progress.slicesLabel': '已配准切片',
     'progress.waiting': '等待开始...',
@@ -413,10 +413,10 @@ const LANGS = {
     'tab.results.title': '统计结果',
     'ph.outputDir': '（默认：outputs/）',
     'ph.atlasLabelPath': '（由自动选取自动填充）',
-    'ph.regionSearch': '🔍 搜索脑区名称...',
+    'ph.regionSearch': '搜索脑区名称...',
     'preview.placeholder': '点击“刷新预览”后，预览将显示在此处',
     'align.placeholder': '运行AI配准后，对比图将显示在此处',
-    'manual.title': '✏️ 手动地标校正',
+    'manual.title': '<i data-lucide="pen-tool" class="icon-inline"></i> 手动地标校正',
     'manual.desc': '在真实切片和图谱切片上点击对应位置，添加校正地标',
     'manual.realSide': '真实切片 → 点击标记位置',
     'manual.atlasSide': '图谱切片 → 点击对应位置',
@@ -436,15 +436,15 @@ const LANGS = {
     'lightbox.overlay': '叠加预览',
     'lightbox.compare': '配准前后对比',
     'lightbox.landmark': '地标图（{n} 个点）',
-    'guide.title': '📖 使用指南',
+    'guide.title': '<i data-lucide="book-open" class="icon-inline"></i> 使用指南',
     'guide.step1': '<strong>第1步 → 配置路径：</strong>点击“浏览”选择TIFF文件夹、图谱标注文件和脑区CSV。',
     'guide.step2': '<strong>第2步 → 预览图谱：</strong>设置切片方向（通常选冠状面）、像素尺寸，点击“自动选取图谱层”，再点击“刷新预览”。',
     'guide.step3': '<strong>第3步 → AI配准：</strong>选择配准模式（仿射或非线性），点击“AI地标配准”，查看质量面板SSIM是否改善。',
     'guide.step4': '<strong>第4步 → 运行流水线：</strong>选择荧光通道，点击“运行流水线”，完成后切换到“统计结果”标签查看脑区细胞计数。',
     'guide.step5': '<strong>导出：</strong>在结果标签点击“导出CSV”获取数据，点击“导出方法段落”获得可直接粘贴到论文的方法描述。',
-    'guide.tip': '💡 提示：所有运行参数自动保存到 outputs/run_params_YYYYMMDD_HHMMSS.json，便于复现。',
+    'guide.tip': '<i data-lucide="lightbulb" class="icon-inline"></i> 提示：所有运行参数自动保存到 outputs/run_params_YYYYMMDD_HHMMSS.json，便于复现。',
     'guide.ok': '明白了 → 开始使用',
-    'methods.title': '📝 方法段落',
+    'methods.title': '<i data-lucide="file-text" class="icon-inline"></i> 方法段落',
     'methods.desc': '以下文本根据最近一次运行参数自动生成，粘贴到方法部分前请自行修改。',
     'methods.loading': '加载中...',
     'text.dialog': '请输入标注文字：',
@@ -531,7 +531,7 @@ function t(key, vars) {
 
 function applyLang(lang) {
   currentLang = lang || 'en';
-  localStorage.setItem('idlebrain.lang', currentLang);
+  localStorage.setItem('brainfast.lang', currentLang);
   document.querySelectorAll('[data-i18n]').forEach(function(el) {
     const key = el.dataset.i18n;
     const val = t(key);
@@ -551,6 +551,8 @@ function applyLang(lang) {
   document.querySelectorAll('.lang-btn[data-lang]').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.lang === currentLang);
   });
+  // Re-initialize Lucide icons after i18n innerHTML updates
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // Language toggle buttons
@@ -588,7 +590,15 @@ const quickExportBtn = document.getElementById('quickExportBtn');
 const quickExportFormatEl = document.getElementById('quickExportFormat');
 
 const overlayJobState = {
-  jobId: localStorage.getItem('idlebrain.overlayJobId') || '',
+  jobId: localStorage.getItem('brainfast.overlayJobId') || '',
+};
+
+const state = {
+  running: false,
+  channel: 'red',
+  runAll: false,
+  allResults: [],
+  useHierarchy: false,
 };
 
 function buildOverlayJobId() {
@@ -601,7 +611,7 @@ function buildOverlayJobId() {
 function getOverlayJobId() {
   if (!overlayJobState.jobId) {
     overlayJobState.jobId = buildOverlayJobId();
-    localStorage.setItem('idlebrain.overlayJobId', overlayJobState.jobId);
+    localStorage.setItem('brainfast.overlayJobId', overlayJobState.jobId);
   }
   return overlayJobState.jobId;
 }
@@ -610,7 +620,7 @@ function syncOverlayJobId(resp) {
   const jobId = String(resp?.jobId || '').trim();
   if (!jobId) return;
   overlayJobState.jobId = jobId;
-  localStorage.setItem('idlebrain.overlayJobId', jobId);
+  localStorage.setItem('brainfast.overlayJobId', jobId);
 }
 
 function withOverlayJobQuery(path, extra = {}) {
@@ -828,11 +838,11 @@ function savePreset() {
   PRESET_KEYS.forEach(k => { const el = document.getElementById(k); if (el) preset[k] = el.value; });
   preset.channel = state.channel;
   preset.runAll  = state.runAll;
-  localStorage.setItem('idlebrain.preset', JSON.stringify(preset));
+  localStorage.setItem('brainfast.preset', JSON.stringify(preset));
   showToast(t('toast.presetSaved'), 'success', 2500);
 }
 function loadPreset(silent = false) {
-  const raw = localStorage.getItem('idlebrain.preset');
+  const raw = localStorage.getItem('brainfast.preset');
   if (!raw) { if (!silent) showToast(t('toast.noPreset'), 'warning'); return false; }
   const p = JSON.parse(raw);
   PRESET_KEYS.forEach(k => { const el = document.getElementById(k); if (el && p[k] !== undefined) el.value = p[k]; });
@@ -894,11 +904,11 @@ async function refreshOverlayPreview() {
     fitMode, alpha, mode, edgeSmoothIter: mode === 'fill' ? 2 : 1,
   };
   
-  let respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', payload, '🖼️ Generating Preview...');
+  let respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', payload, 'Generating Preview...');
   if (!respJson) {
     if (mode !== 'contour') {
       mode = 'contour'; modeEl.value = 'contour';
-      respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', { ...payload, mode: 'contour' }, '🖼️ Generating Preview (Fallback)...');
+      respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', { ...payload, mode: 'contour' }, 'Generating Preview (Fallback)...');
       if (respJson && respJson.ok) { showToast(t('toast.fillModeFallback'), 'warning'); }
       else { showToast(t('toast.previewFailed'), 'error'); return; }
     } else { showToast(t('toast.previewFailed'), 'error'); return; }
@@ -1833,7 +1843,7 @@ async function init() {
   } catch {}
 
   // Auto-load last preset silently
-  if (localStorage.getItem('idlebrain.preset')) {
+  if (localStorage.getItem('brainfast.preset')) {
     if (loadPreset(true)) showToast(t('toast.autoLoadPreset'), 'info', 3000);
   }
 }
@@ -2783,7 +2793,7 @@ document.getElementById('exportCanvasBtn').onclick = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `idlebrain_figure_${Date.now()}.png`;
+    a.download = `brainfast_figure_${Date.now()}.png`;
     a.click();
     URL.revokeObjectURL(url);
   }, 'image/png');
@@ -2856,11 +2866,11 @@ async function refreshOverlayPreviewWithCanvas() {
       fitMode, alpha, mode, edgeSmoothIter: mode === 'fill' ? 2 : 1,
     };
     
-    let respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', payload, '🖼️ Generating Preview...');
+    let respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', payload, 'Generating Preview...');
     if (!respJson) {
       if (mode !== 'contour') {
         mode = 'contour'; modeEl.value = 'contour';
-        respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', { ...payload, mode: 'contour' }, '🖼️ Generating Preview (Fallback)...');
+        respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', { ...payload, mode: 'contour' }, 'Generating Preview (Fallback)...');
         if (respJson && respJson.ok) { showToast(t('toast.fillModeFallback'), 'warning'); }
         else { showToast(t('toast.previewFailed'), 'error'); return; }
       } else { showToast(t('toast.previewFailed'), 'error'); return; }
@@ -3136,16 +3146,17 @@ async function refreshFileList() {
     if (!res.ok || res.files.length === 0) { grid.innerHTML = ''; empty.classList.remove('hidden'); return; }
     empty.classList.add('hidden');
     grid.innerHTML = '';
-    const ICONS = { '.png': '🖼', '.tif': '🔬', '.tiff': '🔬', '.csv': '📊', '.json': '📋', '.txt': '📄' };
+    const ICONS = { '.png': 'image', '.tif': 'microscope', '.tiff': 'microscope', '.csv': 'table', '.json': 'braces', '.txt': 'file-text' };
     res.files.forEach(f => {
       const card = document.createElement('div');
       card.className = 'output-file-card';
-      const icon = ICONS[f.ext] || '📁';
+      const iconName = ICONS[f.ext] || 'folder';
       const sizeStr = f.size > 1024*1024 ? `${(f.size/1024/1024).toFixed(1)} MB` : `${(f.size/1024).toFixed(0)} KB`;
-      card.innerHTML = `<span class="file-icon">${icon}</span><span class="file-name" title="${f.name}">${f.name}</span><span class="file-size">${sizeStr}</span>`;
+      card.innerHTML = `<span class="file-icon"><i data-lucide="${iconName}"></i></span><span class="file-name" title="${f.name}">${f.name}</span><span class="file-size">${sizeStr}</span>`;
       card.onclick = () => handleOutputFileClick(f);
       grid.appendChild(card);
     });
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   } catch {}
 }
 

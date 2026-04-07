@@ -637,14 +637,24 @@ function withOverlayJobQuery(path, extra = {}) {
 // ================================================================
 function showToast(msg, type = 'info', duration = 4500) {
   const container = document.getElementById('toastContainer');
+  // Deduplicate: skip if an identical message is already showing
+  const existing = Array.from(container.children);
+  if (existing.some(el => el.querySelector('.toast-msg')?.textContent === msg)) return;
+  // Cap at 3 visible toasts — remove oldest non-error first, then oldest error
+  while (container.children.length >= 3) {
+    const kids = Array.from(container.children);
+    const victim = kids.find(el => !el.classList.contains('toast-error')) || kids[0];
+    victim.remove();
+  }
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-    const icons = { success: 'OK', warning: 'WARN', error: 'ERR', info: 'i' };
-    toast.innerHTML = `<span class="toast-icon">${icons[type] || 'i'}</span><span class="toast-msg">${msg}</span>`;
+  const icons = { success: 'OK', warning: 'WARN', error: 'ERR', info: 'i' };
+  const escapedMsg = msg.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  toast.innerHTML = `<span class="toast-icon">${icons[type] || 'i'}</span><span class="toast-msg">${escapedMsg}</span>`;
   if (type === 'error') {
     const cb = document.createElement('button');
     cb.className = 'toast-close';
-        cb.textContent = 'x';
+    cb.textContent = 'x';
     cb.onclick = () => toast.remove();
     toast.appendChild(cb);
   }

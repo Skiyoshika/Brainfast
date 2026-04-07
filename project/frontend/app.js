@@ -3073,12 +3073,17 @@ function loadManualImages() {
   const rPath = document.getElementById('realSlicePath').value;
   const aPath = document.getElementById('atlasLabelPath').value;
   if (!rPath || !aPath) return;
-  // For real slice use the full normalized preview; for atlas the label overlay
+  // Real slice: combined overlay preview; Atlas: atlas-only label layer
   manualRealImg.src = withOverlayJobQuery('/api/outputs/overlay-preview', { ts: Date.now() });
-  manualAtlasImg.src = withOverlayJobQuery('/api/outputs/overlay-preview', { ts: Date.now() });
+  manualAtlasImg.src = withOverlayJobQuery('/api/outputs/atlas-layer', { ts: Date.now() });
   manualRealImg.onload = () => {
     manualRealCanvas.width  = manualRealImg.naturalWidth;
     manualRealCanvas.height = manualRealImg.naturalHeight;
+    redrawManual();
+  };
+  manualAtlasImg.onload = () => {
+    manualAtlasCanvas.width  = manualAtlasImg.naturalWidth;
+    manualAtlasCanvas.height = manualAtlasImg.naturalHeight;
     redrawManual();
   };
 }

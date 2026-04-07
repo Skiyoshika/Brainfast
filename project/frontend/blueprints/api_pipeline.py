@@ -101,10 +101,15 @@ def run_pipeline():
 @bp.get("/api/status")
 def status():
     out_dir = ctx.active_output_dir()
-    reg_dir = out_dir / "registered_slices"
-    merged_dir = out_dir / "tmp_merged"
-    slices_done = len(list(reg_dir.glob("slice_*_overlay.png"))) if reg_dir.exists() else 0
-    slices_total = len(list(merged_dir.glob("*.tif"))) if merged_dir.exists() else 0
+    # Only report slice progress when pipeline has been active this session
+    if ctx.run_state["running"] or ctx.run_state["done"]:
+        reg_dir = out_dir / "registered_slices"
+        merged_dir = out_dir / "tmp_merged"
+        slices_done = len(list(reg_dir.glob("slice_*_overlay.png"))) if reg_dir.exists() else 0
+        slices_total = len(list(merged_dir.glob("*.tif"))) if merged_dir.exists() else 0
+    else:
+        slices_done = 0
+        slices_total = 0
     stage = ctx.latest_stage_progress(out_dir)
     return jsonify(
         {

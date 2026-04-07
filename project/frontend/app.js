@@ -1769,8 +1769,8 @@ function renderResultsTable(data) {
   const rootCount = data.find(d => parseInt(d.depth||0)===0);
   const total = rootCount ? Number(rootCount.count||0) : Math.max(...data.map(d=>Number(d.count||0)));
   filtered.forEach(d => {
-    const depth = parseInt(d.depth || 0);
-    const indent = state.useHierarchy && !keyword ? '&nbsp;'.repeat(depth * 3) : '';
+    const depth = Math.max(0, parseInt(d.depth || 0));
+    const indent = state.useHierarchy && !keyword ? '&nbsp;'.repeat(Math.min(depth, 10) * 3) : '';
     const name = d.region_name || d.region || '-';
     const acronym = d.acronym ? `<span style="color:#888;font-size:0.85em"> (${d.acronym})</span>` : '';
     const count = Number(d.count || 0);

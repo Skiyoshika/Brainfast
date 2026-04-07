@@ -226,6 +226,7 @@ const LANGS = {
     'toast.landmarkApplyFailed': 'Landmark alignment failed: {err}',
     'toast.landmarkSuccess': '{n} landmark pairs applied',
     'toast.alignUnexpected': 'Unexpected alignment error',
+    'toast.alignFailedManualHint': 'Auto-alignment could not find enough landmarks. Please add manual correction points below.',
     'toast.runFailed': 'Pipeline failed: {err}',
     'toast.runStarted': 'Pipeline started: {channels}',
     'toast.runComplete': 'Pipeline completed',
@@ -477,6 +478,7 @@ const LANGS = {
     'toast.landmarkApplyFailed': '地标对齐失败：{err}',
     'toast.landmarkSuccess': '已应用 {n} 对地标',
     'toast.alignUnexpected': '对齐时发生意外错误',
+    'toast.alignFailedManualHint': '\u81ea\u52a8\u914d\u51c6\u672a\u80fd\u627e\u5230\u8db3\u591f\u7684\u7279\u5f81\u70b9\u3002\u8bf7\u5728\u4e0b\u65b9\u624b\u52a8\u6dfb\u52a0\u6821\u6b63\u70b9\u3002',
     'toast.runFailed': '流水线失败：{err}',
     'toast.runStarted': '流水线已启动：{channels}',
     'toast.runComplete': '流水线已完成',
@@ -2969,8 +2971,33 @@ async function runOneClickWorkflow() {
 
   // Execute AI registration once.
   const aiAlignHandler = document.getElementById('aiAlignBtn')?.onclick;
+  let aiAlignOk = true;
   if (typeof aiAlignHandler === 'function') {
-    await aiAlignHandler();
+    try {
+      await aiAlignHandler();
+    } catch {
+      aiAlignOk = false;
+    }
+    // Check if the alignment produced a visible result image
+    const compareImg = document.getElementById('alignPreviewImg');
+    if (!compareImg?.src || compareImg.classList.contains('hidden')) {
+      aiAlignOk = false;
+    }
+  }
+
+  if (!aiAlignOk) {
+    // Scroll to manual landmark section and activate it
+    const manualSection = document.getElementById('manualLandmarkSection');
+    if (manualSection) {
+      manualSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      manualSection.style.outline = '2px solid #f59e0b';
+      setTimeout(() => { manualSection.style.outline = ''; }, 5000);
+    }
+    if (manualModeBtn && !manualState.active) {
+      manualModeBtn.click();
+    }
+    showToast(t('toast.alignFailedManualHint'), 'warning', 8000);
+    return;
   }
 
   // Enter manual review stage.

@@ -213,7 +213,7 @@ const LANGS = {
     'toast.previewUpdated': 'Preview updated',
     'toast.autoPickNeedPath': 'Please set both Real Slice and Atlas paths first',
     'toast.autoPickWaiting': 'Auto-picking best atlas slice...',
-    'toast.autoPickFailed': 'Auto-pick failed',
+    'toast.autoPickFailed': 'Auto-pick failed. See the progress dialog for details.',
     'toast.autoPickSuccess': 'Auto-picked: plane={plane}, Z={z}, score={score}',
     'toast.aspectWarning': 'Aspect ratio mismatch: real={ra}, atlas={aa}. Check pixel size or flip settings.',
     'toast.zDetected': '3D stack detected: {z} slices, {h}×{w} px',
@@ -236,6 +236,22 @@ const LANGS = {
     'toast.cancelNone': 'No pipeline is running',
     'toast.outputsPath': 'Output folder: {path}',
     'toast.qcLoadFailed': 'Failed to load QC images',
+    'toast.chooseSourceFirst': 'Please choose source TIFF first.',
+    'toast.autoPickPreviewFailed': 'Auto-pick failed, cannot generate preview.',
+    'toast.oneClickDone': 'One-click registration done. Entered manual review stage.',
+    'toast.3dDetected': '3D detected. The Z selector is now shown below the Start button.',
+    'toast.regenStarted': 'Demo visuals regeneration started. Refreshing in 15s...',
+    'toast.regenFailed': 'Regen failed: {err}',
+    'toast.regenError': 'Regen error: {err}',
+    'toast.pixelSizeDetected': 'Pixel size auto-detected from TIFF: {size} µm/px',
+    'toast.atlasPathNotSet': 'Atlas annotation path not set. Check /api/info defaults.',
+    'toast.setRealSliceFirst': 'Please set Real Slice path first.',
+    'toast.autoLearnDone': 'Auto-learning finished. Tuned params updated.',
+    'toast.autoLearnStarted': 'Auto-learning started in background.',
+    'toast.devError': 'Dev Error: {msg}',
+    'toast.uncaughtError': 'Uncaught: {msg}',
+    'toast.promiseReject': 'Promise Reject: {msg}',
+    'hint.zChoose': 'Choose a Z layer below. Click "Extract This Slice" to continue immediately, or click Start again to use the selected Z.',
 
     'manualCount.title': 'Manual TIFF Check',
     'manualCount.desc': 'Open a source TIFF directly for visual inspection and manual counting. Use the mouse wheel to move through Z slices.',
@@ -467,7 +483,7 @@ const LANGS = {
     'toast.previewUpdated': '预览已更新',
     'toast.autoPickNeedPath': '请先设置真实切片路径和图谱路径',
     'toast.autoPickWaiting': '正在自动选取最佳图谱层...',
-    'toast.autoPickFailed': '自动选取失败',
+    'toast.autoPickFailed': '自动选取失败。请查看进度对话框了解详情。',
     'toast.autoPickSuccess': '自动选取完成：平面={plane}，Z={z}，评分={score}',
     'toast.aspectWarning': '宽高比不匹配：真实={ra}，图谱={aa}。请检查像素尺寸或翻转设置。',
     'toast.zDetected': '检测到3D数据：{z}层，{h}×{w} px',
@@ -490,6 +506,22 @@ const LANGS = {
     'toast.cancelNone': '当前没有运行中的流水线',
     'toast.outputsPath': '输出目录：{path}',
     'toast.qcLoadFailed': 'QC图片加载失败',
+    'toast.chooseSourceFirst': '请先选择源TIFF文件。',
+    'toast.autoPickPreviewFailed': '自动选取失败，无法生成预览。',
+    'toast.oneClickDone': '一键配准完成，已进入手动审核阶段。',
+    'toast.3dDetected': '检测到3D数据。Z层选择器已显示在开始按钮下方。',
+    'toast.regenStarted': '正在重新生成演示图，15秒后刷新...',
+    'toast.regenFailed': '重新生成失败：{err}',
+    'toast.regenError': '重新生成出错：{err}',
+    'toast.pixelSizeDetected': '已从TIFF自动检测像素尺寸：{size} µm/px',
+    'toast.atlasPathNotSet': '未设置Atlas标注路径。请检查 /api/info 默认值。',
+    'toast.setRealSliceFirst': '请先设置切片图像路径。',
+    'toast.autoLearnDone': '自动学习完成，参数已更新。',
+    'toast.autoLearnStarted': '自动学习已在后台启动。',
+    'toast.devError': '开发错误：{msg}',
+    'toast.uncaughtError': '未捕获异常：{msg}',
+    'toast.promiseReject': 'Promise拒绝：{msg}',
+    'hint.zChoose': '请选择Z层。点击"提取此切片"立即继续，或再次点击开始使用所选Z层。',
 
     'manualCount.title': '手动TIFF检查',
     'manualCount.desc': '直接打开源TIFF进行人眼检查和手动计数，可用鼠标滚轮切换Z层。',
@@ -788,7 +820,7 @@ function log(msg) {
     origConsoleError.apply(console, args);
     const msg = args.map(safeStr).join(' ');
     log(`❌ [FE ERROR] ${msg}`);
-    showToast('Dev Error: ' + msg.substring(0, 70), 'error');
+    showToast(t('toast.devError', { msg: msg.substring(0, 70) }), 'error');
   };
   console.warn = function(...args) {
     origConsoleWarn.apply(console, args);
@@ -798,12 +830,12 @@ function log(msg) {
   window.addEventListener('error', e => {
     const msg = `${e.message} at ${e.filename}:${e.lineno}`;
     log(`❌ [UNCAUGHT] ${msg}`);
-    showToast('Uncaught: ' + e.message.substring(0, 50), 'error');
+    showToast(t('toast.uncaughtError', { msg: e.message.substring(0, 50) }), 'error');
   });
   window.addEventListener('unhandledrejection', e => {
     const msg = safeStr(e.reason);
     log(`❌ [PROMISE REJECT] ${msg}`);
-    showToast('Promise Reject: ' + msg.substring(0, 60), 'error');
+    showToast(t('toast.promiseReject', { msg: msg.substring(0, 60) }), 'error');
   });
 })();
 
@@ -1628,14 +1660,14 @@ async function regenDemoVisuals() {
     const r = await fetch('/api/outputs/refresh-demo', { method: 'POST' });
     const j = await r.json();
     if (j.ok) {
-      showToast('Demo visuals regeneration started. Refreshing in 15s...', 'info');
+      showToast(t('toast.regenStarted'), 'info');
       setTimeout(() => { refreshQcAll(); if (btn) { btn.disabled = false; btn.textContent = t('btn.regenDemo'); } }, 15000);
     } else {
-      showToast('Regen failed: ' + (j.error || 'unknown'), 'warning');
+      showToast(t('toast.regenFailed', { err: j.error || 'unknown' }), 'warning');
       if (btn) { btn.disabled = false; btn.textContent = t('btn.regenDemo'); }
     }
   } catch (e) {
-    showToast('Regen error: ' + e, 'warning');
+    showToast(t('toast.regenError', { err: String(e) }), 'warning');
     if (btn) { btn.disabled = false; btn.textContent = t('btn.regenDemo'); }
   }
 }
@@ -1912,7 +1944,7 @@ async function checkSliceIs3D(path) {
       if (psEl && !psEl.dataset.userModified) {
         psEl.value = res.pixel_size_um;
         psEl.dataset.autoDetected = '1';
-        showToast('Pixel size auto-detected from TIFF: ' + res.pixel_size_um + ' µm/px', 'info', 4000);
+        showToast(t('toast.pixelSizeDetected', { size: res.pixel_size_um }), 'info', 4000);
       }
     }
   } catch (err) {
@@ -2488,7 +2520,7 @@ async function ensureAutoPickedAtlasSlice(realPath) {
   const slicingPlane = document.getElementById('slicingPlane').value || 'coronal';
   const pixelSizeUm = Number(document.getElementById('pixelSizeUm').value || 0.65);
   if (!annotationPath) {
-    if (!atlasLabelEl.value) showToast('Atlas annotation path not set. Check /api/info defaults.', 'error', 6000);
+    if (!atlasLabelEl.value) showToast(t('toast.atlasPathNotSet'), 'error', 6000);
     return !!atlasLabelEl.value;
   }
 
@@ -2511,7 +2543,7 @@ async function ensureAutoPickedAtlasSlice(realPath) {
 
   if (!r) {
     if (!atlasLabelEl.value) {
-      showToast('Auto-pick failed, cannot generate preview.', 'error', 5000);
+      showToast(t('toast.autoPickPreviewFailed'), 'error', 5000);
     }
     return !!atlasLabelEl.value;
   }
@@ -2646,7 +2678,7 @@ async function applyLiquifyDrag(x1, y1, x2, y2) {
 
   const payload = buildOverlayRequestPayload();
   if (!payload.realPath) {
-    showToast('Please set Real Slice path first.', 'warning');
+    showToast(t('toast.setRealSliceFirst'), 'warning');
     return;
   }
   payload.x1 = Number(x1);
@@ -2694,7 +2726,7 @@ async function pollCalibrationLearnStatus() {
       calibLearnPollTimer = null;
     }
     if (s.ok === true) {
-      showToast('Auto-learning finished. Tuned params updated.', 'success', 5000);
+      showToast(t('toast.autoLearnDone'), 'success', 5000);
     } else {
       showToast(`Auto-learning failed: ${s.error || '?'}`, 'warning', 7000);
     }
@@ -2819,7 +2851,7 @@ if (saveCalibLearnBtn) {
   saveCalibLearnBtn.onclick = async () => {
     const payload = buildOverlayRequestPayload();
     if (!payload.realPath) {
-      showToast('Please set Real Slice path first.', 'warning');
+      showToast(t('toast.setRealSliceFirst'), 'warning');
       return;
     }
     payload.autoLearn = autoLearnToggle ? !!autoLearnToggle.checked : true;
@@ -2845,7 +2877,7 @@ if (saveCalibLearnBtn) {
         showToast(`Sample library pruned: removed ${pruned}, kept ${kept}/${maxN}.`, 'info', 5000);
       }
       if (res.learningStarted) {
-        showToast('Auto-learning started in background.', 'info', 3000);
+        showToast(t('toast.autoLearnStarted'), 'info', 3000);
         if (calibLearnPollTimer) clearInterval(calibLearnPollTimer);
         calibLearnPollTimer = setInterval(pollCalibrationLearnStatus, 5000);
       }
@@ -2923,7 +2955,7 @@ async function runOneClickWorkflow() {
   const source = String(oneClickSourcePathEl?.value || '').trim();
   const scope = String(oneClickScopeEl?.value || 'single');
   if (!source) {
-    showToast('Please choose source TIFF first.', 'warning');
+    showToast(t('toast.chooseSourceFirst'), 'warning');
     return;
   }
 
@@ -2935,9 +2967,9 @@ async function runOneClickWorkflow() {
   const zVisible = !!(zSlicerBox && !zSlicerBox.classList.contains('hidden'));
   if (scope === 'single' && zVisible && oneClickStartBtn?.dataset?.zConfirmed !== '1') {
     if (oneClickStartBtn) oneClickStartBtn.dataset.zConfirmed = '1';
-    zExtractStatus.textContent = 'Choose a Z layer below. Click "Extract This Slice" to continue immediately, or click Start again to use the selected Z.';
+    zExtractStatus.textContent = t('hint.zChoose');
     revealZSlicer();
-    showToast('3D detected. The Z selector is now shown below the Start button.', 'info', 6000);
+    showToast(t('toast.3dDetected'), 'info', 6000);
     return;
   }
   if (oneClickStartBtn) oneClickStartBtn.dataset.zConfirmed = '0';
@@ -2968,7 +3000,7 @@ async function runOneClickWorkflow() {
 
   const okAuto = await ensureAutoPickedAtlasSlice(source);
   if (!okAuto) {
-    showToast('Auto-pick failed. See the progress dialog for details.', 'error', 5000);
+    showToast(t('toast.autoPickFailed'), 'error', 5000);
     return;
   }
   await refreshOverlayPreviewWithCanvas();
@@ -3008,7 +3040,7 @@ async function runOneClickWorkflow() {
   if (manualModeBtn && !manualState.active) {
     manualModeBtn.click();
   }
-  showToast('One-click registration done. Entered manual review stage.', 'success', 5000);
+  showToast(t('toast.oneClickDone'), 'success', 5000);
 }
 
 if (oneClickStartBtn) {

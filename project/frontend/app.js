@@ -86,6 +86,8 @@ const LANGS = {
     'hint.maxPoints': 'Fewer points → faster but less accurate',
     'hint.minDistance': 'Pixels between detected landmarks',
     'hint.ransacResidual': 'Higher → more permissive matching',
+    'hint.scopeSingle': 'Single-layer mode will include Z-layer selection for 3D TIFF.',
+    'hint.scopeWhole': 'Whole-brain mode registers all Z-slices to the Allen Atlas automatically.',
     'opt.coronal': 'Coronal (default)',
     'opt.sagittal': 'Sagittal',
     'opt.horizontal.plane': 'Horizontal (Axial)',
@@ -338,6 +340,8 @@ const LANGS = {
     'hint.maxPoints': '点数越少 → 越快但精度较低',
     'hint.minDistance': '检测地标之间的像素距离',
     'hint.ransacResidual': '值越大 → 匹配容忍度越高',
+    'hint.scopeSingle': '单层模式将为3D TIFF提供Z层选择。',
+    'hint.scopeWhole': '全脑模式自动将所有Z切片配准到Allen Atlas。',
     'opt.coronal': '冠状面（默认）',
     'opt.sagittal': '射状面',
     'opt.horizontal.plane': '水平面（轴位）',
@@ -3009,6 +3013,17 @@ async function runOneClickWorkflow() {
 
 if (oneClickStartBtn) {
   oneClickStartBtn.onclick = runOneClickWorkflow;
+}
+
+if (oneClickScopeEl) {
+  oneClickScopeEl.onchange = () => {
+    const hint = document.getElementById('oneClickScopeHint');
+    if (hint) {
+      hint.textContent = oneClickScopeEl.value === 'whole'
+        ? t('hint.scopeWhole')
+        : t('hint.scopeSingle');
+    }
+  };
 }
 
 if (quickExportBtn) {

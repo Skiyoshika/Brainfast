@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
   <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.453.0/dist/umd/lucide.min.js"></script>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -32,14 +32,16 @@
   <div class="modal-box">
     <button class="modal-close-btn" id="guideModalClose" aria-label="Close dialog"><i data-lucide="x"></i></button>
     <h2 data-i18n="guide.title"><i data-lucide="book-open" class="icon-inline"></i> Getting Started Guide</h2>
-    <ol>
-      <li data-i18n="guide.step1"><strong>Step 1 →?Configure Paths:</strong> Click "Browse" to select your TIFF folder, Atlas annotation file, and brain region CSV. Fields marked "Required" must be filled in.</li>
-      <li data-i18n="guide.step2"><strong>Step 2 →?Preview Atlas:</strong> Set the slicing plane (usually Coronal), pixel size (default 0.65 µm), click "Auto-pick Atlas Slice", then "Refresh Preview" to check the initial overlay.</li>
-      <li data-i18n="guide.step3"><strong>Step 3 →?AI Registration:</strong> Choose the mode (Affine for small deformation; Nonlinear for tears/large warping), then click "AI Landmark Registration". Check the quality panel to confirm SSIM improved.</li>
-      <li data-i18n="guide.step4"><strong>Step 4 →?Run Pipeline:</strong> Select the fluorescence channel, then click "Run Pipeline". After completion, switch to the "Results" tab to view per-region cell counts.</li>
-      <li data-i18n="guide.step5"><strong>Export:</strong> In the Results tab, click "Export CSV" for data. Click "Export Methods Text" to get a pre-written Methods paragraph you can paste directly into your paper.</li>
-    </ol>
-    <p class="guide-tip" data-i18n="guide.tip"><i data-lucide="lightbulb" class="icon-inline"></i> Tip: All run parameters are automatically saved to outputs/run_params_YYYYMMDD_HHMMSS.json for reproducibility.</p>
+    <div id="guideContent">
+      <ol>
+        <li data-i18n="guide.step1"><strong>Step 1 → Configure Paths:</strong> Click "Browse" to select your TIFF folder, Atlas annotation file, and brain region CSV. Fields marked "Required" must be filled in.</li>
+        <li data-i18n="guide.step2"><strong>Step 2 → Preview Atlas:</strong> Set the slicing plane (usually Coronal), pixel size (default 0.65 µm), click "Auto-pick Atlas Slice", then "Refresh Preview" to check the initial overlay.</li>
+        <li data-i18n="guide.step3"><strong>Step 3 → AI Registration:</strong> Choose the mode (Affine for small deformation; Nonlinear for tears/large warping), then click "AI Landmark Registration". Check the quality panel to confirm SSIM improved.</li>
+        <li data-i18n="guide.step4"><strong>Step 4 → Run Pipeline:</strong> Select the fluorescence channel, then click "Run Pipeline". After completion, switch to the "Results" tab to view per-region cell counts.</li>
+        <li data-i18n="guide.step5"><strong>Export:</strong> In the Results tab, click "Export CSV" for data. Click "Export Methods Text" to get a pre-written Methods paragraph you can paste directly into your paper.</li>
+      </ol>
+      <p class="guide-tip" data-i18n="guide.tip"><i data-lucide="lightbulb" class="icon-inline"></i> Tip: All run parameters are automatically saved to outputs/run_params_YYYYMMDD_HHMMSS.json for reproducibility.</p>
+    </div>
     <div class="modal-footer">
       <button class="btn-primary" id="guideModalOk" data-i18n="guide.ok">Got it → Start Using</button>
     </div>
@@ -136,6 +138,15 @@
     <div class="tab-content active" id="tab-workflow">
       <header class="topbar">
         <h1 data-i18n="nav.workflow">Registration Workflow</h1>
+        <div id="workflowStepIndicator" class="workflow-step-indicator hidden">
+          <span class="wsi-step" data-step="1">1 Config</span>
+          <span class="wsi-arrow">→</span>
+          <span class="wsi-step" data-step="2">2 Atlas</span>
+          <span class="wsi-arrow">→</span>
+          <span class="wsi-step" data-step="3">3 Register</span>
+          <span class="wsi-arrow">→</span>
+          <span class="wsi-step" data-step="4">4 Pipeline</span>
+        </div>
         <div class="topbar-actions">
           <button id="guideBtn" class="btn-ghost" data-i18n="btn.guide"><i data-lucide="book-open" class="btn-icon"></i> Guide</button>
         </div>
@@ -154,31 +165,80 @@
         <div class="workflow-mode-panel">
           <div class="grid-3">
             <label class="field-label">
-              <span>Workflow Mode / 流程模式</span>
+              <span data-i18n="label.workflowMode">Workflow Mode</span>
               <select id="workflowMode">
-                <option value="oneclick" selected>One-Click Mode (Recommended)</option>
-                <option value="pro">Professional Mode</option>
+                <option value="oneclick" selected data-i18n="opt.modeOneClick">One-Click Mode (Recommended)</option>
+                <option value="pro" data-i18n="opt.modePro">Professional Mode</option>
               </select>
             </label>
-            <label class="field-label">
-              <span>One-Click Source TIFF</span>
+            <label class="field-label" style="grid-column:1/-1">
+              <span data-i18n="label.sourceFile">One-Click Source TIFF</span>
               <div class="input-browse">
-                <input id="oneClickSourcePath" placeholder="D:\...\sample.tif" />
+                <input id="oneClickSourcePath" placeholder="Select or type path to .tif file..." />
                 <button class="btn-browse" data-target="oneClickSourcePath" data-type="file" data-filetypes="tif,tiff" data-i18n="btn.browse">Browse</button>
               </div>
+              <span class="field-hint" data-i18n="hint.channelGuide">For multi-channel data: load the reporter channel (C0) for registration. After registration, use Step 4 to process each channel separately.</span>
             </label>
             <label class="field-label">
-              <span>Registration Scope / 配准范围</span>
+              <span data-i18n="label.regScope">Registration Scope</span>
               <select id="oneClickScope">
-                <option value="single" selected>Single-layer Registration (single-slice)</option>
-                <option value="whole">Whole-brain Registration (full workflow)</option>
+                <option value="single" selected data-i18n="opt.scopeSingle">Single-layer Registration (single-slice)</option>
+                <option value="whole" data-i18n="opt.scopeWhole">Whole-brain Registration (full workflow)</option>
               </select>
-              <span class="field-hint" id="oneClickScopeHint">Single-layer mode will include Z-layer selection for 3D TIFF.</span>
+              <span class="field-hint" id="oneClickScopeHint" data-i18n="hint.scopeSingle">Single-layer mode will include Z-layer selection for 3D TIFF.</span>
             </label>
+            <label class="field-label">
+              <span data-i18n="label.hemisphere">Hemisphere</span>
+              <select id="oneClickHemisphere">
+                <option value="auto" data-i18n="opt.hemiAuto">Auto-detect (recommended)</option>
+                <option value="full" data-i18n="opt.hemiFull">Full brain (both hemispheres)</option>
+                <option value="left" data-i18n="opt.hemiLeft">Left hemisphere</option>
+                <option value="right_flipped" data-i18n="opt.hemiRightFlipped">Right hemisphere (flipped, lateral=left)</option>
+              </select>
+              <span class="field-hint" id="oneClickHemiHint" data-i18n="hint.hemiAuto">Auto-detect tries all orientations and picks the best match.</span>
+            </label>
+            <label class="field-label">
+              <span data-i18n="label.atlasVersion">Atlas Version</span>
+              <select id="oneClickAtlasVersion">
+                <option value="ccfv3" data-i18n="opt.atlasCcfv3">CCFv3 (Allen 2017)</option>
+                <option value="ccfv3bbp" data-i18n="opt.atlasCcfv3bbp">CCFv3-BBP (Extended)</option>
+              </select>
+              <span class="field-hint" id="atlasVersionHint" data-i18n="hint.atlasCcfv3">Standard Allen Mouse Brain CCFv3, 25µm resolution</span>
+            </label>
+            <label class="field-label">
+              <span data-i18n="label.regMode">Registration Mode</span>
+              <select id="oneClickRegMode">
+                <option value="cross_modal" data-i18n="opt.regCrossModal">Cross-Modal (Default)</option>
+                <option value="nissl_template" data-i18n="opt.regNissl">Nissl Template (Single-Modal)</option>
+              </select>
+              <span class="field-hint" id="regModeHint" data-i18n="hint.regCrossModal">Matches fluorescence edges against atlas annotation edges</span>
+            </label>
+            <label class="field-label">
+              <span data-i18n="label.targetRegion">Target Brain Region</span>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input id="targetRegionSearch" type="text" class="form-control" style="flex:1;"
+                       placeholder="Search: STN, CP, Thalamus..." autocomplete="off" />
+                <button id="targetRegionClearBtn" type="button" class="btn-secondary" style="padding:4px 10px;font-size:0.85em;" title="Clear selection">✕</button>
+              </div>
+              <select id="targetRegionSelect" size="6" class="form-control" style="display:none;max-height:180px;overflow-y:auto;font-size:0.85em;"></select>
+              <input type="hidden" id="targetRegionId" value="" />
+              <span class="field-hint" id="targetRegionHint" data-i18n="hint.targetRegion">Select a target region to restrict AP search range (e.g., STN + CP for ChAT)</span>
+              <div id="targetRegionTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;"></div>
+            </label>
+          </div>
+          <div id="oneClickPixelSizeRow" class="hidden" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:8px 12px;margin-bottom:0.3rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="color:#f59e0b;font-weight:600;font-size:0.85em;" data-i18n="label.pixelSizeQuick">Pixel size not auto-detected:</span>
+            <input id="oneClickPixelSize" type="number" min="0.1" max="100" step="0.1" value="5" style="width:70px;padding:3px 6px;border-radius:4px;border:1px solid #555;background:#1a1a2e;color:#fff;" />
+            <span style="font-size:0.85em;color:#aaa;">µm/px</span>
+            <span class="field-hint" style="font-size:0.8em;color:#aaa;" data-i18n="hint.pixelSizeQuick">(Cleared tissue: ~5 µm, thin sections: ~0.65 µm)</span>
           </div>
           <div class="actions-row">
             <button id="oneClickStartBtn" class="btn-primary">Start One-Click Workflow</button>
             <span class="field-hint">Flow: auto-pick atlas → auto registration → manual review / liquify → export.</span>
+          </div>
+          <div id="oneClickPreviewBox" class="hidden" style="margin-top:0.5rem;text-align:center;">
+            <img id="oneClickPreviewImg" style="max-height:180px;max-width:100%;border-radius:6px;border:1px solid #333;" alt="TIFF preview" />
+            <div id="oneClickPreviewInfo" class="field-hint" style="margin-top:0.3rem;"></div>
           </div>
           <div id="zSlicerBox" class="z-slicer-box hidden">
             <span class="z-slicer-label" id="zSlicerLabel">3D stack detected -> Z: <strong id="zValDisplay">0</strong> / <span id="zMaxDisplay">0</span></span>
@@ -270,6 +330,7 @@
             <input id="pixelSizeUm" type="number" min="0.1" max="10.0" step="0.05" value="0.65" />
             <span class="field-hint" data-i18n="hint.pixelSizeUm">Fluorescence microscopy: typically ~0.65 µm</span>
           </label>
+          <div id="pixelSizeWarning" class="pixel-size-warning hidden" data-i18n="warn.pixelSizeNotDetected">Pixel size not detected from image metadata. Registration quality depends on this value — please verify or enter manually.</div>
           <label class="field-label">
             <span data-i18n="label.slicingPlane">Slicing Plane</span>
             <select id="slicingPlane">
@@ -753,6 +814,14 @@
           <h2 data-i18n="results.title">Cell Counts by Brain Region</h2>
           <input id="regionSearch" class="search-input" data-i18n-ph="ph.regionSearch" placeholder="Search region name..." />
         </div>
+        <div id="treeDepthControls" class="tree-depth-controls hidden">
+          <span data-i18n="results.expandDepth">Expand to depth:</span>
+          <button class="depth-btn" data-depth="1">1</button>
+          <button class="depth-btn active" data-depth="2">2</button>
+          <button class="depth-btn" data-depth="3">3</button>
+          <button class="depth-btn" data-depth="4">4</button>
+          <button class="depth-btn" data-depth="99" data-i18n="results.expandAll">All</button>
+        </div>
         <table id="resultsTable">
           <thead>
             <tr>
@@ -800,6 +869,6 @@
 </div><!-- /app -->
 
 <script src="./app.js"></script>
-<script>lucide.createIcons();</script>
+<script>if(typeof lucide!=='undefined')lucide.createIcons();</script>
 </body>
 </html>

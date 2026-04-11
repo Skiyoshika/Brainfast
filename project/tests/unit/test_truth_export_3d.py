@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import nibabel as nib
 import numpy as np
 import pytest
-import nibabel as nib
 from tifffile import imread, imwrite
 
 import project.scripts.truth_export_3d as truth_export_3d
@@ -17,9 +17,7 @@ import project.scripts.truth_export_3d as truth_export_3d
         ("unexpected", 1, np.array([[5, 6], [7, 8]], dtype=np.int32)),
     ],
 )
-def test_select_volume_slice_handles_planes_and_defaults_to_coronal(
-    slicing_plane, index, expected
-):
+def test_select_volume_slice_handles_planes_and_defaults_to_coronal(slicing_plane, index, expected):
     volume = np.array(
         [
             [[1, 2], [3, 4]],

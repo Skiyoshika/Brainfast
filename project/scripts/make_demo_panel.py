@@ -30,7 +30,10 @@ def make_annotated_slice(
 
     Regions are annotated with their Allen acronym + full name at centroid positions.
     """
-    import pandas as pd
+    try:
+        from scripts.structure_tree import load_structure_table
+    except ImportError:
+        from structure_tree import load_structure_table
 
     # --- load overlay and label ---
     ov_arr = np.array(Image.open(str(overlay_png)).convert("RGB"))
@@ -38,7 +41,7 @@ def make_annotated_slice(
 
     # --- load structure tree for region names ---
     try:
-        df = pd.read_csv(str(structure_csv))
+        df = load_structure_table(Path(structure_csv))
         id2name = dict(zip(df["id"].astype(int), df["name"].fillna("?"), strict=False))
         id2acro = dict(zip(df["id"].astype(int), df["acronym"].fillna("?"), strict=False))
     except Exception:

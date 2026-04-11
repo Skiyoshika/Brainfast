@@ -737,6 +737,7 @@ tr:hover td { background: var(--bg-card); }
   background: #0d0d0f;
   line-height: 0;
   width: 100%;
+  max-height: 520px;
 }
 .canvas-wrap .preview-img {
   display: block;

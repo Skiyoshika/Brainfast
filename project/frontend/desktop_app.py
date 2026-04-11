@@ -1,94 +1,113 @@
 """
-Brainfast Desktop Launcher
-- System tray icon with right-click menu
-- Splash screen while backend starts
-- Browser auto-open
-- Pipeline-complete notification via tray
+Brainfast desktop launcher.
+
+- Starts the local Flask backend
+- Shows a small splash screen during startup
+- Opens the browser automatically
+- Lives in the system tray until quit
+- Checks atlas assets before backend startup
+- Checks GitHub releases in the background
 """
+
 from __future__ import annotations
 
+import atexit
 import os
 import socket
 import sys
 import threading
 import time
 import webbrowser
-import atexit
 from pathlib import Path
 
-# ── Resolve paths (works both dev and PyInstaller --onedir) ──────────────────
 if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-    # PyInstaller onedir: _MEIPASS is the _internal/ directory
-    # HTML/CSS/JS are placed directly in _internal/ (see spec)
     FRONTEND = Path(sys._MEIPASS)
 else:
     FRONTEND = Path(__file__).resolve().parent
 
 os.environ["BRAINFAST_FRONTEND"] = str(FRONTEND)
 
-from server import app  # noqa: E402 — import after env set
+from server import app  # noqa: E402
 
-HOST      = "127.0.0.1"
-PORT      = 8787
+from project.frontend.app_metadata import read_version_info  # noqa: E402
+from project.frontend.update_checker import (  # noqa: E402
+    check_for_update,
+    latest_release_url,
+    update_checks_enabled,
+)
+
+HOST = "127.0.0.1"
+PORT = 8787
 LOCK_PORT = 18787
-APP_NAME  = "Brainfast"
+APP_NAME = "Brainfast"
+
+_last_run_done = False
+_update_state: dict[str, object] = {
+    "checked": False,
+    "error": "",
+    "has_update": False,
+    "latest_version": "",
+    "latest_url": "",
+}
 
 
-# ── Tray icon image (drawn with PIL, no external file needed) ────────────────
-def _make_icon(size: int = 64, highlight: bool = False) -> "Image.Image":
+def _make_icon(size: int = 64, highlight: bool = False):
     from PIL import Image, ImageDraw
+
     bg = (30, 32, 40, 255)
     accent = (76, 114, 245, 255) if not highlight else (52, 190, 110, 255)
-    img  = Image.new("RGBA", (size, size), bg)
-    draw = ImageDraw.Draw(img)
-    m = size // 8
-    # Brain-like ellipse
-    draw.ellipse([m, m * 2, size - m, size - m], fill=accent)
-    # Top indent (cerebral notch)
-    draw.ellipse([size // 2 - m, m, size // 2 + m, m * 3], fill=bg)
-    # Vertical sulcus line
-    draw.line([(size // 2, m * 2 + 2), (size // 2, size - m - 2)],
-              fill=bg, width=max(2, size // 20))
-    return img.convert("RGB")
+    image = Image.new("RGBA", (size, size), bg)
+    draw = ImageDraw.Draw(image)
+    margin = size // 8
+    draw.ellipse([margin, margin * 2, size - margin, size - margin], fill=accent)
+    draw.ellipse([size // 2 - margin, margin, size // 2 + margin, margin * 3], fill=bg)
+    draw.line(
+        [(size // 2, margin * 2 + 2), (size // 2, size - margin - 2)],
+        fill=bg,
+        width=max(2, size // 20),
+    )
+    return image.convert("RGB")
 
 
-# ── Splash screen (Tkinter) ──────────────────────────────────────────────────
-def _show_splash() -> "Tk":
+def _show_splash():
     import tkinter as tk
+
     root = tk.Tk()
     root.overrideredirect(True)
     root.configure(bg="#181a1f")
     root.attributes("-topmost", True)
 
-    W, H = 320, 140
-    sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-    root.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
+    width, height = 320, 140
+    screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
+    root.geometry(f"{width}x{height}+{(screen_w - width) // 2}+{(screen_h - height) // 2}")
 
-    tk.Label(root, text="🧠", font=("Segoe UI", 36),
-             bg="#181a1f", fg="#4c72f5").pack(pady=(18, 4))
-    tk.Label(root, text="Brainfast", font=("Segoe UI", 15, "bold"),
-             bg="#181a1f", fg="#dde1e9").pack()
-    status = tk.Label(root, text="Starting backend…",
-                      font=("Segoe UI", 10), bg="#181a1f", fg="#878e9e")
-    status.pack(pady=(4, 0))
-
+    tk.Label(
+        root, text="Brainfast", font=("Segoe UI", 15, "bold"), bg="#181a1f", fg="#dde1e9"
+    ).pack(pady=(32, 6))
+    status = tk.Label(
+        root,
+        text="Starting backend...",
+        font=("Segoe UI", 10),
+        bg="#181a1f",
+        fg="#878e9e",
+    )
+    status.pack()
     root.update()
     return root, status
 
 
-# ── Single-instance guard ────────────────────────────────────────────────────
-def _single_instance() -> "socket.socket | None":
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+def _single_instance() -> socket.socket | None:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        s.bind((HOST, LOCK_PORT))
-        return s
+        sock.bind((HOST, LOCK_PORT))
+        return sock
     except OSError:
         return None
 
 
 def _wait_ready(timeout: float = 12.0) -> bool:
-    t0 = time.time()
-    while time.time() - t0 < timeout:
+    start = time.time()
+    while time.time() - start < timeout:
         try:
             with socket.create_connection((HOST, PORT), timeout=0.5):
                 return True
@@ -97,71 +116,154 @@ def _wait_ready(timeout: float = 12.0) -> bool:
     return False
 
 
-# ── Background poller: watch for pipeline completion ────────────────────────
-_last_run_done: bool = False
-
-def _poll_pipeline(icon: "pystray.Icon"):
+def _poll_pipeline(icon):
     global _last_run_done
-    import urllib.request, json as _json
+    import json as json_lib
+    import urllib.request
+
     while True:
         time.sleep(3)
         try:
-            with urllib.request.urlopen(
-                f"http://{HOST}:{PORT}/api/status", timeout=1
-            ) as r:
-                data = _json.loads(r.read())
+            with urllib.request.urlopen(f"http://{HOST}:{PORT}/api/status", timeout=1) as response:
+                data = json_lib.loads(response.read())
             done = bool(data.get("done")) and not bool(data.get("running"))
             if done and not _last_run_done:
-                err = data.get("error")
-                if err:
-                    icon.notify(f"Pipeline error: {err}", APP_NAME)
+                error = data.get("error")
+                if error:
+                    icon.notify(f"Pipeline error: {error}", APP_NAME)
                 else:
-                    icon.notify("Pipeline finished successfully! ✅", APP_NAME)
+                    icon.notify("Pipeline finished successfully.", APP_NAME)
             _last_run_done = done
         except Exception:
             pass
 
 
-# ── Main ─────────────────────────────────────────────────────────────────────
+def _check_updates(icon, *, interactive: bool = False):
+    global _update_state
+
+    if not update_checks_enabled():
+        _update_state = {
+            "checked": True,
+            "error": "",
+            "has_update": False,
+            "latest_version": "",
+            "latest_url": latest_release_url(FRONTEND.parent),
+        }
+        if interactive:
+            icon.notify("Automatic update checks are disabled.", APP_NAME)
+        return
+
+    try:
+        result = check_for_update(FRONTEND.parent)
+        _update_state = {
+            "checked": True,
+            "error": "",
+            "has_update": bool(result["has_update"]),
+            "latest_version": str(result["latest_version"]),
+            "latest_url": str(result["latest_url"]),
+        }
+        if result["has_update"]:
+            icon.notify(
+                f"Update available: {result['latest_version']} (current {result['current_version']})",
+                APP_NAME,
+            )
+        elif interactive:
+            icon.notify(f"Brainfast is up to date ({result['current_version']}).", APP_NAME)
+    except Exception as exc:
+        _update_state = {
+            "checked": True,
+            "error": str(exc),
+            "has_update": False,
+            "latest_version": "",
+            "latest_url": latest_release_url(FRONTEND.parent),
+        }
+        if interactive:
+            icon.notify(f"Update check failed: {exc}", APP_NAME)
+
+
+def _start_update_check(icon) -> None:
+    if not update_checks_enabled():
+        return
+    threading.Thread(target=_check_updates, args=(icon,), daemon=True).start()
+
+
 def main():
     guard = _single_instance()
     if guard is None:
-        # Already running — just open browser
         webbrowser.open(f"http://{HOST}:{PORT}")
         return
     atexit.register(guard.close)
 
-    # Show splash
     splash, splash_status = _show_splash()
 
-    # Start Flask in background
+    def _update_splash(message: str) -> None:
+        splash_status.config(text=message[:56])
+        splash.update()
+
+    try:
+        from project.scripts.asset_bootstrap import ensure_atlas_assets
+
+        _update_splash("Checking atlas assets...")
+        ensure_atlas_assets(FRONTEND.parent, logger=_update_splash)
+    except Exception as exc:
+        splash.destroy()
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror(APP_NAME, f"Atlas bootstrap failed.\n{exc}")
+        root.destroy()
+        return
+
+    _update_splash("Starting backend...")
     flask_thread = threading.Thread(
-        target=lambda: app.run(host=HOST, port=PORT, debug=False, use_reloader=False, threaded=True),
+        target=lambda: app.run(
+            host=HOST,
+            port=PORT,
+            debug=False,
+            use_reloader=False,
+            threaded=True,
+        ),
         daemon=True,
     )
     flask_thread.start()
 
-    # Wait for backend
     ready = _wait_ready(timeout=15)
     splash.destroy()
-
     if not ready:
         import tkinter as tk
         from tkinter import messagebox
-        r = tk.Tk(); r.withdraw()
-        messagebox.showerror(APP_NAME, "Backend failed to start on port 8787.\nCheck that port is free.")
-        r.destroy()
+
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror(
+            APP_NAME, "Backend failed to start on port 8787.\nCheck that the port is free."
+        )
+        root.destroy()
         return
 
-    # Open browser
     webbrowser.open(f"http://{HOST}:{PORT}")
 
-    # Build tray icon
     import pystray
-    from pystray import MenuItem as Item, Menu
+    from pystray import Menu
+    from pystray import MenuItem as Item
+
+    version_info = read_version_info(FRONTEND.parent)
 
     def on_open(_icon, _item):
         webbrowser.open(f"http://{HOST}:{PORT}")
+
+    def on_open_releases(_icon, _item):
+        webbrowser.open(str(_update_state.get("latest_url") or latest_release_url(FRONTEND.parent)))
+
+    def on_check_updates(_icon, _item):
+        threading.Thread(
+            target=_check_updates,
+            args=(_icon,),
+            kwargs={"interactive": True},
+            daemon=True,
+        ).start()
 
     def on_quit(_icon, _item):
         _icon.stop()
@@ -170,18 +272,19 @@ def main():
     icon = pystray.Icon(
         APP_NAME,
         icon=_make_icon(),
-        title=f"{APP_NAME} — running on :{PORT}",
+        title=f"{APP_NAME} {version_info['version']} running on :{PORT}",
         menu=Menu(
-            Item("Open Browser",  on_open, default=True),
+            Item("Open Browser", on_open, default=True),
+            Item("Check for Updates", on_check_updates),
+            Item("Open Releases Page", on_open_releases),
             Menu.SEPARATOR,
-            Item("Quit",          on_quit),
+            Item("Quit", on_quit),
         ),
     )
 
-    # Pipeline notification poller
     threading.Thread(target=_poll_pipeline, args=(icon,), daemon=True).start()
-
-    icon.run()   # blocks until quit
+    _start_update_check(icon)
+    icon.run()
 
 
 if __name__ == "__main__":

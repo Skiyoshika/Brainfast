@@ -12,15 +12,16 @@ from flask import Blueprint, jsonify, request, send_from_directory
 from PIL import Image
 
 import project.frontend.server_context as ctx
+from project.frontend.services.overlay_service import (
+    apply_liquify_and_render,
+    render_overlay_from_label,
+)
 
 
 def _normalize_path(p: str) -> str:
     """Normalize Windows paths: resolve double-backslashes, mixed separators."""
     return os.path.normpath(p) if p else p
-from project.frontend.services.overlay_service import (
-    apply_liquify_and_render,
-    render_overlay_from_label,
-)
+
 
 bp = Blueprint("api_overlay", __name__, url_prefix="/api")
 

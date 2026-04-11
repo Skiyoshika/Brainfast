@@ -26,12 +26,12 @@ from tifffile import imread
 
 try:
     from project.scripts.asset_bootstrap import default_structure_source
-except Exception:
+except ImportError:
     from scripts.asset_bootstrap import default_structure_source
 
 try:
     from project.scripts.pipeline_progress import read_stage_progress
-except Exception:
+except ImportError:
     from scripts.pipeline_progress import read_stage_progress
 
 # ---------------------------------------------------------------------------
@@ -182,10 +182,11 @@ def open_folder_in_shell(path: Path) -> None:
         return
     subprocess.Popen(["xdg-open", str(target)])
 
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-MAX_CALIB_SAMPLES = int(os.environ.get("IDLEBRAIN_MAX_CALIB_SAMPLES", "180"))
+MAX_CALIB_SAMPLES = int(os.environ.get("BRAINFAST_MAX_CALIB_SAMPLES", "180"))
 DEFAULT_STRUCTURE_SOURCE = PROJECT_ROOT / "configs" / "allen_mouse_structure_graph.csv"
 DEFAULT_JOB_ID = "default"
 

@@ -53,21 +53,29 @@ def outputs_volume_reg_stats():
 
 @bp.get("/reg-slice-list")
 def outputs_reg_slice_list():
-    reg_dir = ctx.active_output_dir() / "registered_slices"
-    if not reg_dir.exists():
-        return jsonify({"ok": True, "files": [], "count": 0})
-    files = sorted(reg_dir.glob("slice_*_overlay.png"))
-    return jsonify({"ok": True, "files": [f.name for f in files], "count": len(files)})
+    out = ctx.active_output_dir()
+    # Check both truth_export (3D pipeline) and registered_slices (2D pipeline)
+    for subdir in ("truth_export", "registered_slices"):
+        reg_dir = out / subdir
+        if reg_dir.exists():
+            files = sorted(reg_dir.glob("slice_*_overlay.png"))
+            if files:
+                return jsonify({"ok": True, "files": [f.name for f in files], "count": len(files)})
+    return jsonify({"ok": True, "files": [], "count": 0})
 
 
 @bp.get("/reg-slice/<filename>")
 def outputs_reg_slice_file(filename: str):
-    reg_dir = ctx.active_output_dir() / "registered_slices"
+    out = ctx.active_output_dir()
     safe = Path(filename).name
-    fp = reg_dir / safe
-    if not fp.exists() or not safe.endswith(".png"):
+    if not safe.endswith(".png"):
         return jsonify({"ok": False, "error": "file not found"}), 404
-    return send_from_directory(str(reg_dir), safe)
+    for subdir in ("truth_export", "registered_slices"):
+        reg_dir = out / subdir
+        fp = reg_dir / safe
+        if fp.exists():
+            return send_from_directory(str(reg_dir), safe)
+    return jsonify({"ok": False, "error": "file not found"}), 404
 
 
 @bp.get("/file-list")
@@ -83,11 +91,13 @@ def outputs_file_list():
             # Include first-level subdir files (e.g. paper_report/)
             for sf in sorted(f.iterdir()):
                 if sf.is_file():
-                    files.append({
-                        "name": f"{f.name}/{sf.name}",
-                        "size": sf.stat().st_size,
-                        "ext": sf.suffix.lower(),
-                    })
+                    files.append(
+                        {
+                            "name": f"{f.name}/{sf.name}",
+                            "size": sf.stat().st_size,
+                            "ext": sf.suffix.lower(),
+                        }
+                    )
     return jsonify({"ok": True, "files": files, "dir": str(out_dir)})
 
 

@@ -11,10 +11,16 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+try:
+    from scripts.asset_bootstrap import default_structure_source
+except Exception:
+    from asset_bootstrap import default_structure_source
 
 
 def bootstrap_sys_path() -> Path:
@@ -39,6 +45,21 @@ def bootstrap_sys_path() -> Path:
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
     return project_root
+
+
+def ensure_runtime_cache_dirs(project_root: Path) -> Path:
+    """Point runtime caches at a writable project-local directory.
+
+    This avoids sandbox and Windows profile permission issues for libraries
+    such as Matplotlib, which otherwise try to write under the user's home
+    directory on first import.
+    """
+    runtime_cache_dir = project_root / "outputs" / ".runtime_cache"
+    runtime_cache_dir.mkdir(parents=True, exist_ok=True)
+    matplotlib_dir = runtime_cache_dir / "matplotlib"
+    matplotlib_dir.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("MPLCONFIGDIR", str(matplotlib_dir))
+    return runtime_cache_dir
 
 
 @dataclass
@@ -95,6 +116,10 @@ class RunPaths:
         structure_csv_fallback = outputs / "registration" / "structure_tree.csv"
         if structure_csv_fallback.exists():
             structure_csv = structure_csv_fallback
+        else:
+            fallback_structure = default_structure_source(project_root)
+            if fallback_structure is not None:
+                structure_csv = fallback_structure
 
         return cls(
             project_root=project_root,

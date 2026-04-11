@@ -12,13 +12,26 @@ From the repository root:
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
+
+# Minimal 2D usage (no Cellpose, no ANTs):
+pip install -e ".[dev]"
+
+# Cellpose-enabled detection:
 pip install -e ".[advanced,dev]"
+
+# Whole-brain 3D registration (requires ANTs):
+pip install -e ".[wholebrain,dev]"
+
+# Everything:
+pip install -e ".[full,dev]"
 ```
 
 Expected result:
 
 - Python 3.10+ is active
-- Flask, NumPy, SciPy, scikit-image, tifffile, nibabel, Cellpose, pytest, and ruff are installed
+- Flask, NumPy, SciPy, scikit-image, tifffile, nibabel, pytest, and ruff are installed
+- Cellpose is installed only if `advanced` or `full` extra was selected
+- ANTsPy (`import ants`) is installed only if `wholebrain` or `full` extra was selected
 
 ## 2. Validate the runtime and required assets
 

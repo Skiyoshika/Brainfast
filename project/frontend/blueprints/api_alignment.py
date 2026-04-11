@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from flask import Blueprint, jsonify, request, send_file, send_from_directory
 from PIL import Image, ImageOps
-from tifffile import TiffFile, imread, imwrite
+from tifffile import TiffFile, imwrite
 
 import project.frontend.server_context as ctx
 from project.frontend.services.alignment_service import (
@@ -28,6 +28,7 @@ def _normalize_path(p: str) -> str:
         return p
     # os.path.normpath handles \\, /, mixed separators
     import os
+
     return os.path.normpath(p)
 
 
@@ -174,7 +175,11 @@ def align_nonlinear():
     compare_png = ctx._job_file(job_id, "overlay_compare_nonlinear.png")
     try:
         result = apply_nonlinear_alignment(
-            real_path, atlas_label_path, pairs_csv, out_label, compare_png,
+            real_path,
+            atlas_label_path,
+            pairs_csv,
+            out_label,
+            compare_png,
             hemisphere=hemisphere,
         )
     except Exception as e:
@@ -267,7 +272,11 @@ def align_apply():
     compare_png = ctx._job_file(job_id, "overlay_compare.png")
     try:
         result = apply_affine_alignment(
-            real_path, atlas_label_path, pairs_csv, out_label, compare_png,
+            real_path,
+            atlas_label_path,
+            pairs_csv,
+            out_label,
+            compare_png,
             hemisphere=hemisphere,
         )
     except Exception as e:

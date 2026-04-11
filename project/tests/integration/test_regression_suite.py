@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
-import sys
 
 import nibabel as nib
 import numpy as np
@@ -17,16 +17,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.atlas_autopick import autopick_best_z
-from scripts.asset_bootstrap import default_structure_source
-from scripts.atlas_mapper import map_cells_with_registered_label_slice
-from scripts.dedup import apply_dedup_kdtree
-from scripts.learn_from_trainset import _load_target_for_sample, _pair_ids
-from scripts.map_and_aggregate import aggregate_by_region
-from scripts.overlay_render import render_overlay
-from scripts.structure_tree import load_structure_table, parse_structure_id_path
-from scripts.detect import detect_cells
-from scripts import main
+from scripts import main  # noqa: E402
+from scripts.asset_bootstrap import default_structure_source  # noqa: E402
+from scripts.atlas_autopick import autopick_best_z  # noqa: E402
+from scripts.atlas_mapper import map_cells_with_registered_label_slice  # noqa: E402
+from scripts.dedup import apply_dedup_kdtree  # noqa: E402
+from scripts.detect import detect_cells  # noqa: E402
+from scripts.learn_from_trainset import _load_target_for_sample, _pair_ids  # noqa: E402
+from scripts.map_and_aggregate import aggregate_by_region  # noqa: E402
+from scripts.overlay_render import render_overlay  # noqa: E402
+from scripts.structure_tree import load_structure_table, parse_structure_id_path  # noqa: E402
 
 
 def _write_gray_png(path: Path, arr: np.ndarray) -> None:
@@ -123,7 +123,11 @@ class MappingAggregationRegressionTests(unittest.TestCase):
 
         self.assertEqual(int(leaf.iloc[0]["count"]), 2)
         self.assertAlmostEqual(float(leaf.iloc[0]["confidence"]), 1.0)
-        self.assertTrue(hierarchy["region_id"].isin(parse_structure_id_path(self.region["structure_id_path"])).all())
+        self.assertTrue(
+            hierarchy["region_id"]
+            .isin(parse_structure_id_path(self.region["structure_id_path"]))
+            .all()
+        )
         self.assertIn(int(self.region["id"]), hierarchy["region_id"].tolist())
 
 
@@ -185,7 +189,9 @@ class SyntheticPipelineSmokeTests(unittest.TestCase):
             tissue = (atlas_slice > 0).astype(np.float32)
             # Burn region boundaries into the synthetic image so the edge-matcher
             # finds a unique fingerprint at true_z and not at nearby atlas slices.
-            region_boundaries = find_boundaries(atlas_slice.astype(np.int32), mode="inner", connectivity=2).astype(np.float32)
+            region_boundaries = find_boundaries(
+                atlas_slice.astype(np.int32), mode="inner", connectivity=2
+            ).astype(np.float32)
             real = gaussian_filter(tissue, sigma=2.4) * 150.0 + region_boundaries * 200.0
             imwrite(str(real_path), np.clip(real, 0, 255).astype(np.uint16))
 
@@ -249,7 +255,9 @@ class SyntheticPipelineSmokeTests(unittest.TestCase):
                 structure_csv=structure_csv,
                 atlas_slice_index=int(auto_meta["best_z"]),
                 registration_score=float(auto_meta.get("best_score", 0.0)),
-                registration_method=str(diagnostic.get("warp", {}).get("method", "registered_slice_label")),
+                registration_method=str(
+                    diagnostic.get("warp", {}).get("method", "registered_slice_label")
+                ),
             )
 
             deduped, _stats = apply_dedup_kdtree(

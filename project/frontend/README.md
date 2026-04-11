@@ -1,4 +1,4 @@
-﻿# IdleBrain Frontend / 前端说明
+﻿# Brainfast Frontend / 前端说明
 
 ## English
 Run full UI + backend bridge:
@@ -29,7 +29,7 @@ python scripts/check_env.py --config configs/run_config.template.json
 - Manual landmark correction panel
 - `Save Calibration + Learn` to append training pair and trigger auto-learning
 - Sample library cap protection:
-  - env: `IDLEBRAIN_MAX_CALIB_SAMPLES`
+  - env: `BRAINFAST_MAX_CALIB_SAMPLES`
   - default: `180`
 
 ### Export
@@ -41,12 +41,12 @@ python scripts/check_env.py --config configs/run_config.template.json
 cd frontend
 build_desktop.bat
 ```
-Then run `dist/IdleBrainUI.exe`.
+Then run `dist/BrainfastUI.exe`.
 
 ### Fallback trial launcher
 If PyInstaller is blocked by Windows Defender, double-click:
 
-`StartIdleBrainTrial.bat`
+`StartBrainfast.bat`
 
 ## 中文
 运行前端与后端桥接服务：
@@ -70,7 +70,7 @@ python server.py
 - 支持手动地标校准
 - 点击 `Save Calibration + Learn` 可写入训练样本并触发自动学习
 - 样本库阈值保护：
-  - 环境变量：`IDLEBRAIN_MAX_CALIB_SAMPLES`
+  - 环境变量：`BRAINFAST_MAX_CALIB_SAMPLES`
   - 默认值：`180`
 
 ### 导出
@@ -80,7 +80,15 @@ python server.py
 ### Defender 阻止 EXE 时的试用方式
 如果 PyInstaller 打包被 Windows Defender 拦截，可以直接双击：
 
-`StartIdleBrainTrial.bat`
+`StartBrainfast.bat`
+
+### Known Workflow Gaps / 已知工作流缺口
+
+- The 2D manual correction tools (landmark, liquify, calibration) work for single-slice preview but are **not yet consumed by the 3D whole-brain pipeline**. Manual corrections made in the UI do not carry over to `miki_3d` batch runs.
+- `Save Calibration + Learn` tunes atlas overlay/warp parameters only. It does **not** retrain or fine-tune Cellpose-SAM detection.
+- There is no detector-specific manual QA loop: users cannot view, accept, or reject individual cell detections from the UI.
+
+For the full gap analysis, see [`docs/superpowers/plans/interactive-workflow-gap-audit.md`](../../docs/superpowers/plans/interactive-workflow-gap-audit.md).
 
 ---
 See `../README.md` and `../project/README.md` for full architecture and pipeline docs.

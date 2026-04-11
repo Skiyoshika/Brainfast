@@ -21,8 +21,8 @@
     "signal_type": "cyto"
   },
   "compute": {
-    "device": "cpu",
-    "gpu_name": "RTX 3070 Ti",
+    "device": "auto",
+    "gpu_name": "RTX 5060 Laptop",
     "vram_gb": 8
   },
   "registration": {
@@ -32,6 +32,7 @@
     "truth_source": "3d_registered_volume",
     "template_path": "configs/allen_ref_cache/average_template_25.nii.gz",
     "annotation_path": "annotation_25.nii.gz",
+    "skip_laplacian_refinement": true,
     "ants_transform": "SyN",
     "random_seed": 42,
     "laplacian_lambda": 0.18,
@@ -44,6 +45,7 @@
     "atlas_z_from_filename": true,
     "atlas_z_z_scale": 0.2,
     "atlas_z_offset": 150,
+    "ml_flip": false,
     "atlas_hemisphere": "right_flipped",
     "atlas_z_refine_range": 0,
     "tissue_shrink_factor": 0.88,
@@ -62,10 +64,11 @@
     "sitk_max_disp_frac": 0.10
   },
   "detection": {
-    "primary_model": "fallback",
+    "mode": "cellpose",
+    "primary_model": "cpsam",
     "secondary_model": "none",
     "merge_primary_secondary": false,
-    "cellpose_gpu": false,
+    "cellpose_gpu": true,
     "cellpose_diameter_um": 12.0,
     "cellpose_channels": [0, 0],
     "cellpose_flow_threshold": 0.4,

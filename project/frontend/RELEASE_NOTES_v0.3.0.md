@@ -1,14 +1,14 @@
-﻿# IdleBrainUI v0.3.0 (Desktop Beta)
+﻿# BrainfastUI v0.3.0 (Desktop Beta)
 
 ## What is included
-- Desktop launcher: `dist/IdleBrainUI.exe`
+- Desktop launcher: `dist/BrainfastUI.exe`
 - Discord-style UI with backend bridge
 - Path validation + run/cancel/log/status APIs
 - Multi-channel mode: red/green/farred
 - CSV export + run history + QC preview
 
 ## Quick test checklist
-1. Double-click `IdleBrainUI.exe`
+1. Double-click `BrainfastUI.exe`
 2. Confirm browser opens `http://127.0.0.1:8787`
 3. Fill input/atlas/structure paths
 4. Run Pipeline and verify:

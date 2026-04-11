@@ -68,7 +68,9 @@ def test_run_real_input_routes_whole_brain_mode_to_3d_orchestrator(tmp_path, mon
 
     route_hit: dict[str, object] = {}
 
-    monkeypatch.setattr(main, "_collect_slice_files", lambda *_args, **_kwargs: [input_dir / "z0000.tif"])
+    monkeypatch.setattr(
+        main, "_collect_slice_files", lambda *_args, **_kwargs: [input_dir / "z0000.tif"]
+    )
     monkeypatch.setattr(
         main,
         "_extract_channel_to_tmp",
@@ -124,7 +126,9 @@ def test_run_real_input_routes_whole_brain_mode_to_3d_orchestrator(tmp_path, mon
 
 
 def test_run_config_defaults_anchor_whole_brain_3d_contract():
-    template = Path(r"D:\Brainfast\project\configs\run_config.template.json").read_text(encoding="utf-8")
+    template = Path(r"D:\Brainfast\project\configs\run_config.template.json").read_text(
+        encoding="utf-8"
+    )
     sample = Path(r"D:\Brainfast\project\configs\run_config_35.json").read_text(encoding="utf-8")
 
     for text in (template, sample):
@@ -132,10 +136,12 @@ def test_run_config_defaults_anchor_whole_brain_3d_contract():
         assert '"truth_source": "3d_registered_volume"' in text
 
 
-def test_check_env_validates_ants_dependency():
+def test_check_env_validates_ants_is_optional():
     from project.scripts import check_env
 
-    assert "ants" in check_env.REQUIRED_MODULES
+    # ANTs is optional (needed only for whole-brain 3D registration)
+    assert "ants" in check_env.OPTIONAL_MODULES
+    assert "ants" not in check_env.REQUIRED_MODULES
 
 
 def test_check_env_resolves_relative_input_dir_from_config_parent(tmp_path):
@@ -171,14 +177,18 @@ def test_check_env_main_uses_dynamic_structure_source_and_warns_on_nrrd_fallback
     printed: list[tuple[bool, str, str, str]] = []
 
     monkeypatch.setattr(check_env, "_module_available", lambda _name: True)
-    monkeypatch.setattr(check_env, "default_structure_source", lambda _project_root: structure_source)
+    monkeypatch.setattr(
+        check_env, "default_structure_source", lambda _project_root: structure_source
+    )
     monkeypatch.setattr(
         check_env,
         "atlas_asset_status",
         lambda _project_root: {"annotationReady": False, "annotationNrrdReady": True},
     )
     monkeypatch.setattr(check_env, "load_config", lambda _cfg_path: {})
-    monkeypatch.setattr(check_env, "validate_runtime_config", lambda _cfg, require_input_dir=False: [])
+    monkeypatch.setattr(
+        check_env, "validate_runtime_config", lambda _cfg, require_input_dir=False: []
+    )
     monkeypatch.setattr(
         check_env,
         "_print_status",

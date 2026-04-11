@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -10,9 +11,22 @@ from skimage.feature import blob_log, peak_local_max
 from tifffile import imread
 
 try:
+    from scripts.exceptions import CellposeRuntimeError
+except ImportError:
+    try:
+        from exceptions import CellposeRuntimeError
+    except ImportError:  # pragma: no cover
+
+        class CellposeRuntimeError(RuntimeError):  # type: ignore[no-redef]
+            pass
+
+
+try:
     from scipy.spatial import cKDTree
-except Exception:  # pragma: no cover - optional dependency fallback
+except ImportError:  # pragma: no cover - optional dependency fallback
     cKDTree = None
+
+_log = logging.getLogger(__name__)
 
 
 _CELLPOSE_MODEL_CACHE: dict[tuple[str, bool], Any] = {}
@@ -35,7 +49,14 @@ def _norm_for_cellpose(img: np.ndarray) -> np.ndarray:
 
 
 def _resolve_model_type(name: str) -> str:
+    """Resolve model name to Cellpose model type.
+
+    Cellpose v4+ (Cellpose-SAM) uses 'cpsam' as the unified model;
+    legacy names like cyto2/cyto3/nuclei are accepted but ignored by v4+.
+    """
     s = str(name or "").strip().lower()
+    if "cpsam" in s or "sam" in s:
+        return "cpsam"
     if "nuclei" in s:
         return "nuclei"
     if "cyto3" in s:
@@ -44,7 +65,14 @@ def _resolve_model_type(name: str) -> str:
         return "cyto2"
     if "cyto" in s:
         return "cyto"
-    return "cyto3"
+    # Default to cpsam (Cellpose-SAM) for v4+
+    return "cpsam"
+
+
+def _is_cellpose_model(name: str) -> bool:
+    """Return True if the model name refers to any Cellpose/Cellpose-SAM model."""
+    s = str(name or "").strip().lower()
+    return s.startswith("cellpose") or s in ("cpsam", "sam", "cyto", "cyto2", "cyto3", "nuclei")
 
 
 def _pixel_size_um_from_cfg(cfg: dict[str, Any]) -> float | None:
@@ -83,11 +111,20 @@ def _diameter_px(det_cfg: dict[str, Any], cfg: dict[str, Any]) -> float | None:
 
 
 def _use_gpu(cfg: dict[str, Any], det_cfg: dict[str, Any]) -> bool:
+    """Auto-detect GPU: use CUDA if available, unless explicitly disabled."""
     forced = det_cfg.get("cellpose_gpu", None)
     if forced is not None:
         return bool(forced)
-    dev = str(cfg.get("compute", {}).get("device", "cpu")).lower()
-    return dev in ("cuda", "gpu")
+    dev = str(cfg.get("compute", {}).get("device", "auto")).lower()
+    if dev == "cpu":
+        return False
+    # "auto", "cuda", "gpu" → try to use GPU if torch+CUDA is available
+    try:
+        import torch
+
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
 
 
 def _load_cellpose_model(model_type: str, use_gpu: bool):
@@ -96,7 +133,20 @@ def _load_cellpose_model(model_type: str, use_gpu: bool):
         return _CELLPOSE_MODEL_CACHE[key]
     from cellpose import models
 
-    model = models.Cellpose(gpu=bool(use_gpu), model_type=str(model_type))
+    # Cellpose v4+ (Cellpose-SAM): use CellposeModel with pretrained_model.
+    # Falls back to legacy models.Cellpose for older versions.
+    if hasattr(models, "CellposeModel"):
+        # v4+: model_type is ignored, pretrained_model selects the model
+        model = models.CellposeModel(gpu=bool(use_gpu), pretrained_model=str(model_type))
+        _log.info("Loaded Cellpose-SAM model (v4+): pretrained=%s, gpu=%s", model_type, use_gpu)
+    elif hasattr(models, "Cellpose"):
+        # Legacy v2/v3
+        model = models.Cellpose(gpu=bool(use_gpu), model_type=str(model_type))
+        _log.info("Loaded legacy Cellpose model: type=%s, gpu=%s", model_type, use_gpu)
+    else:
+        raise CellposeRuntimeError(
+            "Cannot find Cellpose model class. Please upgrade cellpose: pip install --upgrade cellpose"
+        )
     _CELLPOSE_MODEL_CACHE[key] = model
     return model
 
@@ -147,6 +197,46 @@ def _dedup_xy(df: pd.DataFrame, radius_px: float = 4.0) -> pd.DataFrame:
     out = df.loc[keep].copy().reset_index(drop=True)
     out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
     return out
+
+
+def detect_cells_reporter_positive(
+    slice_path: Path,
+    intensity_threshold_pct: float = 95.0,
+    min_area_px: float = 8.0,
+    max_area_px: float = 2000.0,
+) -> pd.DataFrame:
+    """Detect fluorescent reporter-positive cells by intensity thresholding + connected components.
+
+    Designed for dTom / GFP-style sparse labelling where positive cells are
+    distinctly brighter than background.  Replaces Cellpose for study-specific
+    reporter quantification (e.g. AAV-toolbox enhancer validation).
+    """
+    img = _read_gray(slice_path)
+    x = _norm_for_cellpose(img)  # robust [0,1] normalisation
+    thr = float(np.percentile(x, float(intensity_threshold_pct)))
+    mask = (x >= thr).astype(np.uint8)
+    labeled = measure.label(mask)
+    props = measure.regionprops_table(
+        labeled,
+        intensity_image=img,
+        properties=("label", "centroid", "area", "mean_intensity"),
+    )
+    if not props or len(props.get("label", [])) == 0:
+        return pd.DataFrame(columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+
+    df = pd.DataFrame(
+        {
+            "x": np.asarray(props["centroid-1"], dtype=np.float32),
+            "y": np.asarray(props["centroid-0"], dtype=np.float32),
+            "area_px": np.asarray(props["area"], dtype=np.float32),
+            "score": np.asarray(props["mean_intensity"], dtype=np.float32),
+        }
+    )
+    df = df[(df["area_px"] >= float(min_area_px)) & (df["area_px"] <= float(max_area_px))]
+    df = df.reset_index(drop=True)
+    df["cell_id"] = np.arange(1, len(df) + 1, dtype=np.int32)
+    df["detector"] = "reporter_positive"
+    return df[["cell_id", "x", "y", "score", "detector", "area_px"]]
 
 
 def detect_cells_fallback(
@@ -213,6 +303,46 @@ def detect_cells_log_fallback(
     return pd.DataFrame(rows, columns=["cell_id", "x", "y", "score", "detector", "area_px"])
 
 
+def _safe_tile_size(
+    img_shape: tuple[int, ...], diameter_px: float | None, vram_gb: float = 8.0
+) -> int | None:
+    """Compute a safe tile size (bsize) to avoid OOM with Cellpose-SAM.
+
+    Cellpose-SAM upscales to its internal resolution (~30px cell diameter).
+    If user cells are small (e.g. 2.4px), this creates a 12.5x upscale that
+    exceeds GPU memory.  We use tiling (bsize) to keep peak memory within
+    VRAM budget.
+
+    Returns bsize (tile edge length in pixels) or None if tiling not needed.
+    """
+    if diameter_px is None or diameter_px <= 0:
+        return None
+
+    # Cellpose-SAM internal target is ~30px; upscale factor = 30 / diameter
+    cellpose_target_diam = 30.0
+    upscale = cellpose_target_diam / max(diameter_px, 1.0)
+
+    if upscale <= 2.5:
+        # Modest upscale — no tiling needed
+        return None
+
+    # Estimate memory: upscaled tile needs ~4 bytes/px * 6 buffers (model internals)
+    # Max tile pixels = vram_gb * 1e9 / (4 * 6) / upscale^2
+    # With safety margin of 2x
+    max_upscaled_pixels = vram_gb * 1e9 / (4.0 * 6.0 * 2.0)
+    max_input_pixels = max_upscaled_pixels / (upscale * upscale)
+    bsize = int(np.sqrt(max_input_pixels))
+    # Clamp to reasonable range
+    bsize = max(128, min(bsize, max(img_shape[:2])))
+    _log.info(
+        "Cellpose tile mode: diameter=%.1fpx, upscale=%.1fx, bsize=%d",
+        diameter_px,
+        upscale,
+        bsize,
+    )
+    return bsize
+
+
 def detect_cells_cellpose(
     slice_path: Path,
     model_type: str = "cyto3",
@@ -226,30 +356,56 @@ def detect_cells_cellpose(
 ) -> pd.DataFrame:
     try:
         model = _load_cellpose_model(model_type=model_type, use_gpu=use_gpu)
-    except Exception:
-        return pd.DataFrame()
+    except Exception as exc:
+        raise CellposeRuntimeError(f"Failed to load Cellpose model '{model_type}': {exc}") from exc
 
     img = _read_gray(slice_path)
     imgf = _norm_for_cellpose(img)
-    ch = channels if isinstance(channels, list) and len(channels) == 2 else [0, 0]
 
-    # Keep eval kwargs conservative for compatibility across Cellpose versions.
-    kwargs = dict(
+    # Build eval kwargs — compatible with Cellpose v2/v3/v4.
+    # v4 (Cellpose-SAM): `channels` is deprecated, eval returns 3 values.
+    # v2/v3: eval returns 4 values (masks, flows, styles, diams).
+    kwargs: dict[str, Any] = dict(
         diameter=diameter_px,
-        channels=ch,
         flow_threshold=float(flow_threshold),
         cellprob_threshold=float(cellprob_threshold),
         min_size=max(0, int(min_size)),
     )
 
+    # Tile-based inference to prevent OOM with small cells / large upscale
+    bsize = _safe_tile_size(imgf.shape, diameter_px, vram_gb=8.0)
+    if bsize is not None:
+        kwargs["bsize"] = bsize
+
+    # Only pass channels for legacy versions (v2/v3)
+    from cellpose import models as _cp_models
+
+    if not hasattr(_cp_models, "CellposeModel") or hasattr(_cp_models, "Cellpose"):
+        ch = channels if isinstance(channels, list) and len(channels) == 2 else [0, 0]
+        kwargs["channels"] = ch
+
     try:
-        masks, flows, styles, diams = model.eval(imgf, **kwargs)
-    except TypeError:
-        # Older versions may not accept all kwargs.
-        kwargs2 = dict(diameter=diameter_px, channels=ch)
-        masks, flows, styles, diams = model.eval(imgf, **kwargs2)
-    except Exception:
-        return pd.DataFrame()
+        result = model.eval(imgf, **kwargs)
+        masks = result[0]  # works for both 3-tuple (v4) and 4-tuple (v2/v3)
+    except (TypeError, RuntimeError) as exc:
+        # OOM or API incompatibility — retry with conservative settings
+        _log.warning("Cellpose eval failed (%s), retrying with tile mode...", exc)
+        kwargs2: dict[str, Any] = dict(diameter=diameter_px)
+        # Force tiling for retry
+        retry_bsize = _safe_tile_size(imgf.shape, diameter_px, vram_gb=4.0)
+        if retry_bsize is not None:
+            kwargs2["bsize"] = retry_bsize
+        try:
+            result = model.eval(imgf, **kwargs2)
+            masks = result[0]
+        except Exception as exc2:
+            raise CellposeRuntimeError(
+                f"Cellpose inference failed for '{slice_path.name}' (model={model_type}): {exc2}"
+            ) from exc2
+    except Exception as exc:
+        raise CellposeRuntimeError(
+            f"Cellpose inference failed for '{slice_path.name}' (model={model_type}): {exc}"
+        ) from exc
 
     return _masks_to_centroids(masks, detector=f"cellpose_{model_type}")
 
@@ -278,31 +434,82 @@ def _run_cellpose_by_name(slice_path: Path, model_name: str, cfg: dict[str, Any]
 
 def detect_cells(slice_path: Path, cfg: dict[str, Any]) -> pd.DataFrame:
     det_cfg = cfg.get("detection", {})
+
+    # ── reporter-positive mode (study-specific fluorescent cell counting) ──
+    if str(det_cfg.get("mode", "")).lower() == "reporter_positive":
+        df = detect_cells_reporter_positive(
+            slice_path,
+            intensity_threshold_pct=float(det_cfg.get("reporter_intensity_threshold_pct", 95.0)),
+            min_area_px=float(det_cfg.get("reporter_min_area_px", 8.0)),
+            max_area_px=float(det_cfg.get("reporter_max_area_px", 2000.0)),
+        )
+        within_slice_dedup_px = float(det_cfg.get("within_slice_dedup_px", 4.0))
+        df = _dedup_xy(df, radius_px=within_slice_dedup_px)
+        df["cell_id"] = np.arange(1, len(df) + 1, dtype=np.int32)
+        return df
+
     primary = str(det_cfg.get("primary_model", "cellpose_cyto2"))
     secondary = str(det_cfg.get("secondary_model", "cellpose_nuclei"))
     merge_secondary = bool(det_cfg.get("merge_primary_secondary", False))
     within_slice_dedup_px = float(det_cfg.get("within_slice_dedup_px", 4.0))
+    auto_switch = bool(det_cfg.get("auto_switch_on_distortion", True))
+
+    # Track whether a Cellpose model was requested so we can distinguish
+    # "Cellpose ran and found 0 cells" from "Cellpose crashed".
+    cellpose_requested = _is_cellpose_model(primary) or _is_cellpose_model(secondary)
 
     primary_df = pd.DataFrame()
-    if primary.startswith("cellpose"):
-        primary_df = _run_cellpose_by_name(slice_path, primary, cfg)
+    if _is_cellpose_model(primary):
+        try:
+            primary_df = _run_cellpose_by_name(slice_path, primary, cfg)
+        except CellposeRuntimeError:
+            if not auto_switch:
+                raise
+            _log.warning(
+                "Cellpose primary model '%s' failed for %s; falling back to non-Cellpose detector",
+                primary,
+                slice_path.name,
+            )
+            cellpose_requested = False  # allow fallback
         if not primary_df.empty and not merge_secondary:
             out = _dedup_xy(primary_df, radius_px=within_slice_dedup_px)
             out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
             return out
 
-    if secondary.startswith("cellpose"):
-        secondary_df = _run_cellpose_by_name(slice_path, secondary, cfg)
-        if not secondary_df.empty:
-            if primary_df.empty:
-                out = _dedup_xy(secondary_df, radius_px=within_slice_dedup_px)
-                out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
-                return out
-            if merge_secondary:
-                combined = pd.concat([primary_df, secondary_df], ignore_index=True)
-                out = _dedup_xy(combined, radius_px=within_slice_dedup_px)
-                out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
-                return out
+    if _is_cellpose_model(secondary):
+        try:
+            secondary_df = _run_cellpose_by_name(slice_path, secondary, cfg)
+        except CellposeRuntimeError:
+            if not auto_switch:
+                raise
+            _log.warning(
+                "Cellpose secondary model '%s' failed for %s; falling back to non-Cellpose detector",
+                secondary,
+                slice_path.name,
+            )
+            secondary_df = pd.DataFrame()
+            cellpose_requested = False  # allow fallback
+        else:
+            if not secondary_df.empty:
+                if primary_df.empty:
+                    out = _dedup_xy(secondary_df, radius_px=within_slice_dedup_px)
+                    out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
+                    return out
+                if merge_secondary:
+                    combined = pd.concat([primary_df, secondary_df], ignore_index=True)
+                    out = _dedup_xy(combined, radius_px=within_slice_dedup_px)
+                    out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
+                    return out
+
+    # If Cellpose was configured and we still haven't returned, both models
+    # either produced empty results or failed.  When auto_switch is False and
+    # Cellpose was the explicit choice, refuse to silently fall through to a
+    # weaker detector — surface it as an error instead.
+    if cellpose_requested and not auto_switch:
+        raise CellposeRuntimeError(
+            f"Cellpose models ({primary}, {secondary}) returned no cells for "
+            f"'{slice_path.name}' and auto_switch_on_distortion is disabled"
+        )
 
     fallback_model = str(det_cfg.get("fallback_model", "log")).lower()
     if "log" in fallback_model:

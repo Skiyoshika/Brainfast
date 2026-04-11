@@ -7,6 +7,16 @@ Allen 图谱自动选层 -> 配准与人工复审 -> 校准样本沉淀 -> 自�
 
 Brainfast is a practical workspace for Allen atlas alignment, manual correction, calibration learning, and whole-brain cell counting.
 
+## Install / 安装
+
+```bash
+python -m venv .venv && .venv\Scripts\activate
+pip install -e ".[dev]"               # minimal 2D (no Cellpose, no ANTs)
+pip install -e ".[advanced,dev]"      # + Cellpose GPU detection
+pip install -e ".[wholebrain,dev]"    # + ANTs 3D registration
+pip install -e ".[full,dev]"          # everything
+```
+
 ## Start Here / 从这里开始
 
 如果你是第一次打开这个仓库，建议按这个顺序：
@@ -101,6 +111,23 @@ flowchart LR
 - 预览与人工校准路径已支持 `jobId` 隔离
 
 但它还不是完全成型的云端多用户系统。更完整的模块化和任务队列仍然在后续演进范围内。
+
+## Trust Policy / 信任策略
+
+Hard rules for interpreting Brainfast outputs. These apply to all users and all samples.
+
+1. **Do not trust region-level counts when registration overlays are visibly poor.**
+   If the atlas overlay does not match the tissue anatomy, downstream cell-to-region mapping is meaningless regardless of how good the detector is. Always verify registration quality before interpreting count tables.
+
+2. **Do not use Cellpose quality as a scapegoat for atlas-mapping failures before registration is verified.**
+   Cell detection and atlas registration are independent quality dimensions. A region showing zero counts may mean the detector missed cells, or it may mean the atlas label for that region was never placed on the tissue. Check registration first.
+
+3. **Do not expand sample coverage until at least one sample has completed a user-visible manual workflow.**
+   The current interactive workflow (load -> register -> correct -> detect -> export) is not yet completable end-to-end from the UI. Until it is, broad sample rollout will produce results that cannot be validated by the user.
+
+For detailed gap analysis, see:
+- [`docs/superpowers/plans/interactive-workflow-gap-audit.md`](docs/superpowers/plans/interactive-workflow-gap-audit.md)
+- [`docs/superpowers/plans/registration-failure-taxonomy.md`](docs/superpowers/plans/registration-failure-taxonomy.md)
 
 ## Large Local Artifacts / 未纳入版本管理的大体积内容
 

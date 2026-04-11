@@ -21,6 +21,9 @@ venv/
 project/frontend/build/
 project/frontend/dist/
 
+# Agentic workspace / brainstorm artifacts
+.superpowers/
+
 # OS/editor artifacts
 .DS_Store
 Thumbs.db

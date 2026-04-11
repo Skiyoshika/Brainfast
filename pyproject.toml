@@ -9,6 +9,7 @@ dynamic = ["version"]
 dependencies = [
     "flask>=3.0",
     "numpy>=1.26",
+    "packaging>=24.0",
     "pandas>=2.2",
     "pillow>=10.0",
     "scipy>=1.12",
@@ -20,10 +21,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# pip install -e ".[advanced]"  — enables CellPose GPU detection
+# pip install -e ".[wholebrain]"  — ANTs-based whole-brain 3D registration
+wholebrain = [
+    "antspyx>=0.4",
+]
+# pip install -e ".[advanced]"  — enables CellPose GPU detection + SimpleITK
 advanced = [
     "SimpleITK>=2.3",
     "cellpose>=2.2",
+]
+# pip install -e ".[full]"  — all optional runtime deps (wholebrain + advanced)
+full = [
+    "brainfast[wholebrain,advanced]",
 ]
 # pip install -e ".[desktop]"  — for building a Windows EXE
 desktop = [

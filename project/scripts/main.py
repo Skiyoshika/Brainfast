@@ -33,7 +33,7 @@ try:
         map_cells_to_regions,
         write_outputs,
     )
-    from scripts.overlay_render import render_overlay
+    from scripts.overlay_render import _alignment_quality, render_overlay
     from scripts.preprocess import merge_every_n_slices
     from scripts.qc import export_slice_qc
     from scripts.registration_adapter import bootstrap_registration_assets
@@ -127,21 +127,59 @@ def _collect_slice_files(slice_dir: Path, glob_pattern: str) -> list[Path]:
     return sorted(slice_dir.glob(glob_pattern))
 
 
+def _is_3d_volume(arr: np.ndarray) -> bool:
+    """Detect if a TIFF array is a 3D z-stack (Z, H, W) vs multi-channel 2D (H, W, C)."""
+    if arr.ndim != 3:
+        return False
+    # If last dim is small (<=4), likely (H, W, C) multi-channel
+    # If last dim is large, likely (Z, H, W) z-stack
+    return arr.shape[-1] > 4 and arr.shape[0] > 4
+
+
 def _extract_channel_to_tmp(src_files: list[Path], out_dir: Path, ch_idx: int) -> list[Path]:
+    """Extract channel data from source files.
+
+    Handles two data formats:
+    - 2D multi-channel TIFFs: (H, W, C) → extract channel C
+    - 3D Z-stack volumes: (Z, H, W) → extract individual Z-slices
+      For Z-stacks, channel is selected by filename (C0, C1, etc.) not array index.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     out = []
-    for i, p in enumerate(src_files):
+
+    # Filter files by channel suffix in filename (e.g., _C0.tif, _C1.tif)
+    channel_filtered = [f for f in src_files if f"_C{ch_idx}" in f.stem]
+    if not channel_filtered:
+        channel_filtered = src_files  # fallback: use all files
+
+    slice_idx = 0
+    for p in channel_filtered:
         arr = imread(str(p))
-        if arr.ndim == 3:
+
+        if _is_3d_volume(arr):
+            # 3D z-stack volume: extract each Z-slice as a separate 2D image
+            print(f"[channel] extracting {arr.shape[0]} z-slices from 3D volume {p.name}")
+            for z in range(arr.shape[0]):
+                dst = out_dir / f"ch_{ch_idx}_{slice_idx:04d}.tif"
+                imwrite(str(dst), arr[z].astype(np.uint16))
+                out.append(dst)
+                slice_idx += 1
+        elif arr.ndim == 3:
+            # Multi-channel 2D image (H, W, C)
             if arr.shape[-1] <= ch_idx:
                 ch = arr[..., 0]
             else:
                 ch = arr[..., ch_idx]
+            dst = out_dir / f"ch_{ch_idx}_{slice_idx:04d}.tif"
+            imwrite(str(dst), ch.astype(np.uint16))
+            out.append(dst)
+            slice_idx += 1
         else:
-            ch = arr
-        dst = out_dir / f"ch_{ch_idx}_{i:04d}.tif"
-        imwrite(str(dst), ch.astype(np.uint16))
-        out.append(dst)
+            # Already 2D
+            dst = out_dir / f"ch_{ch_idx}_{slice_idx:04d}.tif"
+            imwrite(str(dst), arr.astype(np.uint16))
+            out.append(dst)
+            slice_idx += 1
     return out
 
 
@@ -249,6 +287,20 @@ def _quantify_against_exported_truth(
         registered_label_path = Path(truth_row["registered_label_path"])
         overlay_path = truth_row.get("overlay_path", "")
 
+        # Compute actual alignment quality instead of hardcoded 1.0
+        reg_score = 1.0
+        try:
+            from scripts.image_utils import norm_u8_robust
+
+            real_img = imread(str(real_slice_path))
+            if real_img.ndim == 3:
+                real_img = real_img[real_img.shape[0] // 2]
+            real_u8 = norm_u8_robust(real_img)
+            label_img = imread(str(registered_label_path))
+            reg_score = float(_alignment_quality(real_u8, label_img))
+        except Exception:
+            pass
+
         detections = detect_cells(real_slice_path, cfg)
         if detections is None or detections.empty:
             detection_count = 0
@@ -264,7 +316,7 @@ def _quantify_against_exported_truth(
                     structure_csv=structure_csv,
                     atlas_slice_index=slice_id,
                     slicing_plane=slicing_plane,
-                    registration_score=1.0,
+                    registration_score=reg_score,
                     registration_method="3d_truth_export",
                 )
             )
@@ -277,9 +329,9 @@ def _quantify_against_exported_truth(
                 "registered_label_path": str(registered_label_path),
                 "overlay_path": str(overlay_path),
                 "registration_method": "3d_truth_export",
-                "score_type": "volume_truth_export",
-                "registration_ok": True,
-                "best_score": 1.0,
+                "score_type": "edge_ssim",
+                "registration_ok": bool(reg_score >= 0.3),
+                "best_score": round(reg_score, 4),
                 "best_z": slice_id,
                 "slicing_plane": slicing_plane,
                 "detected_cells": detection_count,
@@ -352,7 +404,9 @@ def run_real_input(
 ):
     project_root = _project_root()
     run_name = (
-        str(output_name).strip() if output_name and str(output_name).strip() else Path(input_dir).name
+        str(output_name).strip()
+        if output_name and str(output_name).strip()
+        else Path(input_dir).name
     )
     if output_dir is not None:
         outputs_dir = Path(output_dir)
@@ -675,6 +729,25 @@ def run_real_input(
             except Exception as _e:
                 print(f"[warn] region area computation failed for slice {sid}: {_e}")
 
+    # Post-hoc AP consistency enforcement: flag outlier slices in QC data
+    if len(registration_rows) >= 3:
+        try:
+            from scripts.atlas_autopick import enforce_ap_consistency
+
+            s_indices = [r["slice_id"] for r in registration_rows]
+            s_ap = [r["best_z"] for r in registration_rows]
+            s_scores = [r["best_score"] for r in registration_rows]
+            smoothed_ap, ap_fit = enforce_ap_consistency(s_indices, s_ap, s_scores)
+            for i, row in enumerate(registration_rows):
+                row["smoothed_ap"] = int(smoothed_ap[i])
+                row["ap_outlier"] = abs(int(row["best_z"]) - int(smoothed_ap[i])) > 3
+            print(
+                f"[AP consistency] R²={ap_fit['r_squared']:.3f}, "
+                f"slope={ap_fit['slope']:.2f}, outliers={ap_fit['outliers']}"
+            )
+        except Exception as _e:
+            print(f"[AP consistency] skipped: {_e}")
+
     registration_qc_path = outputs_dir / "slice_registration_qc.csv"
     pd.DataFrame(registration_rows).to_csv(registration_qc_path, index=False)
 
@@ -753,7 +826,9 @@ def run_real_input(
                     out_dir=outputs_dir,
                     marker_intensity_threshold_pct=_coloc_thr,
                 )
-                print("[main] Colocalization complete: cells_colocalization.csv + colocalization_summary.csv")
+                print(
+                    "[main] Colocalization complete: cells_colocalization.csv + colocalization_summary.csv"
+                )
             except Exception as _e:
                 print(f"[warn] colocalization failed: {_e}")
 
@@ -905,7 +980,9 @@ def main():
             cfg,
             Path(args.run_real_input),
             output_name=args.output_name or None,
-            output_dir=Path(args.output_dir).expanduser() if (args.output_dir or "").strip() else None,
+            output_dir=Path(args.output_dir).expanduser()
+            if (args.output_dir or "").strip()
+            else None,
         )
         return
 

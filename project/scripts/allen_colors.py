@@ -1,9 +1,35 @@
 from __future__ import annotations
 
+import json
 from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
+
+
+def _load_color_map_from_json(path: Path) -> dict[int, tuple[int, int, int]]:
+    """Extract color map from Allen API JSON structure graph."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    nodes = data.get("msg", data) if isinstance(data, dict) else data
+    if not isinstance(nodes, list):
+        return {}
+    cmap: dict[int, tuple[int, int, int]] = {}
+
+    def _walk(items: list) -> None:
+        for item in items:
+            try:
+                rid = int(item["id"])
+                hx = str(item.get("color_hex_triplet", "")).strip().lstrip("#")
+                if len(hx) == 6:
+                    cmap[rid] = (int(hx[0:2], 16), int(hx[2:4], 16), int(hx[4:6], 16))
+            except (KeyError, ValueError, TypeError):
+                pass
+            children = item.get("children")
+            if children:
+                _walk(children)
+
+    _walk(nodes)
+    return cmap
 
 
 def load_allen_color_map(structure_csv: Path) -> dict[int, tuple[int, int, int]]:
@@ -18,6 +44,9 @@ def _load_allen_color_map_cached(structure_csv: str) -> dict[int, tuple[int, int
     path = Path(structure_csv)
     if not path.exists():
         return {}
+    # Handle JSON structure graph files (Allen API format)
+    if path.suffix.lower() == ".json":
+        return _load_color_map_from_json(path)
     df = pd.read_csv(path)
     cols = {c.lower(): c for c in df.columns}
     id_col = cols.get("id") or cols.get("region_id")

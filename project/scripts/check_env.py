@@ -5,17 +5,19 @@ import importlib.util
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+_this = Path(__file__).resolve()
+sys.path.insert(0, str(_this.parents[2]))  # D:\Brainfast
+sys.path.insert(0, str(_this.parents[1]))  # D:\Brainfast\project
 
 try:
-    from project.scripts.asset_bootstrap import atlas_asset_status, default_structure_source
-except Exception:
     from scripts.asset_bootstrap import atlas_asset_status, default_structure_source
+except ImportError:
+    from project.scripts.asset_bootstrap import atlas_asset_status, default_structure_source
 
 try:
-    from project.scripts.config_validation import load_config, validate_runtime_config
-except Exception:
     from scripts.config_validation import load_config, validate_runtime_config
+except ImportError:
+    from project.scripts.config_validation import load_config, validate_runtime_config
 
 REQUIRED_MODULES = (
     "flask",
@@ -27,11 +29,11 @@ REQUIRED_MODULES = (
     "PIL",
     "nibabel",
     "matplotlib",
-    "ants",
 )
 
 OPTIONAL_MODULES = (
-    "cellpose",
+    "ants",  # needed for whole-brain 3D registration (pip install -e ".[wholebrain]")
+    "cellpose",  # needed for Cellpose detection (pip install -e ".[advanced]")
     "SimpleITK",
     "pystray",
     "nrrd",
@@ -96,9 +98,38 @@ def main() -> int:
         if not ok:
             failures += 1
 
+    # Determine which optional modules are actually required by the active config
+    try:
+        cfg_for_deps = load_config(Path(args.config)) if Path(args.config).exists() else {}
+    except Exception:
+        cfg_for_deps = {}
+
+    needs_ants = (
+        cfg_for_deps.get("registration", {}).get("scope") == "whole"
+        and cfg_for_deps.get("registration", {}).get("whole_brain_backend") == "miki_3d"
+    )
+    needs_cellpose = any(
+        str(cfg_for_deps.get("detection", {}).get(key, "")).lower()
+        in {"cpsam", "sam", "cellpose", "cyto", "cyto2", "cyto3", "nuclei"}
+        or str(cfg_for_deps.get("detection", {}).get(key, "")).lower().startswith("cellpose")
+        for key in ("primary_model", "secondary_model")
+    )
+
+    _config_required_modules = set()
+    if needs_ants:
+        _config_required_modules.add("ants")
+    if needs_cellpose:
+        _config_required_modules.add("cellpose")
+
     for name in OPTIONAL_MODULES:
         ok = _module_available(name)
-        _print_status(ok, "WARN", f"optional module '{name}'")
+        if name in _config_required_modules:
+            # Config requires this module — treat as FAIL, not WARN
+            _print_status(ok, "FAIL", f"module '{name}' (required by active config)")
+            if not ok:
+                failures += 1
+        else:
+            _print_status(ok, "WARN", f"optional module '{name}'")
 
     structure_source = default_structure_source(project_root)
     required_assets = [

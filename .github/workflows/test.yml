@@ -29,8 +29,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          cd project
-          python -m pytest tests/unit/ -v --tb=short --cov=scripts --cov-report=term-missing
+          python -m pytest project/tests/unit/ -v --tb=short --cov=project/scripts --cov-report=term-missing
 
   # ── Lint ──────────────────────────────────────────────────────────────────
   lint:
@@ -49,10 +48,10 @@ jobs:
         run: pip install ruff
 
       - name: Run ruff check
-        run: ruff check project/scripts/ project/frontend/blueprints/ project/frontend/server_context.py
+        run: ruff check project/scripts/ project/frontend/blueprints/ project/frontend/server_context.py project/frontend/app_metadata.py project/frontend/update_checker.py
 
       - name: Run ruff format check
-        run: ruff format --check project/scripts/ project/frontend/blueprints/ project/frontend/server_context.py
+        run: ruff format --check project/scripts/ project/frontend/blueprints/ project/frontend/server_context.py project/frontend/app_metadata.py project/frontend/update_checker.py
 
   # ── Integration tests (self-hosted, has atlas file) ───────────────────────
   # Uncomment when self-hosted runner with annotation_25.nii.gz is available:

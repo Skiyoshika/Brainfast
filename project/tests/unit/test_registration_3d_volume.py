@@ -130,16 +130,10 @@ def test_prepare_half_template_inputs_crops_ap_range_and_left_half(tmp_path):
     assert meta["shape"] == [4, 6, 3]
 
 
-@pytest.mark.parametrize(
-    ("hemisphere", "expected_first", "expected_last"),
-    [
-        ("right", [1.0, 0.0, 3.0], [1.0, 0.0, 5.0]),
-        ("right_flipped", [1.0, 0.0, 5.0], [1.0, 0.0, 3.0]),
-    ],
-)
-def test_prepare_half_template_inputs_updates_affine_for_right_hemispheres(
-    tmp_path, hemisphere, expected_first, expected_last
-):
+@pytest.mark.parametrize("hemisphere", ["right", "right_flipped"])
+def test_prepare_half_template_inputs_uses_zero_origin_affine_for_ants(tmp_path, hemisphere):
+    """Template and annotation use zero-origin diagonal affines so ANTs sees
+    spatial overlap with the input volume (also at origin)."""
     template_path = tmp_path / "template.nii.gz"
     annotation_path = tmp_path / "annotation.nii.gz"
 
@@ -165,10 +159,10 @@ def test_prepare_half_template_inputs_updates_affine_for_right_hemispheres(
 
     assert tmpl_half.shape == (4, 6, 3)
     assert ann_half.shape == (4, 6, 3)
-    assert nib.affines.apply_affine(tmpl_half.affine, [0, 0, 0]).tolist() == expected_first
-    assert nib.affines.apply_affine(tmpl_half.affine, [0, 0, 2]).tolist() == expected_last
-    assert nib.affines.apply_affine(ann_half.affine, [0, 0, 0]).tolist() == expected_first
-    assert nib.affines.apply_affine(ann_half.affine, [0, 0, 2]).tolist() == expected_last
+    # Zero-origin: voxel [0,0,0] maps to physical (0,0,0)
+    assert nib.affines.apply_affine(tmpl_half.affine, [0, 0, 0]).tolist() == [0.0, 0.0, 0.0]
+    # Template and annotation share the same affine
+    np.testing.assert_array_equal(tmpl_half.affine, ann_half.affine)
     assert meta["hemisphere"] == hemisphere
     assert meta["ap_range"] == [1, 5]
     assert meta["shape"] == [4, 6, 3]

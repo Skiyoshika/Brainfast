@@ -3,6 +3,7 @@
 All route logic lives in project/frontend/blueprints/*.
 All shared state and helpers live in project/frontend/server_context.py.
 """
+
 from __future__ import annotations
 
 import os
@@ -30,8 +31,8 @@ _repo_root = str(PROJECT_ROOT.parent)
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
-from project.scripts.paths import ensure_runtime_cache_dirs
 from project.frontend.app_metadata import resolve_max_content_length
+from project.scripts.paths import ensure_runtime_cache_dirs
 
 ensure_runtime_cache_dirs(PROJECT_ROOT)
 
@@ -46,14 +47,14 @@ ctx.DEFAULT_STRUCTURE_SOURCE = default_structure_source(PROJECT_ROOT) or (
     PROJECT_ROOT / "configs" / "allen_structure_tree.json"
 )
 
-from project.frontend.blueprints.api_pipeline import bp as pipeline_bp
-from project.frontend.blueprints.api_atlas import bp as atlas_bp
-from project.frontend.blueprints.api_overlay import bp as overlay_bp
 from project.frontend.blueprints.api_alignment import bp as alignment_bp
-from project.frontend.blueprints.api_outputs import bp as outputs_bp
-from project.frontend.blueprints.api_training import bp as training_bp
-from project.frontend.blueprints.api_demo import bp as demo_bp
+from project.frontend.blueprints.api_atlas import bp as atlas_bp
 from project.frontend.blueprints.api_browse import bp as browse_bp
+from project.frontend.blueprints.api_demo import bp as demo_bp
+from project.frontend.blueprints.api_outputs import bp as outputs_bp
+from project.frontend.blueprints.api_overlay import bp as overlay_bp
+from project.frontend.blueprints.api_pipeline import bp as pipeline_bp
+from project.frontend.blueprints.api_training import bp as training_bp
 
 
 def create_app() -> Flask:
@@ -96,6 +97,7 @@ def create_app() -> Flask:
                 if normed != raw:
                     # Replace the immutable args dict with normalized version
                     from werkzeug.datastructures import ImmutableMultiDict
+
                     args = request.args.to_dict(flat=False)
                     args["path"] = [normed]
                     request.args = ImmutableMultiDict(args)

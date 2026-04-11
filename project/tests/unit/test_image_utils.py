@@ -1,4 +1,5 @@
 """Unit tests for scripts/image_utils.py — no IO, no atlas required."""
+
 from __future__ import annotations
 
 import sys
@@ -11,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.image_utils import norm_u8_robust, alpha_blend, to_gray_u8
+from scripts.image_utils import alpha_blend, norm_u8_robust, to_gray_u8  # noqa: E402
 
 pytestmark = pytest.mark.unit
 

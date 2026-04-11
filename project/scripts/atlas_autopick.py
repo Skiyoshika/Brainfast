@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +11,120 @@ from skimage.metrics import structural_similarity as ssim
 from skimage.segmentation import find_boundaries
 from skimage.transform import resize as sk_resize
 from tifffile import imread, imwrite
+
+try:
+    from scripts.logging_setup import get_logger
+
+    log = get_logger(__name__)
+except ImportError:
+    log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# DeepSlice CNN-based AP position estimation (optional dependency)
+# ---------------------------------------------------------------------------
+
+# Cache the DeepSlice availability check so we don't pay the 3s TensorFlow
+# import cost on every call when the package is broken or unavailable.
+_deepslice_available: bool | None = None  # None = not yet checked
+
+# Conversion constants for Allen CCFv3 25 µm atlas (528 coronal slices)
+# AP range: roughly +5.7 mm (anterior) to -5.4 mm (posterior) from bregma
+_DEEPSLICE_AP_OFFSET_MM = 5.4  # add to AP(mm) to get positive distance from posterior end
+_DEEPSLICE_ATLAS_RES_MM = 0.025  # 25 µm per slice
+
+
+def _ap_mm_to_atlas_index(ap_mm: float) -> int:
+    """Convert AP position in mm (from bregma) to 25 µm atlas z-index.
+
+    Formula: z_index = int((ap_mm + 5.4) / 0.025)
+    Clamped to valid range [0, 527].
+    """
+    z = int((ap_mm + _DEEPSLICE_AP_OFFSET_MM) / _DEEPSLICE_ATLAS_RES_MM)
+    return max(0, min(527, z))
+
+
+def estimate_ap_deepslice(image_paths: list[Path], species: str = "mouse") -> list[dict] | None:
+    """Estimate AP positions for a batch of images using DeepSlice CNN.
+
+    Parameters
+    ----------
+    image_paths : list[Path]
+        Paths to 2D coronal brain section images.
+    species : str
+        Species for the model ("mouse" or "rat").
+
+    Returns
+    -------
+    list[dict] | None
+        List of dicts with keys ``path``, ``ap_mm``, ``ap_index_25um``,
+        ``confidence``.  Returns *None* if DeepSlice is not installed.
+    """
+    global _deepslice_available
+    if _deepslice_available is False:
+        return None
+    try:
+        from DeepSlice import DeepSlice  # type: ignore[import-untyped]
+
+        _deepslice_available = True
+    except (ImportError, Exception):
+        _deepslice_available = False
+        log.warning(
+            "DeepSlice is not installed or broken — CNN-based AP estimation unavailable. "
+            "Install with: pip install DeepSlice"
+        )
+        return None
+
+    if not image_paths:
+        return []
+
+    try:
+        model = DeepSlice(species=species)
+        # DeepSlice expects a folder or list of file paths (strings)
+        str_paths = [str(p) for p in image_paths]
+        model.Build(str_paths)
+        model.predict()
+        results = model.propagate_angles()
+
+        output: list[dict] = []
+        for _idx, row in results.iterrows():
+            ap_mm = float(row.get("AP", row.get("ap", 0.0)))
+            confidence = float(row.get("confidence", row.get("Confidence", 1.0)))
+            file_path = row.get("Filenames", row.get("filenames", ""))
+            output.append(
+                {
+                    "path": str(file_path),
+                    "ap_mm": ap_mm,
+                    "ap_index_25um": _ap_mm_to_atlas_index(ap_mm),
+                    "confidence": confidence,
+                }
+            )
+        log.info("DeepSlice estimated AP for %d images", len(output))
+        return output
+
+    except Exception:
+        log.exception("DeepSlice prediction failed")
+        return None
+
+
+def estimate_ap_deepslice_single(image_path: Path, species: str = "mouse") -> dict | None:
+    """Convenience wrapper: estimate AP for a single image via DeepSlice.
+
+    Returns
+    -------
+    dict | None
+        Dict with ``ap_mm``, ``ap_index_25um``, ``confidence`` or *None*
+        if DeepSlice is unavailable or prediction fails.
+    """
+    results = estimate_ap_deepslice([image_path], species=species)
+    if results is None or len(results) == 0:
+        return None
+    r = results[0]
+    return {
+        "ap_mm": r["ap_mm"],
+        "ap_index_25um": r["ap_index_25um"],
+        "confidence": r["confidence"],
+    }
 
 
 def _roi_bbox_from_real(real_img: np.ndarray, pad: int = 4) -> tuple[int, int, int, int]:
@@ -356,6 +471,8 @@ def autopick_best_z(
     real_z_index: int | None = None,
     progress_cb=None,
     z_range: list | None = None,
+    ap_method: str = "auto",
+    ap_range: tuple | None = None,
 ) -> dict:
     import nibabel as nib
     from skimage.transform import rescale
@@ -414,10 +531,76 @@ def autopick_best_z(
     tissue_coverage = float(real_mask.mean())
 
     # Apply z_range constraint if specified (prevents wrong selections outside biologically plausible range)
+    # ap_range from target region selector takes precedence over z_range
+    if ap_range and len(ap_range) >= 2 and not z_range:
+        z_range = [int(ap_range[0]), int(ap_range[1])]
+        log.info("AP range from target region: z=%d–%d", z_range[0], z_range[1])
     z_start, z_end = 0, z_dim
     if z_range and len(z_range) >= 2:
         z_start = max(0, int(z_range[0]))
         z_end = min(z_dim, int(z_range[1]))
+
+    # --- DeepSlice CNN-based AP estimation (optional) ---
+    method = str(ap_method or "auto").lower()
+    deepslice_z: int | None = None
+    deepslice_confidence: float = 0.0
+
+    if method in ("deepslice", "auto"):
+        if progress_cb:
+            progress_cb(3, 100, "Trying DeepSlice CNN AP estimation...")
+        ds_result = estimate_ap_deepslice_single(real_path)
+        if ds_result is not None:
+            deepslice_z = int(ds_result["ap_index_25um"])
+            deepslice_confidence = float(ds_result["confidence"])
+            log.info(
+                "DeepSlice AP estimate: %.2f mm -> z_index=%d (confidence=%.3f)",
+                ds_result["ap_mm"],
+                deepslice_z,
+                deepslice_confidence,
+            )
+        elif method == "deepslice":
+            log.warning("DeepSlice requested but unavailable/failed; falling back to SSIM search")
+
+    # If DeepSlice gave a result and was explicitly requested, skip SSIM search
+    if deepslice_z is not None and method == "deepslice":
+        best_z = max(z_start, min(z_end - 1, deepslice_z))
+        best_score = deepslice_confidence
+        best_slice = _get_slice(vol, best_z, plane).astype(np.int32)
+        out_label_tif.parent.mkdir(parents=True, exist_ok=True)
+        if progress_cb:
+            progress_cb(97, 100, "Saving result (DeepSlice)...")
+        imwrite(str(out_label_tif), best_slice)
+        return {
+            "best_z": int(best_z),
+            "best_score": float(best_score),
+            "best_score_type": "deepslice_cnn",
+            "label_slice_tif": str(out_label_tif),
+            "shape": [int(x) for x in vol.shape],
+            "slicing_plane": plane,
+            "slice_shape": [int(x) for x in best_slice.shape],
+            "roi_mode": str(roi_mode),
+            "roi_bbox": [int(roi_bbox[0]), int(roi_bbox[1]), int(roi_bbox[2]), int(roi_bbox[3])],
+            "real_slice": real_slice_meta,
+            "tissue_coverage": float(tissue_coverage),
+            "deepslice_ap_index": int(deepslice_z),
+            "deepslice_confidence": float(deepslice_confidence),
+            "coarse_top": [],
+            "refined_top": [],
+        }
+
+    # For "auto" mode with a DeepSlice hit, use it to narrow the z search range
+    if deepslice_z is not None and method == "auto":
+        ds_margin = 40  # search +/- 40 slices around DeepSlice estimate
+        ds_start = max(z_start, deepslice_z - ds_margin)
+        ds_end = min(z_end, deepslice_z + ds_margin + 1)
+        log.info(
+            "DeepSlice narrowed search range: [%d, %d) (was [%d, %d))",
+            ds_start,
+            ds_end,
+            z_start,
+            z_end,
+        )
+        z_start, z_end = ds_start, ds_end
 
     # When tissue occupies < 15% of the atlas canvas (e.g. high-mag tissue in low-res atlas),
     # use normalized shape scoring: resize both tissue and atlas to the same canvas for comparison.
@@ -507,7 +690,7 @@ def autopick_best_z(
         progress_cb(97, 100, "Saving result...")
     imwrite(str(out_label_tif), best_slice)
 
-    return {
+    result = {
         "best_z": int(best_z),
         "best_score": float(best_score),
         "best_score_type": "refined_warp_quality" if refined_scores else "coarse_edge_score",
@@ -527,4 +710,65 @@ def autopick_best_z(
             [int(z), float(s)]
             for z, s in sorted(refined_scores, key=lambda x: x[1], reverse=True)[:8]
         ],
+    }
+    if deepslice_z is not None:
+        result["deepslice_ap_index"] = int(deepslice_z)
+        result["deepslice_confidence"] = float(deepslice_confidence)
+    return result
+
+
+def enforce_ap_consistency(
+    slice_indices: list[int],
+    ap_values: list[int],
+    scores: list[float] | None = None,
+    sigma_threshold: float = 2.0,
+) -> tuple[list[int], dict]:
+    """Fit a linear AP model across slices and smooth outliers.
+
+    After per-slice AP estimation, the AP values should increase or decrease
+    monotonically across the tissue block. This function fits a robust linear
+    model (AP = slope * slice_index + intercept), rejects outliers beyond
+    sigma_threshold standard deviations, refits on inliers, and returns
+    smoothed AP values.
+
+    Returns:
+        (smoothed_ap_values, fit_info_dict)
+    """
+    from scipy import stats as sp_stats
+
+    idx = np.array(slice_indices, dtype=np.float64)
+    ap = np.array(ap_values, dtype=np.float64)
+    n = len(idx)
+
+    if n < 3:
+        return list(ap.astype(int)), {
+            "slope": 0.0,
+            "intercept": float(np.mean(ap)),
+            "r_squared": 0.0,
+            "outliers": 0,
+        }
+
+    # Initial linear regression
+    slope, intercept, r, _p, _se = sp_stats.linregress(idx, ap)
+    predicted = slope * idx + intercept
+    residuals = np.abs(ap - predicted)
+
+    # Reject outliers
+    threshold = max(np.std(residuals) * sigma_threshold, 1.0)
+    inliers = residuals < threshold
+    n_outliers = int(np.sum(~inliers))
+
+    # Refit on inliers if enough remain
+    if np.sum(inliers) >= 3:
+        slope, intercept, r, _p, _se = sp_stats.linregress(idx[inliers], ap[inliers])
+
+    # Return smoothed AP values (clamped to valid range)
+    smoothed = slope * idx + intercept
+    smoothed = np.clip(smoothed, 0, 527).astype(int)
+
+    return list(smoothed), {
+        "slope": float(slope),
+        "intercept": float(intercept),
+        "r_squared": float(r**2),
+        "outliers": n_outliers,
     }

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from project.scripts import pipeline_progress
 from project.scripts.pipeline_progress import read_stage_progress, write_stage_progress

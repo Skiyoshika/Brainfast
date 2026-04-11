@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 from pathlib import Path
 
@@ -12,6 +13,28 @@ from project.frontend.app_metadata import read_version_info
 from project.scripts.asset_bootstrap import atlas_asset_status
 
 bp = Blueprint("api_pipeline", __name__)
+
+
+def _detect_compute() -> dict:
+    """Auto-detect GPU availability for the /api/info endpoint."""
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            name = torch.cuda.get_device_name(0)
+            try:
+                vram = round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1)
+            except Exception:
+                vram = 0
+            return {
+                "device": "cuda",
+                "gpuName": name,
+                "vramGb": vram,
+                "torchVersion": torch.__version__,
+            }
+    except ImportError:
+        pass
+    return {"device": "cpu", "gpuName": "", "vramGb": 0, "torchVersion": ""}
 
 
 @bp.get("/")
@@ -40,6 +63,7 @@ def info():
                 "maxContentLengthBytes": int(current_app.config.get("MAX_CONTENT_LENGTH") or 0)
             },
             "assets": assets,
+            "compute": _detect_compute(),
             "defaults": {
                 "atlasPath": str(default_atlas),
                 "structPath": str(default_struct) if default_struct.exists() else "",
@@ -68,6 +92,81 @@ def validate():
     return jsonify({"ok": len(issues) == 0, "issues": issues})
 
 
+def _build_runtime_config(
+    template_path: str, params: dict, input_dir: str, channels: list[str], output_dir: str
+) -> Path:
+    """Merge UI params into the template config and write a runtime JSON."""
+    tpl = Path(template_path)
+    # Resolve relative paths against frontend ROOT (frontend sends paths like ../configs/...)
+    if not tpl.is_absolute():
+        tpl = (ctx.ROOT / tpl).resolve()
+    if tpl.exists():
+        cfg = json.loads(tpl.read_text(encoding="utf-8-sig"))
+    else:
+        cfg = {}
+
+    inp = cfg.setdefault("input", {})
+    reg = cfg.setdefault("registration", {})
+    det = cfg.setdefault("detection", {})
+    comp = cfg.setdefault("compute", {})
+
+    # --- input overrides ---
+    if input_dir:
+        inp["slice_dir"] = input_dir
+    pixel = params.get("pixelSizeUm")
+    if pixel:
+        try:
+            inp["pixel_size_um_xy"] = float(pixel)
+        except (ValueError, TypeError):
+            pass
+    plane = params.get("slicingPlane")
+    if plane:
+        inp["slicing_plane"] = plane
+
+    # --- registration overrides ---
+    flip = params.get("flipAtlas", "")
+    hemisphere = params.get("hemisphere", "")
+    if hemisphere:
+        reg["atlas_hemisphere"] = hemisphere
+    elif flip == "h":
+        reg["atlas_hemisphere"] = "right_flipped"
+    elif flip == "none":
+        reg.setdefault("atlas_hemisphere", "full")
+
+    atlas_path = params.get("atlasPath", "")
+    if atlas_path:
+        reg["annotation_path"] = atlas_path
+    struct_path = params.get("structPath", "")
+    if struct_path:
+        reg["structure_path"] = struct_path
+
+    scope = params.get("scope", "")
+    if scope:
+        reg["scope"] = scope
+
+    # --- detection overrides ---
+    # Default to fallback (LoG) if cellpose is not installed
+    try:
+        import cellpose  # noqa: F401
+    except ImportError:
+        det["primary_model"] = "fallback"
+        det.setdefault("fallback_model", "log")
+
+    # Auto-detect GPU: let detect.py handle device selection at runtime
+    comp.setdefault("device", "auto")
+
+    # --- channel map ---
+    if channels:
+        inp["active_channel"] = channels[0]
+
+    # Write runtime config
+    dest_dir = Path(output_dir) if output_dir else ctx.PROJECT_ROOT / "outputs"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    runtime_path = dest_dir / "run_config_runtime.json"
+    runtime_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    return runtime_path
+
+
 @bp.post("/api/run")
 def run_pipeline():
     with ctx._run_state_lock:
@@ -75,7 +174,7 @@ def run_pipeline():
             return jsonify({"ok": False, "error": "pipeline already running"}), 409
 
     payload = request.get_json(force=True)
-    config = payload.get("configPath") or str(
+    template_config = payload.get("configPath") or str(
         ctx.PROJECT_ROOT / "configs" / "run_config.template.json"
     )
     input_dir = payload.get("inputDir", "")
@@ -85,6 +184,19 @@ def run_pipeline():
     output_name = str(payload.get("outputName", "")).strip()
     run_params = payload.get("params", {})
     output_dir = str(payload.get("outputDir") or run_params.get("outputDir") or "").strip()
+
+    # Build runtime config by merging UI params into template
+    try:
+        runtime_cfg_path = _build_runtime_config(
+            template_config,
+            run_params,
+            input_dir,
+            channels,
+            output_dir,
+        )
+        config = str(runtime_cfg_path)
+    except Exception:
+        config = template_config
 
     with ctx._run_state_lock:
         ctx.run_state["config_path"] = config

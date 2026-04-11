@@ -4,6 +4,7 @@ Shared pytest fixtures for Brainfast tests.
 Session-scoped fixtures are created once per test run and reused across all
 test files — this avoids redundant atlas/TIFF loading in integration tests.
 """
+
 from __future__ import annotations
 
 import sys
@@ -19,6 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 # ── Tiny synthetic images (unit tests — no atlas required) ────────────────────
+
 
 @pytest.fixture(scope="session")
 def tiny_label_tif(tmp_path_factory):
@@ -48,11 +50,12 @@ def sparse_real_array():
     arr += rng.integers(50, 150, arr.shape, dtype=np.uint16)
     for _ in range(30):
         y, x = rng.integers(10, 246, size=2)
-        arr[y - 2:y + 3, x - 2:x + 3] = rng.integers(40000, 65000)
+        arr[y - 2 : y + 3, x - 2 : x + 3] = rng.integers(40000, 65000)
     return arr
 
 
 # ── Atlas fixture (integration tests only) ────────────────────────────────────
+
 
 @pytest.fixture(scope="session")
 def atlas_nii_path():

@@ -1,5 +1,5 @@
 ﻿/* ============================================================
-   Brainfast UI →?app.js
+   Brainfast UI - app.js
    Bilingual (EN default / 中文 toggle)
    ============================================================ */
 
@@ -46,6 +46,8 @@ const LANGS = {
     'btn.exportFigure': '<i data-lucide="download" class="btn-icon"></i> Export Figure',
     'btn.refreshQc': '<i data-lucide="refresh-cw" class="btn-icon"></i> Refresh',
     'btn.regenDemo': '<i data-lucide="settings" class="btn-icon"></i> Regen Demo',
+    'btn.oneClickStart': 'Start One-Click Workflow',
+    'hint.oneClickFlow': 'Flow: auto-pick atlas → auto registration → manual review / liquify → export.',
     'ch.red': '<span class="channel-dot channel-dot-red"></span> Red',
     'ch.green': '<span class="channel-dot channel-dot-green"></span> Green',
     'ch.farred': '<span class="channel-dot channel-dot-farred"></span> Far-Red',
@@ -147,6 +149,14 @@ const LANGS = {
     'progress.done': 'Done.',
     'progress.cancelled': 'Cancelled.',
     'progress.startFailed': 'Failed to start.',
+    'progress.starting': 'Starting...',
+    'progress.submitting': 'Submitting...',
+    'progress.processing': 'Processing...',
+    'toast.folderNotFile': 'Please select a .tif file, not a folder.',
+    'toast.pixelSizeMismatch': 'Warning: filename suggests pixel size ~{hint}\u00b5m but current value is {current}\u00b5m. Please verify.',
+    'progress.autopickFailed': 'Auto-pick failed',
+    'progress.extractingZ': 'Extracting selected Z slice...',
+    'progress.usingSlice': 'Using extracted slice: {path}',
     'log.title': 'Live Logs ▶',
     'log.ready': '[ready] Frontend initialized',
     'quality.title': 'Registration Quality',
@@ -285,7 +295,7 @@ const LANGS = {
     'toast.qcLoadFailed': 'Failed to load QC images',
     'toast.chooseSourceFirst': 'Please choose source TIFF first.',
     'toast.autoPickPreviewFailed': 'Auto-pick failed, cannot generate preview.',
-    'toast.oneClickDone': 'One-click registration done. Entered manual review stage.',
+    'toast.oneClickDone': 'Registration done! Review the result, then click "Run Pipeline" to start cell counting.',
     'toast.3dDetected': '3D detected. The Z selector is now shown below the Start button.',
     'toast.regenStarted': 'Demo visuals regeneration started. Refreshing in 15s...',
     'toast.regenFailed': 'Regen failed: {err}',
@@ -364,6 +374,8 @@ const LANGS = {
     'btn.exportFigure': '<i data-lucide="download" class="btn-icon"></i> 导出图片',
     'btn.refreshQc': '<i data-lucide="refresh-cw" class="btn-icon"></i> 刷新',
     'btn.regenDemo': '<i data-lucide="settings" class="btn-icon"></i> 重新生成演示图',
+    'btn.oneClickStart': '启动一键工作流',
+    'hint.oneClickFlow': '流程：自动选取图谱 → 自动配准 → 手动审查 / 液化校正 → 导出。',
     'ch.red': '<span class="channel-dot channel-dot-red"></span> 红通道',
     'ch.green': '<span class="channel-dot channel-dot-green"></span> 绿通道',
     'ch.farred': '<span class="channel-dot channel-dot-farred"></span> 远红通道',
@@ -465,6 +477,14 @@ const LANGS = {
     'progress.done': '完成。',
     'progress.cancelled': '已取消。',
     'progress.startFailed': '启动失败。',
+    'progress.starting': '正在启动...',
+    'progress.submitting': '正在提交...',
+    'progress.processing': '处理中...',
+    'toast.folderNotFile': '请选择 .tif 文件，而非文件夹。',
+    'toast.pixelSizeMismatch': '警告：文件名提示像素尺寸约为 {hint}\u00b5m，但当前值为 {current}\u00b5m，请确认。',
+    'progress.autopickFailed': '自动选取失败',
+    'progress.extractingZ': '正在提取选定的Z层...',
+    'progress.usingSlice': '正在使用提取的切片：{path}',
     'log.title': '实时日志 ▶',
     'log.ready': '[就绪] 前端已初始化',
     'quality.title': '配准质量',
@@ -603,7 +623,7 @@ const LANGS = {
     'toast.qcLoadFailed': 'QC图片加载失败',
     'toast.chooseSourceFirst': '请先选择源TIFF文件。',
     'toast.autoPickPreviewFailed': '自动选取失败，无法生成预览。',
-    'toast.oneClickDone': '一键配准完成，已进入手动审核阶段。',
+    'toast.oneClickDone': '配准完成！检查结果后，点击"运行流水线"开始细胞计数。',
     'toast.3dDetected': '检测到3D数据。Z层选择器已显示在开始按钮下方。',
     'toast.regenStarted': '正在重新生成演示图，15秒后刷新...',
     'toast.regenFailed': '重新生成失败：{err}',
@@ -925,9 +945,12 @@ if (workflowModeEl) {
     const oneClick = document.getElementById('oneClickSourcePath');
     const proInput = document.getElementById('inputDir');
     if (oneClick && proInput) {
-      if (workflowModeEl.value === 'oneclick' && !oneClick.value && proInput.value) {
+      if (workflowModeEl.value === 'oneclick' && proInput.value) {
+        // Switching TO oneclick: bring Pro path into OneClick
         oneClick.value = proInput.value;
-      } else if (workflowModeEl.value === 'pro' && !proInput.value && oneClick.value) {
+        oneClick.dispatchEvent(new Event('change', { bubbles: true }));
+      } else if (workflowModeEl.value === 'pro' && oneClick.value) {
+        // Switching TO pro: bring OneClick path into Pro
         proInput.value = oneClick.value;
       }
     }
@@ -1161,7 +1184,7 @@ function _showAutopickModal() {
   document.getElementById('autopickBarFill').style.width = '0%';
   document.getElementById('autopickBarFill').style.background = 'var(--accent,#4c72f5)';
   document.getElementById('autopickPct').textContent = '0%';
-  document.getElementById('autopickProgressMsg').textContent = 'Starting...';
+  document.getElementById('autopickProgressMsg').textContent = t('progress.starting');
   document.getElementById('autopickStepText').textContent = '';
   document.getElementById('autopickErrorDetail').classList.add('hidden');
   document.getElementById('autopickModalFooter').classList.add('hidden');
@@ -1207,7 +1230,7 @@ function _showAutopickError(errMsg) {
   const fillEl = document.getElementById('autopickBarFill');
   if (fillEl) fillEl.style.background = '#f87171';
   const msgEl = document.getElementById('autopickProgressMsg');
-  if (msgEl) msgEl.textContent = 'Auto-pick failed';
+  if (msgEl) msgEl.textContent = t('progress.autopickFailed');
   const detailEl = document.getElementById('autopickErrorDetail');
   if (detailEl) {
     detailEl.textContent = errMsg || 'Unknown error';
@@ -1286,8 +1309,8 @@ async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
   _showAutopickModal();
   // Update modal title
   const h2 = document.querySelector('#autopickModal h2') || document.querySelector('#autopickModal .modal-title');
-  if (h2) h2.textContent = modalTitle || '🧠 Processing...';
-  _updateAutopickProgress(3, 'Submitting...', '');
+  if (h2) h2.textContent = modalTitle || `\uD83E\uDDE0 ${t('progress.processing')}`;
+  _updateAutopickProgress(3, t('progress.submitting'), '');
 
   let startRes;
   try {
@@ -1306,7 +1329,7 @@ async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
   }
   // Legacy sync response
   if (!startRes.token) {
-    _updateAutopickProgress(100, 'Done!', '');
+    _updateAutopickProgress(100, t('progress.done'), '');
     _scheduleCloseModal(600);
     return startRes;
   }
@@ -1395,7 +1418,7 @@ function showAlignQuality(beforeEdge, afterEdge, improved) {
     <span class="verdict-improve ${impCls}">${impSign}${impPct}%</span>
   `;
   const toastType = improved ? (level === 'poor' || level === 'fair' ? 'warning' : 'success') : 'error';
-  showToast(`SSIM ${b.toFixed(4)} ↗?${a.toFixed(4)} (${impSign}${impPct}%) →?${t(`quality.${level}`)}`, toastType, 6000);
+  showToast(`SSIM ${b.toFixed(4)} \u2192 ${a.toFixed(4)} (${impSign}${impPct}%) \u2014 ${t(`quality.${level}`)}`, toastType, 6000);
 }
 
 // ================================================================
@@ -1440,7 +1463,7 @@ document.getElementById('aiAlignBtn').onclick = async () => {
     compareImg.classList.remove('hidden');
     document.getElementById('alignPreviewPlaceholder').classList.add('hidden');
     compareImg.onclick = () => openLightbox(compareImg.src, t('lightbox.compare'));
-    log(`AI ${alignMode} | pairs=${lm.landmark_pairs} | SSIM ${Number(ap.beforeEdgeScore).toFixed(4)} ↗?${Number(ap.afterEdgeScore).toFixed(4)}`);
+    log(`AI ${alignMode} | pairs=${lm.landmark_pairs} | SSIM ${Number(ap.beforeEdgeScore).toFixed(4)} \u2192 ${Number(ap.afterEdgeScore).toFixed(4)}`);
   } catch { showToast(t('toast.alignUnexpected'), 'error'); }
 };
 
@@ -1481,6 +1504,8 @@ document.getElementById('runBtn').onclick = async () => {
     slicingPlane: document.getElementById('slicingPlane').value,
     rotateAtlas: document.getElementById('rotateAtlas').value,
     flipAtlas: document.getElementById('flipAtlas').value,
+    hemisphere: document.getElementById('oneClickHemisphere')?.value || '',
+    scope: document.getElementById('oneClickScope')?.value || 'whole',
     alignMode: document.getElementById('alignMode').value,
     maxPoints: document.getElementById('maxPoints').value,
     minDistance: document.getElementById('minDistance').value,
@@ -1514,13 +1539,16 @@ async function pollLogsUntilDone() {
       fetch('/api/status').then(r => r.json()),
       fetch('/api/logs').then(r => r.json()),
     ]);
-    
+
+    // Keep status badge in sync with backend state
+    if (s.running && !state.running) setRunning(true);
+
     // 保护前端的开发者日志不被后端的流水线日志覆盖
     const feLogs = logBox.textContent.split('\n').filter(l => l.includes('❌') || l.includes('⚠️') || l.includes('[ready]'));
     const srvLogs = logsData.logs.join('\n');
     logBox.textContent = srvLogs + (feLogs.length ? '\n\n--- Frontend Dev Logs ---\n' + feLogs.join('\n') : '');
     logBox.scrollTop = logBox.scrollHeight;
-    
+
     // Update sidebar slice progress bar (visible at all times)
     _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
     renderWholeBrain3dStage(s.stage || null);
@@ -2161,7 +2189,39 @@ if (_oneClickPixelSize && _mainPixelSize) {
 }
 
 // ================================================================
+// FORM PERSISTENCE — save key fields to localStorage on change
+// ================================================================
+const _PERSIST_FIELDS = [
+  'oneClickSourcePath', 'oneClickPixelSize', 'oneClickScope', 'oneClickHemisphere',
+  'pixelSizeUm', 'alignMode', 'slicingPlane',
+];
+function _saveFormField(id) {
+  const el = document.getElementById(id);
+  if (el) localStorage.setItem(`brainfast.field.${id}`, el.value);
+}
+function _restoreFormFields() {
+  for (const id of _PERSIST_FIELDS) {
+    const saved = localStorage.getItem(`brainfast.field.${id}`);
+    if (saved !== null) {
+      const el = document.getElementById(id);
+      if (el) { el.value = saved; }
+    }
+  }
+}
+// Attach change/input listeners for auto-save
+for (const id of _PERSIST_FIELDS) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('change', () => _saveFormField(id));
+    el.addEventListener('input', () => _saveFormField(id));
+  }
+}
+
+// ================================================================
 async function init() {
+  // Restore persisted form values before applying defaults
+  _restoreFormFields();
+
   // Apply saved or default language
   applyLang(currentLang);
   applyWorkflowMode(workflowModeEl?.value || 'oneclick');
@@ -2294,6 +2354,7 @@ if (oneClickSourcePathEl2) {
   if (savedSource && !oneClickSourcePathEl2.value) {
     oneClickSourcePathEl2.value = savedSource;
     document.getElementById('realSlicePath').value = savedSource;
+    checkSliceIs3D(savedSource);
   }
   oneClickSourcePathEl2.addEventListener('change', e => {
     const path = String(e.target.value || '').trim();
@@ -2321,7 +2382,7 @@ zNumInputEl.oninput = () => syncZ(zNumInputEl.value);
 
 zExtractBtn.onclick = async () => {
   const z = Number(zSliderEl.value);
-  zExtractStatus.textContent = 'Extracting selected Z slice...';
+  zExtractStatus.textContent = t('progress.extractingZ');
   try {
     const res = await fetch('/api/slice/extract-z', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2329,7 +2390,7 @@ zExtractBtn.onclick = async () => {
     }).then(r => r.json());
     if (!res.ok) { showToast(t('toast.zExtractFail', { err: res.error }), 'error'); return; }
     document.getElementById('realSlicePath').value = res.path;
-    zExtractStatus.textContent = `Using extracted slice: ${res.path}`;
+    zExtractStatus.textContent = t('progress.usingSlice', { path: res.path });
     showToast(t('toast.zExtracted', { z, path: res.path }), 'success', 4000);
 
     // Hide Z-slicer immediately so subsequent operations treat the new file as a standard 2D slice
@@ -2919,8 +2980,12 @@ async function loadPreviewIntoCanvas(ts) {
         resolve(false);
         return;
       }
-      drawCanvas.width  = img.naturalWidth;
-      drawCanvas.height = img.naturalHeight;
+      // Constrain canvas to max display size (480px height) to prevent
+      // the overlay from blocking downstream UI elements (Step 4 button).
+      const MAX_DISPLAY_H = 480;
+      const scale = Math.min(1, MAX_DISPLAY_H / img.naturalHeight);
+      drawCanvas.width  = Math.round(img.naturalWidth * scale);
+      drawCanvas.height = Math.round(img.naturalHeight * scale);
       previewImgEl.src  = src;
       previewImgEl.classList.remove('hidden');
       previewImgEl.style.display = 'block';
@@ -3308,6 +3373,25 @@ async function runOneClickWorkflow() {
     return;
   }
 
+  // Validate: reject folder paths (no .tif extension)
+  const srcLower = source.toLowerCase().replace(/\\/g, '/');
+  if (srcLower.endsWith('/') || srcLower.endsWith('\\') ||
+      (!srcLower.endsWith('.tif') && !srcLower.endsWith('.tiff') && !srcLower.endsWith('.nii.gz'))) {
+    showToast(t('toast.folderNotFile'), 'warning');
+    return;
+  }
+
+  // Auto-detect pixel size from filename (e.g. "z5um" → 5)
+  const pxMatch = source.match(/[_\-]z?(\d+(?:\.\d+)?)um/i);
+  if (pxMatch) {
+    const hintPx = parseFloat(pxMatch[1]);
+    const currentPxEl = document.getElementById('oneClickPixelSize');
+    const currentPx = parseFloat(currentPxEl?.value || '0');
+    if (currentPx > 0 && hintPx > 0 && (currentPx / hintPx > 2 || hintPx / currentPx > 2)) {
+      showToast(t('toast.pixelSizeMismatch', { hint: hintPx, current: currentPx }), 'warning', 8000);
+    }
+  }
+
   document.getElementById('realSlicePath').value = source;
   document.getElementById('realSlicePath').dispatchEvent(new Event('change'));
   try { await checkSliceIs3D(source); } catch {}
@@ -3409,13 +3493,30 @@ async function runOneClickWorkflow() {
   // Refresh overlay preview with post-alignment result before entering manual review.
   try { await refreshOverlayPreviewWithCanvas(); } catch (e) { console.warn('Post-align preview skipped:', e); }
 
-  // Enter manual review stage — collapse all steps except Step 3 (AI Registration / manual review).
-  collapseAllStepsExcept('step3');
+  // Mark Step 3 done and advance to Step 4
+  updateWorkflowStepIndicator(4);
+
+  // Expand both Step 3 (manual review available) and Step 4 (run pipeline)
+  document.querySelectorAll('.step-card').forEach(card => {
+    if (card.id === 'step3' || card.id === 'step4') {
+      card.classList.remove('collapsed');
+    } else {
+      card.classList.add('collapsed');
+    }
+  });
+
+  // Activate manual mode so user can review/correct if needed
   if (manualModeBtn && !manualState.active) {
     manualModeBtn.click();
   }
-  // Ensure manual images are loaded with latest overlay (belt-and-suspenders with manualModeBtn.click).
   loadManualImages();
+
+  // Scroll to Step 4 (Run Pipeline) so user sees the action button
+  const step4Card = document.getElementById('step4');
+  if (step4Card) {
+    step4Card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   showToast(t('toast.oneClickDone'), 'success', 5000);
 }
 
@@ -3430,6 +3531,15 @@ if (oneClickScopeEl) {
       hint.textContent = oneClickScopeEl.value === 'whole'
         ? t('hint.scopeWhole')
         : t('hint.scopeSingle');
+    }
+    // Toggle z-slicer visibility: show for single-slice when 3D stack is loaded
+    if (zSlicerBox) {
+      const has3D = zSlider && parseInt(zSlider.max, 10) > 0;
+      if (oneClickScopeEl.value === 'single' && has3D) {
+        revealZSlicer();
+      } else {
+        zSlicerBox.classList.add('hidden');
+      }
     }
   };
 }
@@ -3688,10 +3798,10 @@ async function loadManualImages() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jobId,
-          label_path: aPath,
-          real_path: rPath,
-          structure_csv: document.getElementById('structPath')?.value || '',
-          pixel_size_um: parseFloat(document.getElementById('pixelSizeUm')?.value) || 5,
+          labelPath: aPath,
+          realPath: rPath,
+          structureCsv: document.getElementById('structPath')?.value || '',
+          pixelSizeUm: parseFloat(document.getElementById('pixelSizeUm')?.value) || 5,
           fitMode: document.getElementById('fitMode')?.value || 'cover',
         }),
       });

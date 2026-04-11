@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: Brainfast
+message: >-
+  If you use Brainfast in academic work, please cite the software using the
+  metadata from this file.
+type: software
+authors:
+  - name: Brainfast contributors
+repository-code: "https://github.com/Skiyoshika/Brainfast"
+license: AGPL-3.0-only
+version: "0.3.0-desktop"
+date-released: "2026-03-30"
+abstract: >-
+  Brainfast is a workstation-oriented toolkit for Allen atlas registration,
+  manual review, calibration learning, and whole-brain cell counting from
+  cleared-tissue microscopy data.
+keywords:
+  - neuroscience
+  - lightsheet
+  - atlas registration
+  - allen ccf
+  - cell counting

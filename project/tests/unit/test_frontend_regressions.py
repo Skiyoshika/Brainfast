@@ -39,9 +39,7 @@ def test_index_html_has_balanced_interactive_tags():
 
 
 def test_results_tab_refreshes_outputs_and_file_list():
-    js = Path(r"D:\Brainfast\project\frontend\app.js").read_text(
-        encoding="utf-8", errors="replace"
-    )
+    js = Path(r"D:\Brainfast\project\frontend\app.js").read_text(encoding="utf-8", errors="replace")
 
     assert "if (btn.dataset.tab === 'results') refreshOutputsAndFiles();" in js
 
@@ -64,9 +62,7 @@ def test_index_html_has_whole_brain_3d_sections():
 
 
 def test_app_js_renders_whole_brain_stage_track_and_volume_qc():
-    js = Path(r"D:\Brainfast\project\frontend\app.js").read_text(
-        encoding="utf-8", errors="replace"
-    )
+    js = Path(r"D:\Brainfast\project\frontend\app.js").read_text(encoding="utf-8", errors="replace")
 
     for snippet in (
         "function renderWholeBrain3dStage",
@@ -79,12 +75,13 @@ def test_app_js_renders_whole_brain_stage_track_and_volume_qc():
 
 
 def test_refresh_slice_inspector_stays_strictly_on_3d_exports():
-    js = Path(r"D:\Brainfast\project\frontend\app.js").read_text(
-        encoding="utf-8", errors="replace"
-    )
+    js = Path(r"D:\Brainfast\project\frontend\app.js").read_text(encoding="utf-8", errors="replace")
 
     start = js.index("async function refreshSliceInspector()")
-    end = js.index("// ================================================================\n// BATCH QC ALL", start)
+    end = js.index(
+        "// ================================================================\n// BATCH QC ALL",
+        start,
+    )
     body = js[start:end]
 
     assert "fetch('/api/outputs/reg-slice-list')" in body
@@ -92,9 +89,7 @@ def test_refresh_slice_inspector_stays_strictly_on_3d_exports():
 
 
 def test_slice_inspector_3d_click_enlarges_exported_overlay():
-    js = Path(r"D:\Brainfast\project\frontend\app.js").read_text(
-        encoding="utf-8", errors="replace"
-    )
+    js = Path(r"D:\Brainfast\project\frontend\app.js").read_text(encoding="utf-8", errors="replace")
 
     start = js.index("items.forEach(entry => {")
     end = js.index("sliceInspectorGrid.appendChild(wrap);", start)
@@ -132,9 +127,7 @@ def test_index_html_has_manual_tiff_sidebar_tab():
 
 
 def test_app_js_wires_manual_count_viewer():
-    js = Path(r"D:\Brainfast\project\frontend\app.js").read_text(
-        encoding="utf-8", errors="replace"
-    )
+    js = Path(r"D:\Brainfast\project\frontend\app.js").read_text(encoding="utf-8", errors="replace")
 
     assert "manualCountViewport.addEventListener('wheel'" in js
     assert "manualCountPaletteEl.addEventListener('change'" in js
@@ -146,9 +139,7 @@ def test_app_js_wires_manual_count_viewer():
 
 
 def test_app_js_has_readable_manual_tiff_translations():
-    js = Path(r"D:\Brainfast\project\frontend\app.js").read_text(
-        encoding="utf-8", errors="replace"
-    )
+    js = Path(r"D:\Brainfast\project\frontend\app.js").read_text(encoding="utf-8", errors="replace")
 
     assert "'nav.manualTiff': '手动TIFF检查'" in js
     assert "'manualCount.title': '手动TIFF检查'" in js
@@ -232,7 +223,7 @@ def test_status_endpoint_returns_stage_progress(tmp_path, monkeypatch, client):
     out_dir.mkdir()
     (out_dir / "pipeline_progress.json").write_text(
         (
-            '{'
+            "{"
             '"stageName":"ANTS Registration",'
             '"stageIndex":3,'
             '"stageCount":6,'
@@ -285,12 +276,10 @@ def test_extract_preview_frame_reads_single_page_without_full_stack_imread(tmp_p
 
     import project.frontend.blueprints.api_alignment as api_alignment
 
-    monkeypatch.setattr(
-        api_alignment,
-        "imread",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("full-stack imread should not be used for preview slices")
-        ),
+    # Ensure imread is NOT importable from this module (ruff removed unused
+    # import), so _extract_preview_frame can only use page-based TiffFile.
+    assert not hasattr(api_alignment, "imread"), (
+        "api_alignment should not import imread — _extract_preview_frame must use TiffFile"
     )
 
     frame = api_alignment._extract_preview_frame(tif_path, z_index=1)

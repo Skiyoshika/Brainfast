@@ -14,10 +14,10 @@ Usage in pipeline (scripts/main.py)::
 Usage in sub-modules::
 
     import logging
-    log = logging.getLogger("idlebrain.registration")
+    log = logging.getLogger("brainfast.registration")
     log.info("Conforming warp for slice %d", idx)
 
-All ``idlebrain.*`` child loggers inherit the root idlebrain handler — no
+All ``brainfast.*`` child loggers inherit the root brainfast handler — no
 per-module setup required.
 """
 
@@ -27,8 +27,8 @@ import logging
 import logging.handlers
 from pathlib import Path
 
-_ROOT_LOGGER_NAME = "idlebrain"
-_LOG_FILE_NAME = "idlebrain.log"
+_ROOT_LOGGER_NAME = "brainfast"
+_LOG_FILE_NAME = "brainfast.log"
 _MAX_LOG_BYTES = 5_000_000  # 5 MB
 _BACKUP_COUNT = 3
 
@@ -39,7 +39,7 @@ def configure_logging(
     debug: bool = False,
     logger_name: str = _ROOT_LOGGER_NAME,
 ) -> logging.Logger:
-    """Configure the idlebrain root logger.
+    """Configure the brainfast root logger.
 
     Safe to call multiple times — extra calls add no extra handlers if the
     logger already has handlers attached.
@@ -52,7 +52,7 @@ def configure_logging(
     debug : bool
         When ``True`` the console handler emits DEBUG messages.
     logger_name : str
-        Root logger name (default ``"idlebrain"``).
+        Root logger name (default ``"brainfast"``).
 
     Returns
     -------
@@ -95,12 +95,12 @@ def configure_logging(
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Return a child logger under the idlebrain namespace.
+    """Return a child logger under the brainfast namespace.
 
     Parameters
     ----------
     name : str
-        Short module name, e.g. ``"registration"`` → ``"idlebrain.registration"``.
+        Short module name, e.g. ``"registration"`` → ``"brainfast.registration"``.
 
     Returns
     -------

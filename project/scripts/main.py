@@ -38,7 +38,7 @@ try:
     from scripts.qc import export_slice_qc
     from scripts.registration_adapter import bootstrap_registration_assets
     from scripts.whole_brain_3d import run_whole_brain_3d
-except Exception:
+except ImportError:
     from asset_bootstrap import default_structure_source
     from atlas_autopick import autopick_best_z, refine_atlas_z_by_size
     from atlas_mapper import map_cells_with_registered_label_slice

@@ -129,6 +129,19 @@ For detailed gap analysis, see:
 - [`docs/superpowers/plans/interactive-workflow-gap-audit.md`](docs/superpowers/plans/interactive-workflow-gap-audit.md)
 - [`docs/superpowers/plans/registration-failure-taxonomy.md`](docs/superpowers/plans/registration-failure-taxonomy.md)
 
+## Cellpose-SAM (`cpsam`) Integration
+
+Brainfast uses the **Cellpose** Python package (v4+) for cell detection. The default model is `cpsam` — Cellpose's built-in SAM-augmented model accessed via `cellpose.models.CellposeModel(pretrained_model="cpsam")`.
+
+Key points:
+- There is **no separate `segment-anything` or SAM2 runtime** in this repo. The SAM component is internal to Cellpose.
+- Set `detection.primary_model` to `"cpsam"` in your run config. Other supported values: any Cellpose built-in model name, or `"log"` for the fallback Laplacian-of-Gaussian detector.
+- GPU inference is enabled by default (`detection.cellpose_gpu: true`). For large images, the pipeline automatically tiles to prevent OOM via `bsize`.
+- `Save Calibration + Learn` in the UI tunes atlas overlay parameters — it does **not** retrain or fine-tune Cellpose-SAM.
+- If Cellpose is not installed, the pipeline falls back to the LoG detector with a warning.
+
+Install: `pip install -e ".[advanced]"` (includes Cellpose + SimpleITK).
+
 ## Large Local Artifacts / 未纳入版本管理的大体积内容
 
 - `Samples/`: microscope sample data

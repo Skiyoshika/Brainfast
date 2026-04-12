@@ -183,13 +183,13 @@ class TestGate3:
                 "NCC": 0.5,
                 "NMI": 1.2,
                 "SSIM": 0.3,
-                "Dice": 0.60,
+                "Dice": 0.20,
                 "MSE": 0.05,
                 "PSNR": 13.0,
             },
         )
         result = gate3_registration_quality(tmp_path, "A")
-        assert not result.passed
+        assert not result.passed  # A threshold is 0.30
         assert "Dice" in result.details
 
     def test_pass_relaxed_dice_canary_b(self, tmp_path: Path) -> None:
@@ -205,7 +205,7 @@ class TestGate3:
             },
         )
         result = gate3_registration_quality(tmp_path, "B")
-        assert result.passed  # B threshold is 0.50
+        assert result.passed  # B threshold is 0.01 (sparse 5-slice volume)
 
     def test_fail_nan_metric(self, tmp_path: Path) -> None:
         _write_metrics_csv(

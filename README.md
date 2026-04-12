@@ -142,6 +142,12 @@ Key points:
 
 Install: `pip install -e ".[advanced]"` (includes Cellpose + SimpleITK).
 
+## Stability & Release
+
+Before declaring the pipeline stable for new samples, all gates in the
+[stability exit criteria](docs/superpowers/plans/stability-exit-criteria.md) must pass:
+repo-level (lint, tests, env validation, docs) and sample-level (canary buckets A/B/C each pass twice, then cohort rollout).
+
 ## Large Local Artifacts / 未纳入版本管理的大体积内容
 
 - `Samples/`: microscope sample data

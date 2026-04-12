@@ -72,7 +72,7 @@ Every canary run **must** satisfy ALL of these gates to pass:
 - `volume/` directory exists with the merged 3D volume
 
 ### Gate 3: Registration Quality Bounds
-- **Dice ≥ 0.70** (tissue overlap with template)
+- **Dice ≥ 0.30** (tissue mask overlap; low for half-brain cross-modality registration)
 - **SSIM ≥ 0.05** (cross-modality baseline; fluorescence vs Nissl will be low)
 - **NMI ≥ 1.01** (above independence = some alignment signal)
 - If any metric is NaN or Inf → FAIL

@@ -377,10 +377,12 @@ def detect_cells_cellpose(
     if bsize is not None:
         kwargs["bsize"] = bsize
 
-    # Only pass channels for legacy versions (v2/v3)
+    # Only pass channels for legacy Cellpose (v2/v3).
+    # Cellpose-SAM v4+ ignores channels and warns if present; do NOT pass it.
     from cellpose import models as _cp_models
 
-    if not hasattr(_cp_models, "CellposeModel") or hasattr(_cp_models, "Cellpose"):
+    _is_legacy = hasattr(_cp_models, "Cellpose") and not hasattr(_cp_models, "CellposeModel")
+    if _is_legacy:
         ch = channels if isinstance(channels, list) and len(channels) == 2 else [0, 0]
         kwargs["channels"] = ch
 

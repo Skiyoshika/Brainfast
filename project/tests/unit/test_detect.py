@@ -326,6 +326,67 @@ def test_cellpose_v4_three_value_eval_return(tiny_slice, monkeypatch):
     assert df["detector"].iloc[0] == "cellpose_cpsam"
 
 
+def test_cellpose_v4_does_not_pass_channels(tiny_slice, monkeypatch):
+    """Cellpose-SAM v4+ ignores `channels`; detect_cells_cellpose must NOT
+    include it in kwargs when CellposeModel is present."""
+    import project.scripts.detect as dm
+
+    masks = np.zeros((64, 64), dtype=np.int32)
+    masks[18:23, 18:23] = 1
+
+    fake_model = MagicMock()
+    fake_model.eval.return_value = (masks, "flows", "styles")
+
+    monkeypatch.setattr(dm, "_CELLPOSE_MODEL_CACHE", {})
+    monkeypatch.setattr(
+        "project.scripts.detect._load_cellpose_model",
+        MagicMock(return_value=fake_model),
+    )
+    # v4 path: has CellposeModel, no legacy Cellpose
+    fake_cp_models = MagicMock(spec=["CellposeModel"])  # only CellposeModel
+    fake_cellpose = MagicMock()
+    fake_cellpose.models = fake_cp_models
+    monkeypatch.setitem(sys.modules, "cellpose", fake_cellpose)
+    monkeypatch.setitem(sys.modules, "cellpose.models", fake_cp_models)
+
+    detect_cells_cellpose(tiny_slice, model_type="cpsam", channels=[0, 0])
+    # Verify channels was NOT passed to eval
+    call_kwargs = fake_model.eval.call_args[1]
+    assert "channels" not in call_kwargs, (
+        f"v4 path must NOT pass 'channels' to eval, got: {call_kwargs}"
+    )
+
+
+def test_cellpose_v3_passes_channels(tiny_slice, monkeypatch):
+    """Legacy Cellpose v2/v3 requires `channels` in eval kwargs."""
+    import project.scripts.detect as dm
+
+    masks = np.zeros((64, 64), dtype=np.int32)
+    masks[18:23, 18:23] = 1
+
+    fake_model = MagicMock()
+    fake_model.eval.return_value = (masks, "flows", "styles", "diams")
+
+    monkeypatch.setattr(dm, "_CELLPOSE_MODEL_CACHE", {})
+    monkeypatch.setattr(
+        "project.scripts.detect._load_cellpose_model",
+        MagicMock(return_value=fake_model),
+    )
+    # Legacy path: has Cellpose, no CellposeModel
+    fake_legacy = MagicMock(spec=["Cellpose"])  # only Cellpose, no CellposeModel
+    fake_cellpose = MagicMock()
+    fake_cellpose.models = fake_legacy  # from cellpose import models → this
+    monkeypatch.setitem(sys.modules, "cellpose", fake_cellpose)
+    monkeypatch.setitem(sys.modules, "cellpose.models", fake_legacy)
+
+    detect_cells_cellpose(tiny_slice, model_type="cyto2", channels=[1, 0])
+    call_kwargs = fake_model.eval.call_args[1]
+    assert "channels" in call_kwargs, (
+        f"v3 legacy path must pass 'channels' to eval, got: {call_kwargs}"
+    )
+    assert call_kwargs["channels"] == [1, 0]
+
+
 def test_cellpose_v3_four_value_eval_return(tiny_slice, monkeypatch):
     """Cellpose v2/v3 eval() returns a 4-tuple (masks, flows, styles, diams).
     detect_cells_cellpose should handle this correctly via result[0]."""

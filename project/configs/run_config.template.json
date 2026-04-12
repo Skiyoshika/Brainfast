@@ -34,7 +34,7 @@
     "laplacian_lambda": 0.18,
     "laplacian_maxiter": 100,
     "auto_first": true,
-    "fail_score_threshold": 0.1,
+    "fail_score_threshold": 0.65,
     "landmark_fallback": true,
     "landmark_max_slices": 5,
     "atlas_z_range": [0, 528],

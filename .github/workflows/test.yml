@@ -53,6 +53,36 @@ jobs:
       - name: Run ruff format check
         run: ruff format --check project/scripts/ project/frontend/blueprints/ project/frontend/server_context.py project/frontend/app_metadata.py project/frontend/update_checker.py
 
+  # ── Smoke test: default shipped path (wholebrain + cpsam) ─────────────────
+  smoke-default-path:
+    name: Smoke test default path
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install full stack
+        run: pip install -e ".[full,dev]"
+
+      - name: Verify check_env.py against template config
+        run: python project/scripts/check_env.py --config project/configs/run_config.template.json
+
+      - name: Import smoke test (numerical stack + ANTs + Cellpose)
+        run: |
+          python -c "import numpy; print('numpy', numpy.__version__)"
+          python -c "import scipy; print('scipy', scipy.__version__)"
+          python -c "import skimage; print('skimage', skimage.__version__)"
+          python -c "import nibabel; print('nibabel', nibabel.__version__)"
+          python -c "from cellpose.models import CellposeModel; print('cellpose OK')"
+
+      - name: Run unit tests with full deps
+        run: python -m pytest project/tests/unit/ -q --tb=short
+
   # ── Integration tests (self-hosted, has atlas file) ───────────────────────
   # Uncomment when self-hosted runner with annotation_25.nii.gz is available:
   # integration:

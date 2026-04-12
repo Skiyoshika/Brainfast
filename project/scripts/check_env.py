@@ -44,6 +44,65 @@ def _module_available(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 
 
+def _module_importable(name: str) -> tuple[bool, str]:
+    """Try a real import and return (ok, detail).
+
+    ``find_spec`` only checks if the module *name* is visible on sys.path; it
+    does not catch ABI mismatches, DLL load failures, or broken transitive
+    dependencies that make the actual ``import`` crash.  This function
+    performs a real import inside a subprocess-like try/except so that the
+    caller gets both the result and a human-readable failure reason.
+    """
+    try:
+        # ANTs has a known issue: ants.__init__ unconditionally imports
+        # ants.plotting which depends on mpl_toolkits internals that break
+        # with newer matplotlib (>3.9).  The core registration functions work
+        # fine.  We stub out the plotting submodule before importing so that
+        # check_env tests the *functional* part of the package.
+        if name == "ants" and "ants" not in sys.modules:
+            import types
+
+            sys.modules.setdefault("ants.plotting", types.ModuleType("ants.plotting"))
+
+        mod = __import__(name)
+        ver = getattr(mod, "__version__", "")
+        if not ver:
+            try:
+                from importlib.metadata import version as _pkg_version
+
+                ver = _pkg_version(name.replace(".", "-"))
+            except Exception:
+                ver = "installed"
+        return True, ver
+    except Exception as exc:
+        return False, str(exc)
+
+
+# Version boundary checks for the numerical stack.
+# These must match pyproject.toml [project].dependencies.
+_VERSION_BOUNDS: dict[str, tuple[tuple[int, ...], tuple[int, ...]]] = {
+    "numpy": ((1, 26), (3, 0)),  # >=1.26, <3  (tested with 1.26 and 2.4)
+    "scipy": ((1, 12), (2, 0)),  # >=1.12, <2  (tested with 1.12 and 1.17)
+    "skimage": ((0, 22), (1, 0)),  # >=0.22, <1  (tested with 0.22 and 0.26)
+}
+
+
+def _check_version_bounds(name: str, version_str: str) -> str | None:
+    """Return an error string if *version_str* is outside the pinned range."""
+    if name not in _VERSION_BOUNDS:
+        return None
+    lo, hi = _VERSION_BOUNDS[name]
+    try:
+        parts = tuple(int(x) for x in version_str.split(".")[: len(lo)])
+    except (ValueError, TypeError):
+        return f"{name} version '{version_str}' cannot be parsed"
+    if parts < lo:
+        return f"{name}=={version_str} is below minimum {'.'.join(map(str, lo))}"
+    if parts >= hi:
+        return f"{name}=={version_str} exceeds upper bound <{'.'.join(map(str, hi))}"
+    return None
+
+
 def _print_status(ok: bool, kind: str, label: str, detail: str = "") -> None:
     state = "OK" if ok else kind
     line = f"[{state}] {label}"
@@ -93,10 +152,16 @@ def main() -> int:
         failures += 1
 
     for name in REQUIRED_MODULES:
-        ok = _module_available(name)
-        _print_status(ok, "FAIL", f"python module '{name}'")
+        ok, detail = _module_importable(name)
+        _print_status(ok, "FAIL", f"python module '{name}'", detail if not ok else detail)
         if not ok:
             failures += 1
+        else:
+            # Check version bounds for pinned numerical stack
+            ver_err = _check_version_bounds(name, detail)
+            if ver_err:
+                _print_status(False, "FAIL", f"version '{name}'", ver_err)
+                failures += 1
 
     # Determine which optional modules are actually required by the active config
     try:
@@ -122,12 +187,19 @@ def main() -> int:
         _config_required_modules.add("cellpose")
 
     for name in OPTIONAL_MODULES:
-        ok = _module_available(name)
+        ok, detail = _module_importable(name)
         if name in _config_required_modules:
             # Config requires this module — treat as FAIL, not WARN
-            _print_status(ok, "FAIL", f"module '{name}' (required by active config)")
+            _print_status(
+                ok, "FAIL", f"module '{name}' (required by active config)", detail if not ok else ""
+            )
             if not ok:
                 failures += 1
+            else:
+                ver_err = _check_version_bounds(name, detail)
+                if ver_err:
+                    _print_status(False, "FAIL", f"version '{name}'", ver_err)
+                    failures += 1
         else:
             _print_status(ok, "WARN", f"optional module '{name}'")
 

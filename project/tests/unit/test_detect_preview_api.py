@@ -346,3 +346,48 @@ class TestDetectPreviewEndpoint:
             assert resp.status_code == 200
             assert captured_cfg["detection"]["primary_model"] == "cpsam"
             assert captured_cfg["detection"]["cellpose_diameter_um"] == 12.0
+
+    def test_param_override_model_reaches_detector(self, app, tmp_path, sample_slice):
+        """Full chain: param override 'model' changes which model string
+        reaches the actual detect_cells function."""
+        import json
+        import pandas as pd
+        import project.frontend.server_context as ctx
+
+        # Config says cpsam, but param override says cyto3
+        base_cfg = {
+            "detection": {"primary_model": "cpsam"},
+            "input": {"pixel_size_um_xy": 5.0},
+            "compute": {"device": "cpu"},
+        }
+        cfg_file = tmp_path / "override_config.json"
+        cfg_file.write_text(json.dumps(base_cfg))
+        ctx.run_state["config_path"] = str(cfg_file)
+
+        fake_df = pd.DataFrame({
+            "x": [10.0], "y": [15.0], "detector": ["cellpose_cyto3"],
+        })
+        captured_cfg = {}
+
+        def mock_detect(slice_path, cfg):
+            captured_cfg.update(cfg)
+            return fake_df
+
+        from unittest.mock import patch
+        with patch(
+            "project.frontend.blueprints.api_detect_preview._run_detection",
+            side_effect=mock_detect,
+        ):
+            client = app.test_client()
+            resp = client.post(
+                "/api/detect/preview",
+                data=json.dumps({
+                    "slicePath": str(sample_slice),
+                    "jobId": "test_override_model",
+                    "params": {"model": "cyto3"},
+                }),
+                content_type="application/json",
+            )
+            assert resp.status_code == 200
+            # Config passed to detector must have the overridden model
+            assert captured_cfg["detection"]["primary_model"] == "cyto3"

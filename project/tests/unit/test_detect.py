@@ -68,7 +68,7 @@ def test_cellpose_raises_on_inference_failure(tiny_slice, monkeypatch):
     fake_model.eval.side_effect = RuntimeError("segfault in inference")
     monkeypatch.setattr(
         "project.scripts.detect._load_cellpose_model",
-        MagicMock(return_value=fake_model),
+        MagicMock(return_value=(fake_model, False)),
     )
     with pytest.raises(CellposeRuntimeError, match="inference failed"):
         detect_cells_cellpose(tiny_slice, model_type="cyto2")
@@ -277,7 +277,7 @@ def test_load_cellpose_model_v4_branch(monkeypatch):
             sys.modules.pop("cellpose.models", None)
 
     FakeCellposeModel.assert_called_once_with(gpu=False, pretrained_model="cpsam")
-    assert result is fake_model_instance
+    assert result == (fake_model_instance, False)  # (model, is_legacy=False)
 
 
 def test_load_cellpose_model_legacy_branch(monkeypatch):
@@ -312,7 +312,7 @@ def test_load_cellpose_model_legacy_branch(monkeypatch):
             sys.modules.pop("cellpose.models", None)
 
     FakeCellpose.assert_called_once_with(gpu=False, model_type="cyto2")
-    assert result is fake_model_instance
+    assert result == (fake_model_instance, True)  # (model, is_legacy=True)
 
 
 # ── v4 three-value eval() return handling ──────────────────────────────────────
@@ -334,13 +334,8 @@ def test_cellpose_v4_three_value_eval_return(tiny_slice, monkeypatch):
     monkeypatch.setattr(dm, "_CELLPOSE_MODEL_CACHE", {})
     monkeypatch.setattr(
         "project.scripts.detect._load_cellpose_model",
-        MagicMock(return_value=fake_model),
+        MagicMock(return_value=(fake_model, False)),
     )
-    # Mock the cellpose.models import inside detect_cells_cellpose
-    fake_cp_models = MagicMock()
-    fake_cp_models.CellposeModel = MagicMock  # v4 path
-    monkeypatch.setitem(sys.modules, "cellpose", MagicMock())
-    monkeypatch.setitem(sys.modules, "cellpose.models", fake_cp_models)
 
     df = detect_cells_cellpose(tiny_slice, model_type="cpsam")
     assert isinstance(df, pd.DataFrame)
@@ -363,14 +358,8 @@ def test_cellpose_v4_does_not_pass_channels(tiny_slice, monkeypatch):
     monkeypatch.setattr(dm, "_CELLPOSE_MODEL_CACHE", {})
     monkeypatch.setattr(
         "project.scripts.detect._load_cellpose_model",
-        MagicMock(return_value=fake_model),
+        MagicMock(return_value=(fake_model, False)),  # v4+, not legacy
     )
-    # v4 path: has CellposeModel, no legacy Cellpose
-    fake_cp_models = MagicMock(spec=["CellposeModel"])  # only CellposeModel
-    fake_cellpose = MagicMock()
-    fake_cellpose.models = fake_cp_models
-    monkeypatch.setitem(sys.modules, "cellpose", fake_cellpose)
-    monkeypatch.setitem(sys.modules, "cellpose.models", fake_cp_models)
 
     detect_cells_cellpose(tiny_slice, model_type="cpsam", channels=[0, 0])
     # Verify channels was NOT passed to eval
@@ -393,14 +382,8 @@ def test_cellpose_v3_passes_channels(tiny_slice, monkeypatch):
     monkeypatch.setattr(dm, "_CELLPOSE_MODEL_CACHE", {})
     monkeypatch.setattr(
         "project.scripts.detect._load_cellpose_model",
-        MagicMock(return_value=fake_model),
+        MagicMock(return_value=(fake_model, True)),  # legacy v2/v3
     )
-    # Legacy path: has Cellpose, no CellposeModel
-    fake_legacy = MagicMock(spec=["Cellpose"])  # only Cellpose, no CellposeModel
-    fake_cellpose = MagicMock()
-    fake_cellpose.models = fake_legacy  # from cellpose import models → this
-    monkeypatch.setitem(sys.modules, "cellpose", fake_cellpose)
-    monkeypatch.setitem(sys.modules, "cellpose.models", fake_legacy)
 
     detect_cells_cellpose(tiny_slice, model_type="cyto2", channels=[1, 0])
     call_kwargs = fake_model.eval.call_args[1]
@@ -425,15 +408,8 @@ def test_cellpose_v3_four_value_eval_return(tiny_slice, monkeypatch):
     monkeypatch.setattr(dm, "_CELLPOSE_MODEL_CACHE", {})
     monkeypatch.setattr(
         "project.scripts.detect._load_cellpose_model",
-        MagicMock(return_value=fake_model),
+        MagicMock(return_value=(fake_model, True)),  # legacy v2/v3
     )
-
-    # Legacy path: no CellposeModel, has Cellpose
-    class FakeLegacyModels:
-        Cellpose = MagicMock
-
-    monkeypatch.setitem(sys.modules, "cellpose", MagicMock())
-    monkeypatch.setitem(sys.modules, "cellpose.models", FakeLegacyModels())
 
     df = detect_cells_cellpose(tiny_slice, model_type="cyto2")
     assert isinstance(df, pd.DataFrame)
@@ -475,13 +451,8 @@ def test_no_silent_fallback_when_auto_switch_off_and_cellpose_returns_empty(
 
     monkeypatch.setattr(
         "project.scripts.detect._load_cellpose_model",
-        MagicMock(return_value=fake_model),
+        MagicMock(return_value=(fake_model, False)),
     )
-    # Mock the cellpose.models import inside detect_cells_cellpose
-    fake_cp_models = MagicMock()
-    fake_cp_models.CellposeModel = MagicMock
-    monkeypatch.setitem(sys.modules, "cellpose", MagicMock())
-    monkeypatch.setitem(sys.modules, "cellpose.models", fake_cp_models)
 
     cfg = {
         "detection": {
@@ -511,7 +482,7 @@ def test_detect_cells_cellpose_returns_masks_when_requested(monkeypatch):
 
     monkeypatch.setattr(
         "project.scripts.detect._load_cellpose_model",
-        lambda **kwargs: fake_model,
+        lambda **kwargs: (fake_model, False),
     )
     monkeypatch.setattr(
         "project.scripts.detect._read_gray",
@@ -547,7 +518,7 @@ def test_detect_cells_cellpose_default_returns_df_only(monkeypatch):
 
     monkeypatch.setattr(
         "project.scripts.detect._load_cellpose_model",
-        lambda **kwargs: fake_model,
+        lambda **kwargs: (fake_model, False),
     )
     monkeypatch.setattr(
         "project.scripts.detect._read_gray",

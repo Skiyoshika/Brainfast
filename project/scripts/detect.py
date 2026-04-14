@@ -151,6 +151,10 @@ def _use_gpu(cfg: dict[str, Any], det_cfg: dict[str, Any]) -> bool:
 
 
 def _load_cellpose_model(model_type: str, use_gpu: bool):
+    """Load and cache a Cellpose model.
+
+    Returns (model, is_legacy) where is_legacy=True for Cellpose v2/v3.
+    """
     key = (str(model_type), bool(use_gpu))
     if key in _CELLPOSE_MODEL_CACHE:
         return _CELLPOSE_MODEL_CACHE[key]
@@ -162,16 +166,18 @@ def _load_cellpose_model(model_type: str, use_gpu: bool):
         # v4+: model_type is ignored, pretrained_model selects the model
         model = models.CellposeModel(gpu=bool(use_gpu), pretrained_model=str(model_type))
         _log.info("Loaded Cellpose-SAM model (v4+): pretrained=%s, gpu=%s", model_type, use_gpu)
+        result = (model, False)
     elif hasattr(models, "Cellpose"):
         # Legacy v2/v3
         model = models.Cellpose(gpu=bool(use_gpu), model_type=str(model_type))
         _log.info("Loaded legacy Cellpose model: type=%s, gpu=%s", model_type, use_gpu)
+        result = (model, True)
     else:
         raise CellposeRuntimeError(
             "Cannot find Cellpose model class. Please upgrade cellpose: pip install --upgrade cellpose"
         )
-    _CELLPOSE_MODEL_CACHE[key] = model
-    return model
+    _CELLPOSE_MODEL_CACHE[key] = result
+    return result
 
 
 def _masks_to_centroids(masks: np.ndarray, detector: str) -> pd.DataFrame:
@@ -379,7 +385,7 @@ def detect_cells_cellpose(
     return_masks: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, np.ndarray]:
     try:
-        model = _load_cellpose_model(model_type=model_type, use_gpu=use_gpu)
+        model, _is_legacy = _load_cellpose_model(model_type=model_type, use_gpu=use_gpu)
     except Exception as exc:
         raise CellposeRuntimeError(f"Failed to load Cellpose model '{model_type}': {exc}") from exc
 
@@ -403,9 +409,6 @@ def detect_cells_cellpose(
 
     # Only pass channels for legacy Cellpose (v2/v3).
     # Cellpose-SAM v4+ ignores channels and warns if present; do NOT pass it.
-    from cellpose import models as _cp_models
-
-    _is_legacy = hasattr(_cp_models, "Cellpose") and not hasattr(_cp_models, "CellposeModel")
     if _is_legacy:
         ch = channels if isinstance(channels, list) and len(channels) == 2 else [0, 0]
         kwargs["channels"] = ch

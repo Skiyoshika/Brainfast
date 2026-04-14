@@ -1058,3 +1058,73 @@ tr:hover td { background: var(--bg-card); }
   text-align: right;
   min-width: 36px;
 }
+
+/* Training Tab */
+.training-stats {
+  display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.stat-card {
+  background: var(--bg-secondary, #1a1a2e);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 80px;
+}
+.stat-val {
+  font-size: 24px; font-weight: 700;
+  color: var(--accent, #e94560);
+}
+.stat-label {
+  font-size: 11px; color: var(--text-secondary, #888);
+  text-transform: uppercase; margin-top: 2px;
+}
+.training-set-list {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  max-height: 200px; overflow-y: auto;
+}
+.training-sample-card {
+  background: var(--bg-secondary, #1a1a2e);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.training-sample-card .ts-name { font-weight: 600; }
+.training-sample-card .ts-cells { color: var(--text-secondary); }
+.training-sample-card .ts-delete {
+  background: none; border: none; color: #e94560;
+  cursor: pointer; font-size: 14px; padding: 0 4px;
+}
+.training-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+.training-progress-bar-wrap {
+  background: var(--bg-secondary, #1a1a2e);
+  border-radius: 4px; height: 24px; overflow: hidden;
+  margin-bottom: 8px;
+}
+.training-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #e94560, #ff6b6b);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+.training-progress-stats {
+  display: flex; gap: 16px; font-size: 13px;
+  color: var(--text-secondary, #888);
+}
+.training-status-msg {
+  margin-top: 8px; font-size: 13px;
+  padding: 8px; border-radius: 6px;
+}
+.training-status-msg.success {
+  background: rgba(76, 175, 80, 0.15); color: #81C784;
+}
+.training-status-msg.error {
+  background: rgba(233, 69, 96, 0.15); color: #e94560;
+}
+.training-result-summary {
+  font-size: 14px; line-height: 1.6;
+}

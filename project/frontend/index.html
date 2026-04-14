@@ -107,6 +107,10 @@
         <span class="nav-icon"><i data-lucide="bar-chart-3"></i></span>
         <span data-i18n="nav.results">Results</span>
       </button>
+      <button class="nav-btn" data-tab="training">
+        <span class="nav-icon"><i data-lucide="graduation-cap"></i></span>
+        <span data-i18n="nav.training">Model Training</span>
+      </button>
     </nav>
     <div class="sidebar-footer">
       <!-- Pipeline slice progress bar -->
@@ -921,6 +925,113 @@
         <div id="outputFileEmpty" class="empty-hint" data-i18n="outputs.empty">No output files yet</div>
       </section>
     </div><!-- /tab-results -->
+
+    <!-- ================================================
+         TAB 5: Model Training
+    ================================================ -->
+    <div class="tab-content" id="tab-training">
+      <h2 class="section-title" data-i18n="training.title">Cellpose Model Training</h2>
+
+      <!-- Training Set Section -->
+      <section class="step-card">
+        <div class="step-header">
+          <span class="step-badge">1</span>
+          <div>
+            <h3 data-i18n="training.datasetTitle">Training Dataset</h3>
+            <p class="step-desc" data-i18n="training.datasetDesc">Annotated images saved from the Mask Editor</p>
+          </div>
+        </div>
+        <div class="step-body">
+          <div id="trainingSetStats" class="training-stats">
+            <div class="stat-card"><span class="stat-val" id="tsImageCount">0</span><span class="stat-label" data-i18n="training.images">Images</span></div>
+            <div class="stat-card"><span class="stat-val" id="tsCellCount">0</span><span class="stat-label" data-i18n="training.cells">Cells</span></div>
+            <div class="stat-card"><span class="stat-val" id="tsAvgCells">0</span><span class="stat-label" data-i18n="training.avgPerImage">Avg/Image</span></div>
+            <div class="stat-card"><span class="stat-val" id="tsReadiness">--</span><span class="stat-label" data-i18n="training.readiness">Status</span></div>
+          </div>
+          <div id="trainingSetList" class="training-set-list">
+            <!-- Populated dynamically -->
+          </div>
+          <button id="refreshTrainingSetBtn" class="btn-secondary btn-sm" style="margin-top:8px;" data-i18n="training.refresh">Refresh</button>
+        </div>
+      </section>
+
+      <!-- Training Config Section -->
+      <section class="step-card">
+        <div class="step-header">
+          <span class="step-badge">2</span>
+          <div>
+            <h3 data-i18n="training.configTitle">Training Configuration</h3>
+            <p class="step-desc" data-i18n="training.configDesc">Select base model and start training</p>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="training-config-grid">
+            <label class="field-label">
+              <span data-i18n="training.baseModel">Base Model</span>
+              <select id="trainBaseModel">
+                <option value="cyto3">cyto3</option>
+                <option value="cpsam">cpsam (Cellpose-SAM)</option>
+                <option value="cyto2">cyto2</option>
+                <option value="nuclei">nuclei</option>
+              </select>
+            </label>
+            <label class="field-label">
+              <span data-i18n="training.modelName">Model Name</span>
+              <input id="trainModelName" type="text" placeholder="brainfast_v1" />
+            </label>
+            <label class="field-label">
+              <span data-i18n="training.epochs">Epochs</span>
+              <input id="trainEpochs" type="number" min="10" max="500" value="100" />
+            </label>
+            <label class="field-label" style="display:flex;align-items:center;gap:8px;">
+              <input id="trainGpu" type="checkbox" checked />
+              <span data-i18n="training.gpu">Use GPU</span>
+            </label>
+          </div>
+          <div class="training-actions" style="margin-top:12px;display:flex;gap:8px;">
+            <button id="startTrainingBtn" class="btn-primary" data-i18n="training.start">Start Training</button>
+            <button id="cancelTrainingBtn" class="btn-secondary" style="display:none;" data-i18n="training.cancel">Cancel Training</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Training Progress Section -->
+      <section class="step-card" id="trainingProgressCard" style="display:none;">
+        <div class="step-header">
+          <span class="step-badge">3</span>
+          <div>
+            <h3 data-i18n="training.progressTitle">Training Progress</h3>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="training-progress-bar-wrap">
+            <div class="training-progress-bar" id="trainProgressBar" style="width:0%;"></div>
+          </div>
+          <div class="training-progress-stats">
+            <span id="trainEpochText">Epoch 0 / 100</span>
+            <span id="trainLossText">Loss: --</span>
+            <span id="trainEtaText">ETA: --</span>
+          </div>
+          <div id="trainStatusMsg" class="training-status-msg"></div>
+        </div>
+      </section>
+
+      <!-- Training Result Section -->
+      <section class="step-card" id="trainingResultCard" style="display:none;">
+        <div class="step-header">
+          <span class="step-badge">&#10003;</span>
+          <div>
+            <h3 data-i18n="training.resultTitle">Training Complete</h3>
+          </div>
+        </div>
+        <div class="step-body">
+          <div id="trainResultSummary" class="training-result-summary"></div>
+          <div style="margin-top:12px;display:flex;gap:8px;">
+            <button id="applyModelBtn" class="btn-primary" data-i18n="training.apply">Apply Model</button>
+          </div>
+        </div>
+      </section>
+    </div><!-- /tab-training -->
 
   </main>
 </div><!-- /app -->

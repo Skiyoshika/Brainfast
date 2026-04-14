@@ -358,6 +358,26 @@ const LANGS = {
     'maskEditor.opacity': 'Mask Opacity',
     'maskEditor.cells': 'Cells',
     'maskEditor.save': 'Save to Training Set',
+    'nav.training': 'Model Training',
+    'training.title': 'Cellpose Model Training',
+    'training.datasetTitle': 'Training Dataset',
+    'training.datasetDesc': 'Annotated images saved from the Mask Editor',
+    'training.images': 'Images',
+    'training.cells': 'Cells',
+    'training.avgPerImage': 'Avg/Image',
+    'training.readiness': 'Status',
+    'training.refresh': 'Refresh',
+    'training.configTitle': 'Training Configuration',
+    'training.configDesc': 'Select base model and start training',
+    'training.baseModel': 'Base Model',
+    'training.modelName': 'Model Name',
+    'training.epochs': 'Epochs',
+    'training.gpu': 'Use GPU',
+    'training.start': 'Start Training',
+    'training.cancel': 'Cancel Training',
+    'training.progressTitle': 'Training Progress',
+    'training.resultTitle': 'Training Complete',
+    'training.apply': 'Apply Model',
   },
   zh: {
     'nav.workflow': '配准工作流',
@@ -705,6 +725,26 @@ const LANGS = {
     'maskEditor.opacity': '掩码透明度',
     'maskEditor.cells': '细胞',
     'maskEditor.save': '保存到训练集',
+    'nav.training': '模型训练',
+    'training.title': 'Cellpose 模型训练',
+    'training.datasetTitle': '训练数据集',
+    'training.datasetDesc': '从掩码编辑器保存的标注图像',
+    'training.images': '图像',
+    'training.cells': '细胞',
+    'training.avgPerImage': '平均/图',
+    'training.readiness': '状态',
+    'training.refresh': '刷新',
+    'training.configTitle': '训练配置',
+    'training.configDesc': '选择基础模型并开始训练',
+    'training.baseModel': '基础模型',
+    'training.modelName': '模型名称',
+    'training.epochs': '训练轮数',
+    'training.gpu': '使用GPU',
+    'training.start': '开始训练',
+    'training.cancel': '取消训练',
+    'training.progressTitle': '训练进度',
+    'training.resultTitle': '训练完成',
+    'training.apply': '应用模型',
   },
 };
 
@@ -4169,4 +4209,184 @@ document.getElementById('pixelSizeUm')?.addEventListener('input', function() {
   this.dataset.userModified = '1';
   const warn = document.getElementById('pixelSizeWarning');
   if (warn) warn.classList.add('hidden');
+});
+
+// ===================== Training Tab Logic =====================
+
+async function loadTrainingSet() {
+  try {
+    var res = await fetch('/api/cellpose/training-set');
+    var data = await res.json();
+    if (!data.ok) return;
+
+    document.getElementById('tsImageCount').textContent = data.stats.totalImages;
+    document.getElementById('tsCellCount').textContent = data.stats.totalCells;
+    document.getElementById('tsAvgCells').textContent = data.stats.avgCellsPerImage;
+    document.getElementById('tsReadiness').textContent = data.ready ? 'Ready' : 'Need more';
+    document.getElementById('tsReadiness').style.color = data.ready ? '#81C784' : '#e94560';
+
+    var listEl = document.getElementById('trainingSetList');
+    listEl.innerHTML = '';
+    for (var i = 0; i < data.samples.length; i++) {
+      var s = data.samples[i];
+      var card = document.createElement('div');
+      card.className = 'training-sample-card';
+      card.innerHTML = '<span class="ts-name">' + s.name + '</span>' +
+        '<span class="ts-cells">' + s.cellCount + ' cells</span>' +
+        '<button class="ts-delete" data-name="' + s.name + '" title="Remove">&times;</button>';
+      listEl.appendChild(card);
+    }
+
+    // Bind delete buttons
+    listEl.querySelectorAll('.ts-delete').forEach(function(btn) {
+      btn.onclick = async function() {
+        var name = this.getAttribute('data-name');
+        if (!confirm('Remove ' + name + ' from training set?')) return;
+        await fetch('/api/cellpose/training-set/' + encodeURIComponent(name), { method: 'DELETE' });
+        loadTrainingSet();
+      };
+    });
+  } catch (err) {
+    console.error('Failed to load training set:', err);
+  }
+}
+
+var _trainPollTimer = null;
+
+async function startTraining() {
+  var modelName = document.getElementById('trainModelName').value.trim();
+  var baseModel = document.getElementById('trainBaseModel').value;
+  var epochs = parseInt(document.getElementById('trainEpochs').value, 10) || 100;
+  var gpu = document.getElementById('trainGpu').checked;
+
+  if (!modelName) {
+    modelName = 'brainfast_' + Date.now();
+    document.getElementById('trainModelName').value = modelName;
+  }
+
+  try {
+    var res = await fetch('/api/cellpose/train', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseModel: baseModel, modelName: modelName, epochs: epochs, gpu: gpu }),
+    });
+    var data = await res.json();
+    if (!data.ok) {
+      showToast('Training failed: ' + data.error, 'error');
+      return;
+    }
+
+    showToast('Training started: ' + modelName, 'success');
+    document.getElementById('startTrainingBtn').disabled = true;
+    document.getElementById('cancelTrainingBtn').style.display = '';
+    document.getElementById('trainingProgressCard').style.display = '';
+    document.getElementById('trainingResultCard').style.display = 'none';
+
+    // Start polling
+    _trainPollTimer = setInterval(pollTrainingStatus, 2000);
+    pollTrainingStatus();
+  } catch (err) {
+    showToast('Training error: ' + err.message, 'error');
+  }
+}
+
+async function pollTrainingStatus() {
+  try {
+    var res = await fetch('/api/cellpose/train-status');
+    var data = await res.json();
+    if (!data.ok) return;
+
+    var pct = data.totalEpochs > 0 ? Math.round(data.epoch / data.totalEpochs * 100) : 0;
+    document.getElementById('trainProgressBar').style.width = pct + '%';
+    document.getElementById('trainEpochText').textContent = 'Epoch ' + data.epoch + ' / ' + data.totalEpochs;
+    document.getElementById('trainLossText').textContent = 'Loss: ' + (data.trainLoss != null ? data.trainLoss.toFixed(4) : '--');
+    document.getElementById('trainEtaText').textContent = 'ETA: ' + (data.estimatedTimeRemaining || '--');
+
+    if (data.status === 'completed') {
+      clearInterval(_trainPollTimer);
+      _trainPollTimer = null;
+      document.getElementById('startTrainingBtn').disabled = false;
+      document.getElementById('cancelTrainingBtn').style.display = 'none';
+      document.getElementById('trainingResultCard').style.display = '';
+
+      var summary = 'Model: <strong>' + data.modelName + '</strong><br>';
+      summary += 'Final train loss: ' + (data.trainLoss != null ? data.trainLoss.toFixed(4) : '--') + '<br>';
+      summary += 'Final test loss: ' + (data.testLoss != null ? data.testLoss.toFixed(4) : '--') + '<br>';
+      summary += 'Model path: ' + data.modelPath;
+      document.getElementById('trainResultSummary').innerHTML = summary;
+
+      showToast('Training completed: ' + data.modelName, 'success', 5000);
+
+      // Refresh model list in detection panel
+      if (typeof loadCellposeModels === 'function') loadCellposeModels();
+    } else if (data.status === 'failed') {
+      clearInterval(_trainPollTimer);
+      _trainPollTimer = null;
+      document.getElementById('startTrainingBtn').disabled = false;
+      document.getElementById('cancelTrainingBtn').style.display = 'none';
+
+      var msgEl = document.getElementById('trainStatusMsg');
+      msgEl.className = 'training-status-msg error';
+      msgEl.textContent = 'Training failed: ' + data.error;
+
+      showToast('Training failed: ' + data.error, 'error');
+    } else if (data.status === 'cancelled') {
+      clearInterval(_trainPollTimer);
+      _trainPollTimer = null;
+      document.getElementById('startTrainingBtn').disabled = false;
+      document.getElementById('cancelTrainingBtn').style.display = 'none';
+
+      var msgEl2 = document.getElementById('trainStatusMsg');
+      msgEl2.className = 'training-status-msg';
+      msgEl2.textContent = 'Training cancelled.';
+    }
+  } catch (err) {
+    console.error('Training poll error:', err);
+  }
+}
+
+async function cancelTraining() {
+  await fetch('/api/cellpose/train-cancel', { method: 'POST' });
+  showToast('Training cancelled', 'warning');
+}
+
+async function applyTrainedModel() {
+  try {
+    var res = await fetch('/api/cellpose/train-status');
+    var data = await res.json();
+    if (!data.modelName) {
+      showToast('No model to apply', 'warning');
+      return;
+    }
+
+    var res2 = await fetch('/api/cellpose/apply-model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modelName: data.modelName }),
+    });
+    var result = await res2.json();
+    if (result.ok) {
+      showToast('Model applied: ' + result.appliedModel, 'success', 4000);
+      if (typeof loadCellposeModels === 'function') loadCellposeModels();
+    } else {
+      showToast('Failed to apply model: ' + result.error, 'error');
+    }
+  } catch (err) {
+    showToast('Apply model error: ' + err.message, 'error');
+  }
+}
+
+// Bind training tab events
+document.getElementById('refreshTrainingSetBtn').addEventListener('click', loadTrainingSet);
+document.getElementById('startTrainingBtn').addEventListener('click', startTraining);
+document.getElementById('cancelTrainingBtn').addEventListener('click', cancelTraining);
+document.getElementById('applyModelBtn').addEventListener('click', applyTrainedModel);
+
+// Auto-load training set when tab is shown
+document.querySelectorAll('.nav-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    if (btn.getAttribute('data-tab') === 'training') {
+      loadTrainingSet();
+    }
+  });
 });

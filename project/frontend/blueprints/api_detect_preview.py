@@ -8,6 +8,7 @@ a machine-readable CSV of detected cells.
 from __future__ import annotations
 
 import threading
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +25,7 @@ bp = Blueprint("api_detect_preview", __name__, url_prefix="/api")
 # In-memory cache for the last detection result per job
 # ---------------------------------------------------------------------------
 _detect_results: dict[str, dict] = {}
+_detect_masks: dict[str, np.ndarray] = {}
 _detect_lock = threading.Lock()
 
 
@@ -99,6 +101,37 @@ def _run_detection(slice_path: Path, cfg: dict) -> pd.DataFrame:
     return detect_cells(slice_path, cfg)
 
 
+def _run_detection_with_masks(slice_path: Path, cfg: dict):
+    """Run detection and return (DataFrame, masks) if Cellpose, else (DataFrame, None)."""
+    try:
+        from project.scripts.detect import detect_cells_cellpose, _resolve_model_type, _diameter_px, _use_gpu
+    except ImportError:
+        from scripts.detect import detect_cells_cellpose, _resolve_model_type, _diameter_px, _use_gpu
+
+    det_cfg = cfg.get("detection", {})
+    model_type = _resolve_model_type(str(det_cfg.get("primary_model", "cpsam")))
+    d_px = _diameter_px(det_cfg, cfg)
+    use_gpu = _use_gpu(cfg, det_cfg)
+    flow_thr = float(det_cfg.get("cellpose_flow_threshold", 0.4))
+    prob_thr = float(det_cfg.get("cellpose_cellprob_threshold", 0.0))
+    min_sz = int(det_cfg.get("cellpose_min_size_px", 8))
+
+    try:
+        result = detect_cells_cellpose(
+            slice_path, model_type, d_px,
+            use_gpu=use_gpu, flow_threshold=flow_thr,
+            cellprob_threshold=prob_thr, min_size=min_sz,
+            return_masks=True,
+        )
+        if isinstance(result, tuple):
+            return result  # (df, masks)
+        return result, None
+    except Exception:
+        # Fallback to standard detection (no masks)
+        df = _run_detection(slice_path, cfg)
+        return df, None
+
+
 def _make_overlay(img: np.ndarray, cells_df: pd.DataFrame) -> Image.Image:
     """Draw detected cell centroids on the image as an RGBA overlay."""
     from project.scripts.image_utils import norm_u8_robust
@@ -158,8 +191,16 @@ def detect_preview():
     if params:
         cfg = _apply_param_overrides(cfg, params)
 
+    return_masks = bool(payload.get("returnMasks", False))
+
     try:
-        cells_df = _run_detection(slice_path, cfg)
+        if return_masks:
+            cells_df, raw_masks = _run_detection_with_masks(slice_path, cfg)
+            if raw_masks is not None:
+                with _detect_lock:
+                    _detect_masks[job_id] = raw_masks
+        else:
+            cells_df = _run_detection(slice_path, cfg)
     except Exception as exc:
         return jsonify(
             {
@@ -229,6 +270,29 @@ def detect_preview_csv():
     if not path.exists():
         return jsonify({"ok": False, "error": "no detection preview available"}), 404
     return send_file(str(path), mimetype="text/csv", as_attachment=True, download_name="detect_preview.csv")
+
+
+@bp.get("/detect/preview/masks")
+def detect_preview_masks():
+    """Return the raw instance mask array from the last detection.
+
+    The mask is zlib-compressed and hex-encoded for JSON transport.
+    Client decompresses and reshapes to (height, width) Int32 array.
+    """
+    job_id = ctx._query_job_id()
+    with _detect_lock:
+        masks = _detect_masks.get(job_id)
+    if masks is None:
+        return jsonify({"ok": False, "error": "no masks available"}), 404
+
+    compressed = zlib.compress(masks.astype(np.int32).tobytes())
+    return jsonify({
+        "ok": True,
+        "width": masks.shape[1],
+        "height": masks.shape[0],
+        "cellCount": int(masks.max()),
+        "maskHex": compressed.hex(),
+    })
 
 
 @bp.get("/detect/preview/status")

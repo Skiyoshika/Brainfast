@@ -493,3 +493,70 @@ def test_no_silent_fallback_when_auto_switch_off_and_cellpose_returns_empty(
     }
     with pytest.raises(CellposeRuntimeError, match="auto_switch_on_distortion is disabled"):
         detect_cells(tiny_slice, cfg)
+
+
+def test_detect_cells_cellpose_returns_masks_when_requested(monkeypatch):
+    """When return_masks=True, detect_cells_cellpose returns (df, masks) tuple."""
+    from pathlib import Path
+    from unittest.mock import MagicMock
+
+    import numpy as np
+
+    from project.scripts.detect import detect_cells_cellpose
+
+    fake_masks = np.array([[0, 0, 1], [0, 1, 1], [2, 2, 0]], dtype=np.int32)
+
+    fake_model = MagicMock()
+    fake_model.eval.return_value = (fake_masks, None, None)
+
+    monkeypatch.setattr(
+        "project.scripts.detect._load_cellpose_model",
+        lambda **kwargs: fake_model,
+    )
+    monkeypatch.setattr(
+        "project.scripts.detect._read_gray",
+        lambda p: np.zeros((3, 3), dtype=np.float32),
+    )
+    monkeypatch.setattr(
+        "project.scripts.detect._norm_for_cellpose",
+        lambda img: img,
+    )
+
+    result = detect_cells_cellpose(Path("fake.tif"), "cyto3", return_masks=True)
+    assert isinstance(result, tuple)
+    assert len(result) == 2
+    df, masks = result
+    assert len(df) == 2  # two cells (labels 1 and 2)
+    assert masks.shape == (3, 3)
+    assert int(masks.max()) == 2
+
+
+def test_detect_cells_cellpose_default_returns_df_only(monkeypatch):
+    """Default behavior (return_masks=False) returns just the DataFrame."""
+    from pathlib import Path
+    from unittest.mock import MagicMock
+
+    import numpy as np
+    import pandas as pd
+
+    from project.scripts.detect import detect_cells_cellpose
+
+    fake_masks = np.array([[0, 1], [1, 0]], dtype=np.int32)
+    fake_model = MagicMock()
+    fake_model.eval.return_value = (fake_masks, None, None)
+
+    monkeypatch.setattr(
+        "project.scripts.detect._load_cellpose_model",
+        lambda **kwargs: fake_model,
+    )
+    monkeypatch.setattr(
+        "project.scripts.detect._read_gray",
+        lambda p: np.zeros((2, 2), dtype=np.float32),
+    )
+    monkeypatch.setattr(
+        "project.scripts.detect._norm_for_cellpose",
+        lambda img: img,
+    )
+
+    result = detect_cells_cellpose(Path("fake.tif"), "cyto3")
+    assert isinstance(result, pd.DataFrame)

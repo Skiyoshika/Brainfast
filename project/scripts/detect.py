@@ -376,7 +376,8 @@ def detect_cells_cellpose(
     flow_threshold: float = 0.4,
     cellprob_threshold: float = 0.0,
     min_size: int = 8,
-) -> pd.DataFrame:
+    return_masks: bool = False,
+) -> pd.DataFrame | tuple[pd.DataFrame, np.ndarray]:
     try:
         model = _load_cellpose_model(model_type=model_type, use_gpu=use_gpu)
     except Exception as exc:
@@ -432,7 +433,10 @@ def detect_cells_cellpose(
             f"Cellpose inference failed for '{slice_path.name}' (model={model_type}): {exc}"
         ) from exc
 
-    return _masks_to_centroids(masks, detector=f"cellpose_{model_type}")
+    df = _masks_to_centroids(masks, detector=f"cellpose_{model_type}")
+    if return_masks:
+        return df, masks
+    return df
 
 
 def _run_cellpose_by_name(slice_path: Path, model_name: str, cfg: dict[str, Any]) -> pd.DataFrame:

@@ -113,7 +113,6 @@ def prepare_cropped_template(
     return tmpl_out, ann_out
 
 
-
 def run_elastix(fixed, moving, out_dir):
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [

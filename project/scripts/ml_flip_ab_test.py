@@ -248,9 +248,7 @@ def main() -> int:
     # Write per-sample manifest
     run_end = datetime.datetime.now().isoformat(timespec="seconds")
     cellpose_used = all(
-        "cpsam" in str(m.get("error", ""))
-        or m.get("NMI") is not None
-        for m in results.values()
+        "cpsam" in str(m.get("error", "")) or m.get("NMI") is not None for m in results.values()
     )
     manifest = {
         "sample_label": sample_label,

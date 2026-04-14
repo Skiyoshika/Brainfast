@@ -119,11 +119,13 @@ def save_training_sample():
 
     stats = _training_set_stats(td)
 
-    return jsonify({
-        "ok": True,
-        "savedAs": f"cellpose_training/{stem}.tif",
-        "trainingSetStats": stats,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "savedAs": f"cellpose_training/{stem}.tif",
+            "trainingSetStats": stats,
+        }
+    )
 
 
 @bp.post("/train")
@@ -146,16 +148,19 @@ def start_training():
 
     if not model_name:
         import time as _time
+
         model_name = f"brainfast_{int(_time.time())}"
 
     td = _training_dir()
     stats = _training_set_stats(td)
 
     if stats["totalImages"] < 2:
-        return jsonify({
-            "ok": False,
-            "error": f"Need at least 2 training images, have {stats['totalImages']}",
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": f"Need at least 2 training images, have {stats['totalImages']}",
+            }
+        ), 400
 
     try:
         trainer = get_trainer()
@@ -169,12 +174,14 @@ def start_training():
     except TrainingError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 409
 
-    return jsonify({
-        "ok": True,
-        "modelName": model_name,
-        "epochs": epochs,
-        "trainingImages": stats["totalImages"],
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "modelName": model_name,
+            "epochs": epochs,
+            "trainingImages": stats["totalImages"],
+        }
+    )
 
 
 @bp.get("/train-status")
@@ -215,18 +222,22 @@ def training_set_info():
             cell_count = int(m.max())
         except Exception:
             cell_count = 0
-        samples.append({
-            "name": stem,
-            "imageExists": img_path.exists(),
-            "cellCount": cell_count,
-        })
+        samples.append(
+            {
+                "name": stem,
+                "imageExists": img_path.exists(),
+                "cellCount": cell_count,
+            }
+        )
 
-    return jsonify({
-        "ok": True,
-        "stats": stats,
-        "samples": samples,
-        "ready": stats["totalImages"] >= 2,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "stats": stats,
+            "samples": samples,
+            "ready": stats["totalImages"] >= 2,
+        }
+    )
 
 
 @bp.post("/apply-model")

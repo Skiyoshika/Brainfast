@@ -128,9 +128,13 @@ def _run_detection_with_masks(slice_path: Path, cfg: dict):
 
     try:
         result = detect_cells_cellpose(
-            slice_path, model_type, d_px,
-            use_gpu=use_gpu, flow_threshold=flow_thr,
-            cellprob_threshold=prob_thr, min_size=min_sz,
+            slice_path,
+            model_type,
+            d_px,
+            use_gpu=use_gpu,
+            flow_threshold=flow_thr,
+            cellprob_threshold=prob_thr,
+            min_size=min_sz,
             return_masks=True,
         )
         if isinstance(result, tuple):
@@ -279,7 +283,9 @@ def detect_preview_csv():
     path = ctx._job_file(job_id, "detect_preview.csv")
     if not path.exists():
         return jsonify({"ok": False, "error": "no detection preview available"}), 404
-    return send_file(str(path), mimetype="text/csv", as_attachment=True, download_name="detect_preview.csv")
+    return send_file(
+        str(path), mimetype="text/csv", as_attachment=True, download_name="detect_preview.csv"
+    )
 
 
 @bp.get("/detect/preview/masks")
@@ -296,13 +302,15 @@ def detect_preview_masks():
         return jsonify({"ok": False, "error": "no masks available"}), 404
 
     compressed = zlib.compress(masks.astype(np.int32).tobytes())
-    return jsonify({
-        "ok": True,
-        "width": masks.shape[1],
-        "height": masks.shape[0],
-        "cellCount": int(masks.max()),
-        "maskHex": compressed.hex(),
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "width": masks.shape[1],
+            "height": masks.shape[0],
+            "cellCount": int(masks.max()),
+            "maskHex": compressed.hex(),
+        }
+    )
 
 
 @bp.get("/detect/preview/status")

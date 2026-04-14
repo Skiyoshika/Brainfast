@@ -716,9 +716,7 @@ def detect_cells(slice_path: Path, cfg: dict[str, Any]) -> pd.DataFrame:
     # "Cellpose ran and found 0 cells" from "Cellpose crashed".
     requested_cellpose = _is_cellpose_model(primary) or _is_cellpose_model(secondary)
     allow_fallback_raw = det_cfg.get("allow_fallback", None)
-    allow_fallback = (
-        bool(allow_fallback_raw) if allow_fallback_raw is not None else auto_switch
-    )
+    allow_fallback = bool(allow_fallback_raw) if allow_fallback_raw is not None else auto_switch
     cellpose_errors: list[Exception] = []
 
     primary_df = pd.DataFrame()

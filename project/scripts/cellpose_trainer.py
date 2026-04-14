@@ -96,9 +96,7 @@ def load_training_data(training_dir: Path) -> tuple[list[np.ndarray], list[np.nd
         labels.append(imread(str(mf)).astype(np.int32))
 
     if len(images) < 2:
-        raise TrainingError(
-            f"Need at least 2 image/mask pairs for training, found {len(images)}"
-        )
+        raise TrainingError(f"Need at least 2 image/mask pairs for training, found {len(images)}")
 
     _log.info("Loaded %d training pairs from %s", len(images), training_dir)
     return images, labels
@@ -154,11 +152,13 @@ def _clear_model_cache() -> None:
     """Clear the Cellpose model cache in detect.py so the new model is loaded."""
     try:
         from project.scripts.detect import _CELLPOSE_MODEL_CACHE
+
         _CELLPOSE_MODEL_CACHE.clear()
         _log.info("Cleared Cellpose model cache")
     except ImportError:
         try:
             from scripts.detect import _CELLPOSE_MODEL_CACHE
+
             _CELLPOSE_MODEL_CACHE.clear()
         except ImportError:
             _log.warning("Could not clear model cache — detect module not found")
@@ -168,6 +168,7 @@ def _register_model(model_path: str) -> None:
     """Register the trained model in Cellpose's user model registry."""
     try:
         from cellpose.io import add_model
+
         add_model(model_path)
         _log.info("Registered model: %s", model_path)
     except Exception as exc:
@@ -180,6 +181,7 @@ def _update_config_primary_model(model_name: str) -> None:
 
     try:
         import project.frontend.server_context as ctx
+
         config_path_str = ctx.run_state.get("config_path")
     except ImportError:
         config_path_str = None
@@ -189,6 +191,7 @@ def _update_config_primary_model(model_name: str) -> None:
         candidates = []
         try:
             import project.frontend.server_context as ctx
+
             candidates.append(ctx.PROJECT_ROOT / "configs" / "run_config.template.json")
         except Exception:
             pass

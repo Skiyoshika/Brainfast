@@ -126,10 +126,11 @@ def test_run_real_input_routes_whole_brain_mode_to_3d_orchestrator(tmp_path, mon
 
 
 def test_run_config_defaults_anchor_whole_brain_3d_contract():
-    template = Path(r"D:\Brainfast\project\configs\run_config.template.json").read_text(
+    _project = Path(__file__).resolve().parents[2]
+    template = (_project / "configs" / "run_config.template.json").read_text(
         encoding="utf-8"
     )
-    sample = Path(r"D:\Brainfast\project\configs\run_config_35.json").read_text(encoding="utf-8")
+    sample = (_project / "configs" / "run_config_35.json").read_text(encoding="utf-8")
 
     for text in (template, sample):
         assert '"whole_brain_backend": "miki_3d"' in text

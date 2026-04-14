@@ -180,3 +180,74 @@ class TestSaveTrainingSample:
 
         data = resp.get_json()
         assert data["trainingSetStats"]["totalImages"] == 3
+
+
+class TestTrainingEndpoints:
+    def test_train_status_idle(self, client):
+        """Status is idle when no training has been started."""
+        resp = client.get("/api/cellpose/train-status")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["status"] in ("idle", "completed", "cancelled", "failed")
+
+    def test_train_rejects_insufficient_data(self, client, app):
+        """Cannot start training with fewer than 2 images."""
+        resp = client.post(
+            "/api/cellpose/train",
+            data=json.dumps({"baseModel": "cyto3", "modelName": "test"}),
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+        assert "at least 2" in resp.get_json()["error"]
+
+    def test_train_cancel(self, client):
+        resp = client.post("/api/cellpose/train-cancel")
+        assert resp.status_code == 200
+        assert resp.get_json()["ok"] is True
+
+
+class TestTrainingSetEndpoints:
+    def test_training_set_info_empty(self, client):
+        resp = client.get("/api/cellpose/training-set")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["stats"]["totalImages"] == 0
+        assert data["ready"] is False
+
+    def test_training_set_info_with_samples(self, client, tmp_path):
+        """After saving samples, training-set returns them."""
+        import project.frontend.server_context as ctx
+
+        # Create training data directly
+        td = ctx.PROJECT_ROOT / "cellpose_training"
+        td.mkdir(parents=True, exist_ok=True)
+        for i in range(3):
+            imwrite(str(td / f"s{i}.tif"), np.zeros((8, 8), dtype=np.uint16))
+            mask = np.ones((8, 8), dtype=np.uint16) * (i + 1)
+            imwrite(str(td / f"s{i}_masks.tif"), mask)
+
+        resp = client.get("/api/cellpose/training-set")
+        data = resp.get_json()
+        assert data["stats"]["totalImages"] == 3
+        assert data["ready"] is True
+        assert len(data["samples"]) == 3
+
+    def test_delete_training_sample(self, client, tmp_path):
+        import project.frontend.server_context as ctx
+
+        td = ctx.PROJECT_ROOT / "cellpose_training"
+        td.mkdir(parents=True, exist_ok=True)
+        imwrite(str(td / "test.tif"), np.zeros((4, 4), dtype=np.uint16))
+        imwrite(str(td / "test_masks.tif"), np.ones((4, 4), dtype=np.uint16))
+
+        resp = client.delete("/api/cellpose/training-set/test")
+        assert resp.status_code == 200
+        assert resp.get_json()["ok"] is True
+        assert not (td / "test.tif").exists()
+        assert not (td / "test_masks.tif").exists()
+
+    def test_delete_nonexistent_sample(self, client):
+        resp = client.delete("/api/cellpose/training-set/nonexistent")
+        assert resp.status_code == 404

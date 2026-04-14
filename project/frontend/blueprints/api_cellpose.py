@@ -124,3 +124,128 @@ def save_training_sample():
         "savedAs": f"cellpose_training/{stem}.tif",
         "trainingSetStats": stats,
     })
+
+
+@bp.post("/train")
+def start_training():
+    """Start Cellpose model training in a background thread.
+
+    Request JSON:
+        baseModel: str — base model to fine-tune (default: "cyto3")
+        modelName: str — name for the trained model (default: auto-generated)
+        epochs: int — number of training epochs (default: 100)
+        gpu: bool — use GPU (default: true)
+    """
+    from project.scripts.cellpose_trainer import get_trainer, TrainingError
+
+    payload = request.get_json(force=True)
+    base_model = payload.get("baseModel", "cyto3")
+    model_name = payload.get("modelName", "")
+    epochs = int(payload.get("epochs", 100))
+    use_gpu = bool(payload.get("gpu", True))
+
+    if not model_name:
+        import time as _time
+        model_name = f"brainfast_{int(_time.time())}"
+
+    td = _training_dir()
+    stats = _training_set_stats(td)
+
+    if stats["totalImages"] < 2:
+        return jsonify({
+            "ok": False,
+            "error": f"Need at least 2 training images, have {stats['totalImages']}",
+        }), 400
+
+    try:
+        trainer = get_trainer()
+        trainer.start(
+            training_dir=td,
+            base_model=base_model,
+            model_name=model_name,
+            n_epochs=epochs,
+            use_gpu=use_gpu,
+        )
+    except TrainingError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 409
+
+    return jsonify({
+        "ok": True,
+        "modelName": model_name,
+        "epochs": epochs,
+        "trainingImages": stats["totalImages"],
+    })
+
+
+@bp.get("/train-status")
+def train_status():
+    """Return current training status."""
+    from project.scripts.cellpose_trainer import get_trainer
+
+    trainer = get_trainer()
+    return jsonify({"ok": True, **trainer.get_status()})
+
+
+@bp.post("/train-cancel")
+def train_cancel():
+    """Cancel the current training run."""
+    from project.scripts.cellpose_trainer import get_trainer
+
+    trainer = get_trainer()
+    trainer.cancel()
+    return jsonify({"ok": True, "status": "cancelled"})
+
+
+@bp.get("/training-set")
+def training_set_info():
+    """Return info about the current training set.
+
+    Returns list of training samples with stats.
+    """
+    td = _training_dir()
+    stats = _training_set_stats(td)
+
+    samples = []
+    mask_files = sorted(td.glob("*_masks.tif"))
+    for mf in mask_files:
+        stem = mf.name.replace("_masks.tif", "")
+        img_path = td / f"{stem}.tif"
+        try:
+            m = imread(str(mf))
+            cell_count = int(m.max())
+        except Exception:
+            cell_count = 0
+        samples.append({
+            "name": stem,
+            "imageExists": img_path.exists(),
+            "cellCount": cell_count,
+        })
+
+    return jsonify({
+        "ok": True,
+        "stats": stats,
+        "samples": samples,
+        "ready": stats["totalImages"] >= 2,
+    })
+
+
+@bp.delete("/training-set/<name>")
+def delete_training_sample(name: str):
+    """Delete a training sample by name."""
+    td = _training_dir()
+    img_path = td / f"{name}.tif"
+    mask_path = td / f"{name}_masks.tif"
+
+    deleted = False
+    if img_path.exists():
+        img_path.unlink()
+        deleted = True
+    if mask_path.exists():
+        mask_path.unlink()
+        deleted = True
+
+    if not deleted:
+        return jsonify({"ok": False, "error": f"Sample '{name}' not found"}), 404
+
+    stats = _training_set_stats(td)
+    return jsonify({"ok": True, "trainingSetStats": stats})

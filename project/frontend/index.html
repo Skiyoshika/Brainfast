@@ -395,6 +395,46 @@
         <div class="actions-row">
           <button id="autoPickBtn"       class="btn-secondary" data-i18n="btn.autoPick"><i data-lucide="crosshair" class="btn-icon"></i> Auto-pick Atlas Slice</button>
           <button id="refreshPreviewBtn" class="btn-primary"   data-i18n="btn.refreshPreview"><i data-lucide="image" class="btn-icon"></i> Refresh Preview</button>
+          <details id="detectParamsPanel" class="detect-params-panel">
+            <summary class="btn-secondary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+              <i data-lucide="settings" class="btn-icon"></i>
+              <span data-i18n="btn.detectParams">Detection Parameters</span>
+            </summary>
+            <div class="detect-params-grid">
+              <label class="field-label">
+                <span data-i18n="detect.model">Model</span>
+                <select id="detectModelSelect">
+                  <option value="cpsam">cpsam (Cellpose-SAM)</option>
+                  <option value="cyto3">cyto3</option>
+                  <option value="cyto2">cyto2</option>
+                  <option value="nuclei">nuclei</option>
+                </select>
+              </label>
+              <label class="field-label">
+                <span data-i18n="detect.diameter">Diameter (µm)</span>
+                <input id="detectDiameterUm" type="number" min="1" max="100" step="0.5" value="12.0" />
+              </label>
+              <label class="field-label">
+                <span data-i18n="detect.flowThreshold">Flow Threshold</span>
+                <input id="detectFlowThreshold" type="range" min="0" max="1" step="0.05" value="0.4" />
+                <span id="detectFlowThresholdVal" class="slider-val">0.4</span>
+              </label>
+              <label class="field-label">
+                <span data-i18n="detect.cellprobThreshold">Cell Probability</span>
+                <input id="detectCellprobThreshold" type="range" min="-6" max="6" step="0.5" value="0.0" />
+                <span id="detectCellprobThresholdVal" class="slider-val">0.0</span>
+              </label>
+              <label class="field-label">
+                <span data-i18n="detect.minSize">Min Size (px)</span>
+                <input id="detectMinSizePx" type="number" min="1" max="500" step="1" value="8" />
+              </label>
+              <label class="field-label" style="flex-direction:row;align-items:center;gap:8px;">
+                <input id="detectGpuToggle" type="checkbox" checked style="width:auto;" />
+                <span data-i18n="detect.gpu">GPU</span>
+              </label>
+            </div>
+          </details>
+          <button id="detectPreviewBtn" class="btn-secondary" data-i18n="btn.detectPreview"><i data-lucide="scan" class="btn-icon"></i> Detect Cells</button>
           <label class="field-label" style="min-width:180px;">
             <span>Export Format</span>
             <select id="quickExportFormat">
@@ -460,6 +500,21 @@
               <!-- Drawing canvas on top -->
               <canvas id="drawCanvas" class="draw-canvas"></canvas>
               <div id="regionHoverTooltip" class="region-hover-tooltip hidden"></div>
+            </div>
+          </div>
+          <!-- Detection preview result banner -->
+          <div id="detectPreviewResult" class="detect-preview-result hidden">
+            <div class="detect-result-header">
+              <span id="detectResultIcon" class="detect-result-icon">🔬</span>
+              <span id="detectResultSummary" class="detect-result-summary"></span>
+              <button id="detectResultClose" class="detect-result-close" title="Close">&times;</button>
+            </div>
+            <div id="detectResultDetails" class="detect-result-details hidden">
+              <img id="detectOverlayImg" class="detect-overlay-img" alt="detection overlay" />
+              <div class="detect-actions">
+                <a id="detectCsvLink" class="btn-secondary btn-sm" download="detect_preview.csv">⬇ Download CSV</a>
+                <button id="detectToggleOverlay" class="btn-secondary btn-sm">Toggle Overlay</button>
+              </div>
             </div>
           </div>
         </div>

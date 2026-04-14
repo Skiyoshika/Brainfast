@@ -495,6 +495,37 @@ body.mode-oneclick .pro-only {
 .preview-img { width: 100%; max-height: 480px; object-fit: contain; cursor: zoom-in; display: block; }
 .preview-img.hidden { display: none; }
 
+/* ===== DETECT PREVIEW RESULT ===== */
+.detect-preview-result {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  padding: 12px 16px;
+}
+.detect-preview-result.hidden { display: none; }
+.detect-result-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detect-result-icon { font-size: 18px; }
+.detect-result-summary { flex: 1; font-size: 14px; font-weight: 500; color: var(--text); }
+.detect-result-close {
+  background: none; border: none; font-size: 18px; cursor: pointer;
+  color: var(--text-hint); padding: 0 4px; line-height: 1;
+}
+.detect-result-close:hover { color: var(--text); }
+.detect-result-details { margin-top: 10px; }
+.detect-overlay-img {
+  width: 100%; max-height: 360px; object-fit: contain;
+  border-radius: 4px; cursor: zoom-in; background: #111;
+}
+.detect-actions {
+  display: flex; gap: 8px; margin-top: 8px; align-items: center;
+}
+.btn-sm { font-size: 12px; padding: 4px 10px; }
+
 /* ===== ALIGNMENT QUALITY PANEL ===== */
 .quality-panel {
   background: var(--bg-card);
@@ -994,4 +1025,36 @@ tr:hover td { background: var(--bg-card); }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Detection parameter panel */
+.detect-params-panel {
+  margin-bottom: 8px;
+}
+.detect-params-panel[open] {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--bg-secondary, #1a1a2e);
+}
+.detect-params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px 16px;
+  margin-top: 8px;
+}
+.detect-params-grid .field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.85em;
+}
+.detect-params-grid input[type="range"] {
+  width: 100%;
+}
+.slider-val {
+  font-size: 0.8em;
+  color: var(--text-secondary, #888);
+  text-align: right;
+  min-width: 36px;
 }

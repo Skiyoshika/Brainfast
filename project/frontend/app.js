@@ -44,6 +44,19 @@ const LANGS = {
     'btn.scalebar': '<i data-lucide="ruler" class="btn-icon"></i> Scale',
     'btn.clearAnnotations': '<i data-lucide="trash-2" class="btn-icon"></i> Clear All',
     'btn.exportFigure': '<i data-lucide="download" class="btn-icon"></i> Export Figure',
+    'btn.detectPreview': '<i data-lucide="scan" class="btn-icon"></i> Detect Cells',
+    'btn.detectParams': '<i data-lucide="settings" class="btn-icon"></i> Detection Parameters',
+    'detect.model': 'Model',
+    'detect.diameter': 'Diameter (µm)',
+    'detect.flowThreshold': 'Flow Threshold',
+    'detect.cellprobThreshold': 'Cell Probability',
+    'detect.minSize': 'Min Size (px)',
+    'detect.gpu': 'GPU',
+    'detect.running': 'Running cell detection…',
+    'detect.done': '{count} cells detected ({detector})',
+    'detect.error': 'Detection failed: {err}',
+    'detect.noSlice': 'Select a real slice first',
+    'detect.noRuntime': 'Cellpose not available — install cellpose to enable detection',
     'btn.refreshQc': '<i data-lucide="refresh-cw" class="btn-icon"></i> Refresh',
     'btn.regenDemo': '<i data-lucide="settings" class="btn-icon"></i> Regen Demo',
     'btn.oneClickStart': 'Start One-Click Workflow',
@@ -372,6 +385,19 @@ const LANGS = {
     'btn.scalebar': '<i data-lucide="ruler" class="btn-icon"></i> 比例尺',
     'btn.clearAnnotations': '<i data-lucide="trash-2" class="btn-icon"></i> 清除全部',
     'btn.exportFigure': '<i data-lucide="download" class="btn-icon"></i> 导出图片',
+    'btn.detectPreview': '<i data-lucide="scan" class="btn-icon"></i> 检测细胞',
+    'btn.detectParams': '<i data-lucide="settings" class="btn-icon"></i> 检测参数',
+    'detect.model': '模型',
+    'detect.diameter': '直径 (µm)',
+    'detect.flowThreshold': '流量阈值',
+    'detect.cellprobThreshold': '细胞概率',
+    'detect.minSize': '最小面积 (px)',
+    'detect.gpu': 'GPU',
+    'detect.running': '正在检测细胞…',
+    'detect.done': '检测到 {count} 个细胞（{detector}）',
+    'detect.error': '检测失败：{err}',
+    'detect.noSlice': '请先选择真实切片',
+    'detect.noRuntime': 'Cellpose 未安装——请安装 cellpose 以启用检测',
     'btn.refreshQc': '<i data-lucide="refresh-cw" class="btn-icon"></i> 刷新',
     'btn.regenDemo': '<i data-lucide="settings" class="btn-icon"></i> 重新生成演示图',
     'btn.oneClickStart': '启动一键工作流',
@@ -1166,6 +1192,121 @@ async function refreshOverlayPreview() {
   showToast(t('toast.previewUpdated'), 'success', 2000);
 }
 document.getElementById('refreshPreviewBtn').onclick = refreshOverlayPreview;
+
+// ================================================================
+// DETECT PREVIEW (single-slice cell detection)
+// ================================================================
+let _detectOverlayVisible = true;
+
+async function runDetectPreview() {
+  const slicePath = document.getElementById('realSlicePath').value;
+  if (!slicePath) { showToast(t('detect.noSlice'), 'warning'); return; }
+
+  const resultDiv = document.getElementById('detectPreviewResult');
+  const summary   = document.getElementById('detectResultSummary');
+  const details   = document.getElementById('detectResultDetails');
+  const btn       = document.getElementById('detectPreviewBtn');
+
+  // Show running state
+  resultDiv.classList.remove('hidden');
+  details.classList.add('hidden');
+  summary.textContent = t('detect.running');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/detect/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slicePath,
+        jobId: getOverlayJobId(),
+        params: {
+          model: document.getElementById('detectModelSelect').value,
+          diameter_um: parseFloat(document.getElementById('detectDiameterUm').value) || 12.0,
+          flow_threshold: parseFloat(document.getElementById('detectFlowThreshold').value),
+          cellprob_threshold: parseFloat(document.getElementById('detectCellprobThreshold').value),
+          min_size_px: parseInt(document.getElementById('detectMinSizePx').value, 10) || 8,
+          gpu: document.getElementById('detectGpuToggle').checked,
+        },
+      }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      const errMsg = data.runtimeAvailable === false
+        ? t('detect.noRuntime')
+        : t('detect.error', { err: data.error || 'unknown' });
+      summary.textContent = errMsg;
+      showToast(errMsg, 'error', 5000);
+      return;
+    }
+
+    // Success — show results
+    summary.textContent = t('detect.done', { count: data.cellCount, detector: data.detector });
+    showToast(t('detect.done', { count: data.cellCount, detector: data.detector }), 'success', 3000);
+
+    // Show overlay image and CSV link
+    if (data.overlayUrl) {
+      const overlayImg = document.getElementById('detectOverlayImg');
+      overlayImg.src = data.overlayUrl + '&ts=' + Date.now();
+      overlayImg.onclick = () => openLightbox(overlayImg.src, t('detect.done', { count: data.cellCount, detector: data.detector }));
+      _detectOverlayVisible = true;
+    }
+    if (data.csvUrl) {
+      document.getElementById('detectCsvLink').href = data.csvUrl;
+    }
+    details.classList.remove('hidden');
+
+  } catch (err) {
+    summary.textContent = t('detect.error', { err: err.message });
+    showToast(t('detect.error', { err: err.message }), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// --- Detection parameter panel logic ---
+async function loadCellposeModels() {
+  try {
+    const res = await fetch('/api/cellpose/models');
+    const data = await res.json();
+    if (!data.ok) return;
+
+    const select = document.getElementById('detectModelSelect');
+    select.innerHTML = '';
+    for (const m of data.models) {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.type === 'custom' ? `${m.name} (custom)` : m.name;
+      select.appendChild(opt);
+    }
+  } catch (err) {
+    console.warn('Failed to load Cellpose models:', err);
+  }
+}
+
+// Slider value displays
+document.getElementById('detectFlowThreshold').oninput = function() {
+  document.getElementById('detectFlowThresholdVal').textContent = this.value;
+};
+document.getElementById('detectCellprobThreshold').oninput = function() {
+  document.getElementById('detectCellprobThresholdVal').textContent = this.value;
+};
+
+// Load models when panel is first opened
+document.getElementById('detectParamsPanel').addEventListener('toggle', function() {
+  if (this.open) loadCellposeModels();
+});
+
+document.getElementById('detectPreviewBtn').onclick = runDetectPreview;
+document.getElementById('detectResultClose').onclick = () => {
+  document.getElementById('detectPreviewResult').classList.add('hidden');
+};
+document.getElementById('detectToggleOverlay').onclick = () => {
+  const img = document.getElementById('detectOverlayImg');
+  _detectOverlayVisible = !_detectOverlayVisible;
+  img.style.display = _detectOverlayVisible ? '' : 'none';
+};
 
 // ================================================================
 // AUTOPICK ASYNC PROGRESS HELPERS

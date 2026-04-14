@@ -49,13 +49,17 @@ ctx.DEFAULT_STRUCTURE_SOURCE = default_structure_source(PROJECT_ROOT) or (
 
 from project.frontend.blueprints.api_alignment import bp as alignment_bp
 from project.frontend.blueprints.api_atlas import bp as atlas_bp
+from project.frontend.blueprints.api_batch import bp as batch_bp
 from project.frontend.blueprints.api_browse import bp as browse_bp
 from project.frontend.blueprints.api_cellpose import bp as cellpose_bp
+from project.frontend.blueprints.api_compare import bp as compare_bp
 from project.frontend.blueprints.api_demo import bp as demo_bp
 from project.frontend.blueprints.api_detect_preview import bp as detect_preview_bp
+from project.frontend.blueprints.api_docs import bp as docs_bp
 from project.frontend.blueprints.api_outputs import bp as outputs_bp
 from project.frontend.blueprints.api_overlay import bp as overlay_bp
 from project.frontend.blueprints.api_pipeline import bp as pipeline_bp
+from project.frontend.blueprints.api_projects import bp as projects_bp
 from project.frontend.blueprints.api_training import bp as training_bp
 
 
@@ -71,7 +75,11 @@ def create_app() -> Flask:
     app.register_blueprint(demo_bp)
     app.register_blueprint(browse_bp)
     app.register_blueprint(cellpose_bp)
+    app.register_blueprint(compare_bp)
+    app.register_blueprint(batch_bp)
     app.register_blueprint(detect_preview_bp)
+    app.register_blueprint(docs_bp)
+    app.register_blueprint(projects_bp)
 
     @app.errorhandler(RequestEntityTooLarge)
     def _handle_request_too_large(_exc):

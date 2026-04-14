@@ -116,7 +116,7 @@ def test_run_real_input_routes_whole_brain_mode_to_3d_orchestrator(tmp_path, mon
             },
         },
         input_dir=input_dir,
-        output_dir=tmp_path / "outputs",
+        outputs_dir=tmp_path / "outputs",
     )
 
     assert result["truth_source"] == "3d_registered_volume"

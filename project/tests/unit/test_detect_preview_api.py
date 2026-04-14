@@ -248,7 +248,9 @@ class TestDetectPreviewEndpoint:
     def test_param_overrides_applied_to_config(self, app, tmp_path, sample_slice):
         """When request includes 'params', they override config values."""
         import json
+
         import pandas as pd
+
         import project.frontend.server_context as ctx
 
         base_cfg = {
@@ -308,7 +310,9 @@ class TestDetectPreviewEndpoint:
     def test_param_overrides_without_params_key_unchanged(self, app, tmp_path, sample_slice):
         """When request has no 'params', config is used as-is (backward compat)."""
         import json
+
         import pandas as pd
+
         import project.frontend.server_context as ctx
 
         base_cfg = {
@@ -351,7 +355,9 @@ class TestDetectPreviewEndpoint:
         """Full chain: param override 'model' changes which model string
         reaches the actual detect_cells function."""
         import json
+
         import pandas as pd
+
         import project.frontend.server_context as ctx
 
         # Config says cpsam, but param override says cyto3

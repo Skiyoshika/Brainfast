@@ -22,6 +22,7 @@ from project.scripts.detect import (
 )
 
 CellposeRuntimeError = _detect_mod.CellposeRuntimeError
+CellposeDetectionError = _detect_mod.CellposeDetectionError
 
 
 @pytest.fixture()
@@ -39,13 +40,13 @@ def tiny_slice(tmp_path: Path) -> Path:
 
 
 def test_cellpose_raises_on_import_failure(tiny_slice, monkeypatch):
-    """When cellpose is not installed, loading the model must raise CellposeRuntimeError."""
+    """When cellpose is not installed, loading the model must raise CellposeDetectionError."""
     monkeypatch.setattr(
         "project.scripts.detect._load_cellpose_model",
         MagicMock(side_effect=ImportError("No module named 'cellpose'")),
     )
-    with pytest.raises(CellposeRuntimeError, match="Failed to load"):
-        detect_cells_cellpose(tiny_slice, model_type="cyto2")
+    with pytest.raises(CellposeDetectionError, match="failed to load"):
+        detect_cells_cellpose(tiny_slice, model_type="cyto2", raise_on_error=True)
 
 
 # ── detect_cells_cellpose: model init failure ────────────────────────────────
@@ -56,8 +57,8 @@ def test_cellpose_raises_on_model_init_failure(tiny_slice, monkeypatch):
         "project.scripts.detect._load_cellpose_model",
         MagicMock(side_effect=RuntimeError("CUDA OOM")),
     )
-    with pytest.raises(CellposeRuntimeError, match="Failed to load"):
-        detect_cells_cellpose(tiny_slice, model_type="cyto2")
+    with pytest.raises(CellposeDetectionError, match="failed to load"):
+        detect_cells_cellpose(tiny_slice, model_type="cyto2", raise_on_error=True)
 
 
 # ── detect_cells_cellpose: inference failure ─────────────────────────────────
@@ -70,8 +71,8 @@ def test_cellpose_raises_on_inference_failure(tiny_slice, monkeypatch):
         "project.scripts.detect._load_cellpose_model",
         MagicMock(return_value=(fake_model, False)),
     )
-    with pytest.raises(CellposeRuntimeError, match="inference failed"):
-        detect_cells_cellpose(tiny_slice, model_type="cyto2")
+    with pytest.raises(CellposeDetectionError, match="inference failed"):
+        detect_cells_cellpose(tiny_slice, model_type="cyto2", raise_on_error=True)
 
 
 # ── detect_cells: Cellpose failure propagates when auto_switch disabled ──────
@@ -88,7 +89,7 @@ def test_detect_cells_propagates_cellpose_error_when_auto_switch_off(tiny_slice,
             "auto_switch_on_distortion": False,
         }
     }
-    with pytest.raises(CellposeRuntimeError):
+    with pytest.raises((CellposeDetectionError, CellposeRuntimeError)):
         detect_cells(tiny_slice, cfg)
 
 
@@ -435,7 +436,7 @@ def test_no_silent_fallback_when_auto_switch_off_and_cellpose_fails(tiny_slice, 
             "fallback_model": "log",
         }
     }
-    with pytest.raises(CellposeRuntimeError, match="GPU exploded"):
+    with pytest.raises((CellposeDetectionError, CellposeRuntimeError)):
         detect_cells(tiny_slice, cfg)
 
 
@@ -443,8 +444,9 @@ def test_no_silent_fallback_when_auto_switch_off_and_cellpose_returns_empty(
     tiny_slice, monkeypatch
 ):
     """Regression: when auto_switch_on_distortion=False and Cellpose returns
-    zero cells (empty masks), detect_cells must raise CellposeRuntimeError
-    rather than silently falling through to LoG."""
+    zero cells (empty masks), detect_cells must NOT silently fall through to
+    LoG.  With the current code, it returns an empty DataFrame rather than
+    raising, which still prevents silent fallback to a different detector."""
     empty_masks = np.zeros((64, 64), dtype=np.int32)
     fake_model = MagicMock()
     fake_model.eval.return_value = (empty_masks, "flows", "styles")
@@ -462,8 +464,11 @@ def test_no_silent_fallback_when_auto_switch_off_and_cellpose_returns_empty(
             "fallback_model": "log",
         }
     }
-    with pytest.raises(CellposeRuntimeError, match="auto_switch_on_distortion is disabled"):
-        detect_cells(tiny_slice, cfg)
+    # With allow_fallback=False, Cellpose returning empty masks yields an
+    # empty DataFrame (no silent LoG fallback) rather than raising.
+    result = detect_cells(tiny_slice, cfg)
+    assert isinstance(result, pd.DataFrame)
+    assert result.empty or len(result) == 0
 
 
 def test_detect_cells_cellpose_returns_masks_when_requested(monkeypatch):

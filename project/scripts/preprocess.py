@@ -36,6 +36,11 @@ def _conform_shapes(imgs: list[np.ndarray]) -> list[np.ndarray]:
 
 def merge_every_n_slices(input_files: list[Path], out_dir: Path, n: int = 5) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
+    for old in out_dir.glob("*.tif"):
+        try:
+            old.unlink()
+        except Exception:
+            pass
     outputs: list[Path] = []
     for i in range(0, len(input_files), n):
         chunk = input_files[i : i + n]

@@ -17,9 +17,48 @@ const LANGS = {
     'nav.manualTiff': 'Manual TIFF Check',
     'nav.qc': 'Batch QC Review',
     'nav.results': 'Results',
+    'nav.projects': 'Projects',
+    'projects.title': 'My Projects',
+    'projects.create': '+ Create Project',
+    'projects.empty': 'No projects yet. Create one above.',
+    'projects.namePh': 'Project name…',
+    'projects.descPh': 'Description (optional)',
+    'projects.samples': 'Samples',
+    'projects.delete': 'Delete',
+    'sample.run': 'Load & Run',
+    'sample.status.done': 'Done',
+    'sample.status.running': 'Running',
+    'sample.status.queued': 'Queued',
+    'sample.status.pending': 'Pending',
+    'sample.status.error': 'Error',
+    'sample.addBtn': '+ Add Sample',
+    'sample.configPh': 'Config path…',
+    'sample.inputPh': 'Input directory…',
+    'sample.namePh': 'Sample name…',
+    'batch.title': 'Batch Queue',
+    'batch.hint': 'Samples queued here are processed one by one automatically.',
+    'batch.empty': 'Queue is empty.',
+    'batch.cancel': 'Cancel',
+    'batch.enqueue': 'Enqueue',
     'status.idle': 'Idle',
     'status.running': 'Running...',
     'status.error': 'Error',
+    'errorPanel.title': 'Errors',
+    'errorPanel.empty': 'No errors recorded.',
+    'preflight.title': 'Preflight Check',
+    'preflight.desc.warn': 'Review the structured issues below before starting the pipeline.',
+    'preflight.desc.error': 'Fix the blocking issues below before starting the pipeline.',
+    'preflight.back': 'Back',
+    'preflight.continue': 'Continue Anyway',
+    'progress.phase.queued': 'Queued',
+    'progress.phase.ap_selection': 'AP Selection',
+    'progress.phase.registration': 'Registration',
+    'progress.phase.detection': 'Detection',
+    'progress.phase.dedup': 'Deduplication',
+    'progress.phase.mapping': 'Mapping',
+    'progress.phase.done': 'Done',
+    'progress.phase.error': 'Error',
+    'progress.phase.cancelled': 'Cancelled',
     'btn.guide': '<i data-lucide="book-open" class="btn-icon"></i> Guide',
     'btn.run': '<i data-lucide="play" class="btn-icon"></i> Run Pipeline',
     'btn.cancel': '<i data-lucide="x" class="btn-icon"></i> Cancel',
@@ -28,7 +67,27 @@ const LANGS = {
     'btn.close': 'Close',
     'btn.refreshResults': '<i data-lucide="refresh-cw" class="btn-icon"></i> Refresh',
     'btn.exportCsv': '<i data-lucide="download" class="btn-icon"></i> Export CSV',
+    'btn.exportExcel': '<i data-lucide="download" class="btn-icon"></i> Export Excel',
     'btn.exportMethods': '<i data-lucide="file-text" class="btn-icon"></i> Export Methods Text',
+    'tour.btnTitle': 'Start guided tour',
+    'tour.skip': 'Skip tour',
+    'tour.next': 'Next →',
+    'tour.done': 'Done',
+    'tour.step1.title': '① Input paths',
+    'tour.step1.body': 'Set your input image folder (TIFF Z-stack) and output folder here. The atlas file is auto-filled if found.',
+    'tour.step2.title': '② Atlas selection',
+    'tour.step2.body': 'Brainfast auto-selects the best Allen CCFv3 coronal plane for each slice. Choose hemisphere and pixel size to match your sample.',
+    'tour.step3.title': '③ Registration mode',
+    'tour.step3.body': 'Affine is fast and robust. Nonlinear (TPS) handles curved or deformed tissue. Adjust the confidence threshold to filter detections.',
+    'tour.step4.title': '④ Run & monitor',
+    'tour.step4.body': 'Click Run Pipeline. The log and slice progress bar update in real-time. Cancel at any time.',
+    'tour.step5.title': '⑤ Results',
+    'tour.step5.body': 'Switch to the Results tab after the run. Export to CSV or Excel, view the Garwood CI per region, and copy the Methods paragraph.',
+    'coexpr.title': 'Co-expression by Region',
+    'coexpr.hint': 'Cell counts per atlas region for each fluorescence channel — only shown when per-channel leaf CSVs exist.',
+    'coexpr.th.region': 'Region',
+    'coexpr.th.red': 'Red (count)',
+    'coexpr.th.green': 'Green (count)',
     'btn.browse': 'Browse',
     'btn.savePreset': '<i data-lucide="save" class="btn-icon"></i> Save Config',
     'btn.loadPreset': '<i data-lucide="folder-open" class="btn-icon"></i> Load Config',
@@ -136,6 +195,8 @@ const LANGS = {
     'hint.targetRegionSelected': 'AP search restricted to slices {start}–{end} ({startMm} to {endMm} mm)',
     'hint.targetRegionNone': 'No region selected — full atlas AP range will be searched',
     'hint.channelGuide': 'For multi-channel data: load the reporter channel (C0) for registration. After registration, use Step 4 to process each channel separately.',
+    'label.confidenceThreshold': 'Confidence Threshold',
+    'hint.confidenceThreshold': 'Filter cell detections by minimum score (0 = keep all, 1 = strictest).',
     'opt.coronal': 'Coronal (default)',
     'opt.sagittal': 'Sagittal',
     'opt.horizontal.plane': 'Horizontal (Axial)',
@@ -159,6 +220,8 @@ const LANGS = {
     'progress.queued': 'Queued...',
     'progress.running': 'Running: {ch}',
     'progress.slices': 'Processing slice {cur} / {total}',
+    'progress.eta': 'ETA {eta}',
+    'progress.slicesEta': 'Processing slice {cur} / {total} · ETA {eta}',
     'progress.done': 'Done.',
     'progress.cancelled': 'Cancelled.',
     'progress.startFailed': 'Failed to start.',
@@ -189,17 +252,79 @@ const LANGS = {
     'results.expandAll': 'All',
     'results.total': '{n} regions total',
     'results.filtered': 'Showing {found} of {total} regions',
+    'results.expandHint': 'Expand to browse and search',
+    'results.tableHint': 'This tree is for browsing hierarchy totals. Use the summary above for interpretation.',
     'compare.title': 'Channel Comparison (Total Cell Count)',
+    'compare.multi.title': 'Cross-Sample Region Comparison',
+    'compare.multi.hint': 'Enter output directories from multiple runs to compare cell counts across samples.',
+    'compare.multi.addDir': '+ Add Directory',
+    'compare.multi.run': 'Compare',
+    'compare.multi.label': 'Label',
+    'compare.multi.dirPlaceholder': 'Output directory path...',
+    'compare.multi.empty': 'Enter at least 2 output directories and click Compare.',
+    'compare.multi.noData': 'No matching regions found. Check that hierarchy CSV files exist in the selected directories.',
     'history.title': 'Run History',
     'th.region': 'Region Name',
     'th.count': 'Cell Count',
     'th.confidence': 'Confidence',
     'th.pct': '%',
+    'th.elongation': 'Elongation',
+    'th.area': 'Area (px)',
+    'th.intensity': 'Intensity',
+    'th.ci': '95% CI',
+    'results.morphToggle': 'Show morphology',
     'th.bar': 'Distribution',
-    'chart.title': 'Cell Distribution — Major Brain Regions',
-    'chart.imgTitle': 'Whole-Brain Cell Count Summary',
+    'chart.title': 'Distribution — Analysis Regions',
+    'chart.imgTitle': 'Cell Count Summary',
+    'chart.apDensityTitle': 'AP-Axis Cell Density Profile',
+    'chart.apDensityHint': 'Cell count per atlas AP position — shows injection spread along the anterior-posterior axis.',
+    'summary.title': 'Result Snapshot',
+    'summary.hint': 'Check scope and mapping coverage before reading regional biology.',
+    'summary.sample': 'Sample',
+    'summary.scope': 'Scope',
+    'summary.mode': 'Counting Mode',
+    'summary.detectors': 'Detector',
+    'summary.detected': 'Detected Cells',
+    'summary.mapped': 'Mapped to Atlas',
+    'summary.outside': 'Outside Atlas',
+    'summary.regions': 'Mapped Regions',
+    'summary.topRegion': 'Top Region',
+    'summary.none': 'No summary available yet.',
+    'cellconf.title': 'Cell Count Confidence Samples',
+    'cellconf.hint': 'Three representative raw slices with the final counted-cell markers overlaid.',
+    'cellconf.empty': 'No counted-cell sample images yet.',
+    'cellconf.detector': 'Detector',
+    'cellconf.cells': 'cells',
     'th.channel': 'Channel',
     'th.total': 'Total Count',
+    'reg3d.title': '3D Registration Reports',
+    'reg3d.hint': 'Check the final overview first. Open the summary or metadata only when something looks suspicious.',
+    'reg3d.empty': 'No 3D registration runs found yet.',
+    'reg3d.pipeline': 'Pipeline',
+    'reg3d.updated': 'Updated',
+    'reg3d.hemisphere': 'Hemisphere',
+    'reg3d.target': 'Target',
+    'reg3d.staining': 'Staining Rate',
+    'reg3d.coverage': 'Atlas Coverage',
+    'reg3d.positiveAtlas': 'Positive / Atlas',
+    'reg3d.before': 'Before',
+    'reg3d.after': 'Final',
+    'reg3d.noBefore': 'No pre-refinement overview',
+    'reg3d.openSummary': 'Open Summary',
+    'reg3d.openMetadata': 'Open Metadata',
+    'reg3d.openReport': 'Open HTML Report',
+    'reg3d.summaryTitle': '3D Run Summary',
+    'reg3d.summaryDesc': 'This is the plain-text summary for the selected 3D registration run.',
+    'reg3d.metadataTitle': '3D Run Metadata',
+    'reg3d.metadataDesc': 'This JSON contains the paths, metrics, backend parameters, and staining stats for the selected 3D registration run.',
+    'reg3d.menu': 'More actions',
+    'reg3d.detailInfo': 'Detailed Info',
+    'reg3d.deleteBad': 'Delete Bad Report',
+    'reg3d.pinReport': 'Pin This Report',
+    'reg3d.pinned': 'Pinned',
+    'reg3d.pinDone': 'Report pinned to top.',
+    'reg3d.deleteDone': 'Report removed from active list.',
+    'reg3d.deleteConfirm': 'Move this report out of the active list?',
     'outputs.title': 'Output Files',
     'outputs.hint': 'Click a PNG to preview · Click CSV/JSON to view content',
     'outputs.empty': 'No output files yet',
@@ -221,8 +346,12 @@ const LANGS = {
     'qc.empty': 'No QC images yet. Please run the pipeline in the Registration Workflow tab first.',
     'qc.annotatedSliceTitle': 'Atlas Registration — Annotated Brain Regions',
     'qc.annotatedSliceHint': 'Lightsheet image with Allen CCFv3 region boundaries and labels. Click to view full size.',
-    'qc.bestSliceTitle': 'Raw Lightsheet vs Atlas Registration',
-    'qc.bestSliceHint': 'Side-by-side comparison — click to view full resolution',
+    'qc.bestSliceTitle': 'Registration Slice vs Atlas Registration',
+    'qc.bestSliceHint': 'Registered-slice comparison — click to view full resolution',
+    'qc.zContinuityTitle': 'AP-Axis Z Continuity',
+    'qc.zContinuityHint': 'Atlas AP index per slice — blue=raw, green=smoothed, red=outlier. Outliers may indicate registration errors.',
+    'qc.zContinuityOk': 'AP series monotone — no outliers detected',
+    'qc.zContinuityWarn': '{n} AP outlier(s) detected — review registration for flagged slices',
     'qc.panelTitle': 'Whole-Brain Registration Overview',
     'qc.panelHint': 'Multi-slice atlas registration panel — click to view full size',
     'tab.manualTiff.title': 'Manual TIFF Check',
@@ -378,12 +507,37 @@ const LANGS = {
     'training.progressTitle': 'Training Progress',
     'training.resultTitle': 'Training Complete',
     'training.apply': 'Apply Model',
+    'toast.runDetailsFailed': 'Failed to open run details.',
+    'outputs.previewDesc': 'Text preview for the selected output file.',
   },
   zh: {
     'nav.workflow': '配准工作流',
     'nav.manualTiff': '手动TIFF检查',
     'nav.qc': '批量QC审查',
     'nav.results': '统计结果',
+    'nav.projects': '项目管理',
+    'projects.title': '我的项目',
+    'projects.create': '+ 新建项目',
+    'projects.empty': '暂无项目，请在上方创建。',
+    'projects.namePh': '项目名称…',
+    'projects.descPh': '描述（可选）',
+    'projects.samples': '样本',
+    'projects.delete': '删除',
+    'sample.run': '加载并运行',
+    'sample.status.done': '完成',
+    'sample.status.running': '运行中',
+    'sample.status.queued': '排队中',
+    'sample.status.pending': '待处理',
+    'sample.status.error': '错误',
+    'sample.addBtn': '+ 添加样本',
+    'sample.configPh': '配置文件路径…',
+    'sample.inputPh': '输入目录…',
+    'sample.namePh': '样本名称…',
+    'batch.title': '批处理队列',
+    'batch.hint': '队列中的样本会自动逐个处理。',
+    'batch.empty': '队列为空。',
+    'batch.cancel': '取消',
+    'batch.enqueue': '加入队列',
     'status.idle': '空闲',
     'status.running': '运行中...',
     'status.error': '错误',
@@ -396,6 +550,41 @@ const LANGS = {
     'btn.refreshResults': '<i data-lucide="refresh-cw" class="btn-icon"></i> 刷新',
     'btn.exportCsv': '<i data-lucide="download" class="btn-icon"></i> 导出CSV',
     'btn.exportMethods': '<i data-lucide="file-text" class="btn-icon"></i> 导出方法段落',
+    'errorPanel.title': '错误面板',
+    'errorPanel.empty': '当前没有记录到错误。',
+    'preflight.title': '运行前检查',
+    'preflight.desc.warn': '运行前请先检查下面这些结构化提示。',
+    'preflight.desc.error': '下面这些阻断问题需要先修复，才能开始运行。',
+    'preflight.back': '返回修改',
+    'preflight.continue': '仍然继续',
+    'progress.phase.queued': '已排队',
+    'progress.phase.ap_selection': 'AP选层',
+    'progress.phase.registration': '配准',
+    'progress.phase.detection': '检测',
+    'progress.phase.dedup': '去重',
+    'progress.phase.mapping': '映射',
+    'progress.phase.done': '完成',
+    'progress.phase.error': '错误',
+    'progress.phase.cancelled': '已取消',
+    'tour.btnTitle': '开始引导游览',
+    'tour.skip': '跳过',
+    'tour.next': '下一步 →',
+    'tour.done': '完成',
+    'tour.step1.title': '① 输入路径',
+    'tour.step1.body': '在这里设置输入图像文件夹（TIFF Z-stack）和输出文件夹。若检测到图谱文件则自动填充。',
+    'tour.step2.title': '② 图谱选层',
+    'tour.step2.body': 'Brainfast 自动为每张切片匹配最佳 Allen CCFv3 冠状面。请根据样本设置半球和像素大小。',
+    'tour.step3.title': '③ 配准模式',
+    'tour.step3.body': '仿射变换速度快且鲁棒；非线性（TPS）适用于弯曲或变形组织。调整置信度阈值可过滤检测结果。',
+    'tour.step4.title': '④ 运行与监控',
+    'tour.step4.body': '点击运行流程，日志和切片进度条实时更新。可随时取消。',
+    'tour.step5.title': '⑤ 查看结果',
+    'tour.step5.body': '运行完成后切换到结果 Tab，可按脑区导出 CSV/Excel，查看 Garwood CI，并复制方法段落用于论文。',
+    'coexpr.title': '各通道区域共表达',
+    'coexpr.hint': '每个荧光通道在各脑图谱区域的细胞数——仅当存在分通道叶区CSV时显示。',
+    'coexpr.th.region': '区域',
+    'coexpr.th.red': '红色通道（数量）',
+    'coexpr.th.green': '绿色通道（数量）',
     'btn.browse': '浏览',
     'btn.savePreset': '<i data-lucide="save" class="btn-icon"></i> 保存配置',
     'btn.loadPreset': '<i data-lucide="folder-open" class="btn-icon"></i> 加载配置',
@@ -503,6 +692,8 @@ const LANGS = {
     'hint.targetRegionSelected': 'AP搜索范围限制为切片 {start}–{end}（{startMm} 至 {endMm} mm）',
     'hint.targetRegionNone': '未选择脑区——将搜索全部AP范围',
     'hint.channelGuide': '多通道数据：请加载reporter通道（C0）用于配准。配准完成后，在步骤4中分别处理各通道。',
+    'label.confidenceThreshold': '置信度阈值',
+    'hint.confidenceThreshold': '按最低置信度过滤检测结果（0 = 保留全部，1 = 最严格）。',
     'opt.coronal': '冠状面（默认）',
     'opt.sagittal': '射状面',
     'opt.horizontal.plane': '水平面（轴位）',
@@ -526,6 +717,8 @@ const LANGS = {
     'progress.queued': '已排队...',
     'progress.running': '运行中：{ch}',
     'progress.slices': '处理切片 {cur} / {total}',
+    'progress.eta': '预计剩余 {eta}',
+    'progress.slicesEta': '处理切片 {cur} / {total} · 预计剩余 {eta}',
     'progress.done': '完成。',
     'progress.cancelled': '已取消。',
     'progress.startFailed': '启动失败。',
@@ -556,17 +749,79 @@ const LANGS = {
     'results.expandAll': '全部',
     'results.total': '共 {n} 个脑区',
     'results.filtered': '显示 {found} / {total} 个脑区',
+    'results.expandHint': '展开后查看和搜索',
+    'results.tableHint': '这张树表用于浏览层级累计值；真正用于解释分布的请以上方摘要和图表为准。',
     'compare.title': '通道比较（细胞总数）',
+    'compare.multi.title': '跨样本脑区细胞数对比',
+    'compare.multi.hint': '输入多个运行结果目录，对比各脑区的细胞计数。',
+    'compare.multi.addDir': '+ 添加目录',
+    'compare.multi.run': '开始对比',
+    'compare.multi.label': '标签',
+    'compare.multi.dirPlaceholder': '输出目录路径...',
+    'compare.multi.empty': '请输入至少2个输出目录后点击"开始对比"。',
+    'compare.multi.noData': '未找到匹配脑区。请检查所选目录中是否存在层次CSV文件。',
     'history.title': '运行历史',
     'th.region': '脑区名称',
     'th.count': '细胞计数',
     'th.pct': '占比',
     'th.bar': '分布',
-    'chart.title': '细胞分布 — 主要脑区',
-    'chart.imgTitle': '全脑细胞计数汇总',
+    'th.elongation': '细胞延伸度',
+    'th.area': '面积(px)',
+    'th.intensity': '荧光强度',
+    'th.ci': '95% 置信区间',
+    'results.morphToggle': '显示形态特征',
+    'chart.title': '细胞分布 — 分析脑区',
+    'chart.imgTitle': '细胞计数汇总',
+    'chart.apDensityTitle': 'AP轴细胞密度分布',
+    'chart.apDensityHint': '每个图谱AP坐标的细胞数 — 反映注射点沿前后轴的扩散范围。',
+    'summary.title': '结果摘要',
+    'summary.hint': '先确认范围和图谱映射覆盖，再解读脑区分布。',
+    'summary.sample': '样本',
+    'summary.scope': '范围',
+    'summary.mode': '计数模式',
+    'summary.detectors': '检测器',
+    'summary.detected': '检测到的细胞',
+    'summary.mapped': '成功映射到图谱',
+    'summary.outside': '落在图谱外',
+    'summary.regions': '映射到的脑区数',
+    'summary.topRegion': '最高脑区',
+    'summary.none': '当前还没有可用摘要。',
+    'cellconf.title': '细胞计数置信样本',
+    'cellconf.hint': '展示 3 张代表性真实切片，并叠加最终计入统计的细胞标记点。',
+    'cellconf.empty': '暂无细胞计数样本图。',
+    'cellconf.detector': '检测器',
+    'cellconf.cells': '个细胞',
     'th.confidence': '置信度',
     'th.channel': '通道',
     'th.total': '总计数',
+    'reg3d.title': '3D配准报告',
+    'reg3d.hint': '先看最终总览图；只有当结果可疑时，再打开摘要或元数据。',
+    'reg3d.empty': '还没有发现3D配准结果。',
+    'reg3d.pipeline': '流程',
+    'reg3d.updated': '更新时间',
+    'reg3d.hemisphere': '半脑',
+    'reg3d.target': '目标分辨率',
+    'reg3d.staining': '染色率',
+    'reg3d.coverage': '图谱覆盖率',
+    'reg3d.positiveAtlas': '阳性/图谱',
+    'reg3d.before': '细化前',
+    'reg3d.after': '最终结果',
+    'reg3d.noBefore': '没有细化前总览图',
+    'reg3d.openSummary': '打开摘要',
+    'reg3d.openMetadata': '打开元数据',
+    'reg3d.openReport': '打开HTML报告',
+    'reg3d.summaryTitle': '3D运行摘要',
+    'reg3d.summaryDesc': '这是当前3D配准结果的纯文本摘要。',
+    'reg3d.metadataTitle': '3D运行元数据',
+    'reg3d.metadataDesc': '这个JSON包含当前3D配准结果的路径、指标、后端参数和染色率。',
+    'reg3d.menu': '更多操作',
+    'reg3d.detailInfo': '详细信息',
+    'reg3d.deleteBad': '删除不良报告',
+    'reg3d.pinReport': '置顶该报告',
+    'reg3d.pinned': '已置顶',
+    'reg3d.pinDone': '报告已置顶。',
+    'reg3d.deleteDone': '报告已从当前列表移除。',
+    'reg3d.deleteConfirm': '确认将该报告移出当前列表吗？',
     'outputs.title': '输出文件',
     'outputs.hint': '点击PNG预览 · 点击CSV/JSON查看内容',
     'outputs.empty': '暂无输出文件',
@@ -588,8 +843,12 @@ const LANGS = {
     'qc.empty': '暂无QC图片，请先在”配准工作流”标签页运行流水线。',
     'qc.annotatedSliceTitle': '图谱配准 — 脑区标注示例',
     'qc.annotatedSliceHint': '光片图像叠加 Allen CCFv3 脑区边界与标签。点击查看大图。',
-    'qc.bestSliceTitle': '原始光片 vs 图谱配准',
-    'qc.bestSliceHint': '左右对比图 — 点击查看原始分辨率',
+    'qc.bestSliceTitle': '配准切片 vs 图谱配准',
+    'qc.bestSliceHint': '配准后切片左右对比图 — 点击查看原始分辨率',
+    'qc.zContinuityTitle': 'AP轴Z连续性检测',
+    'qc.zContinuityHint': '每切片图谱AP坐标 — 蓝=原始，绿=平滑，红=异常。异常点可能表示配准错误。',
+    'qc.zContinuityOk': 'AP序列单调 — 未检测到异常',
+    'qc.zContinuityWarn': '检测到 {n} 个AP异常 — 请检查标红切片的配准结果',
     'qc.panelTitle': '全脑配准总览',
     'qc.panelHint': '多切片图谱配准面板 — 点击查看大图',
     'tab.manualTiff.title': '手动TIFF检查',
@@ -745,6 +1004,8 @@ const LANGS = {
     'training.progressTitle': '训练进度',
     'training.resultTitle': '训练完成',
     'training.apply': '应用模型',
+    'toast.runDetailsFailed': '打开运行详情失败。',
+    'outputs.previewDesc': '所选输出文件的文本预览。',
   },
 };
 
@@ -792,6 +1053,24 @@ document.querySelectorAll('.lang-btn[data-lang]').forEach(function(btn) {
   btn.onclick = function() { applyLang(btn.dataset.lang); };
 });
 
+// ================================================================
+// THEME TOGGLE (light / dark)
+// ================================================================
+(function initTheme() {
+  const saved = localStorage.getItem('idlebrain.theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
+  const btn = document.getElementById('themeToggleBtn');
+  if (btn) btn.textContent = saved === 'light' ? '🌙' : '☀️';
+})();
+
+document.getElementById('themeToggleBtn')?.addEventListener('click', function() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('idlebrain.theme', next);
+  this.textContent = next === 'light' ? '🌙' : '☀️';
+});
+
 
 
 // DOM refs
@@ -820,18 +1099,47 @@ const oneClickScopeEl = document.getElementById('oneClickScope');
 const oneClickStartBtn = document.getElementById('oneClickStartBtn');
 const quickExportBtn = document.getElementById('quickExportBtn');
 const quickExportFormatEl = document.getElementById('quickExportFormat');
-
-const overlayJobState = {
-  jobId: localStorage.getItem('brainfast.overlayJobId') || '',
-};
+const methodsModalTitleEl = document.getElementById('methodsModalTitle');
+const methodsModalDescEl = document.getElementById('methodsModalDesc');
+const errorPanelToggle = document.getElementById('errorPanelToggle');
+const errorPanelBody = document.getElementById('errorPanelBody');
+const errorPanelList = document.getElementById('errorPanelList');
+const errorPanelEmpty = document.getElementById('errorPanelEmpty');
+const errorBadge = document.getElementById('errorBadge');
+const preflightModal = document.getElementById('preflightModal');
+const preflightModalTitle = document.getElementById('preflightModalTitle');
+const preflightModalDesc = document.getElementById('preflightModalDesc');
+const preflightIssuesEl = document.getElementById('preflightIssues');
+const preflightContinueBtn = document.getElementById('preflightContinueBtn');
+const preflightCancelBtn = document.getElementById('preflightCancelBtn');
 
 const state = {
   running: false,
   channel: 'red',
   runAll: false,
   allResults: [],
+  cellSummary: null,
   useHierarchy: false,
+  startEpoch: null,
+  backendErrors: [],
+  frontendErrors: [],
+  activeJobId: localStorage.getItem('idlebrain.activeJobId') || '',
 };
+
+const overlayJobState = {
+  jobId: localStorage.getItem('brainfast.overlayJobId') || '',
+};
+
+state.frontendErrors = loadFrontendErrors();
+renderErrorPanel();
+
+if (errorPanelToggle) {
+  errorPanelToggle.onclick = () => {
+    const willOpen = errorPanelBody?.classList.contains('hidden');
+    errorPanelBody?.classList.toggle('hidden');
+    errorPanelToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  };
+}
 
 function buildOverlayJobId() {
   if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -846,6 +1154,21 @@ function getOverlayJobId() {
     localStorage.setItem('brainfast.overlayJobId', overlayJobState.jobId);
   }
   return overlayJobState.jobId;
+}
+
+function setActiveJobId(jobId) {
+  state.activeJobId = String(jobId || '').trim();
+  if (state.activeJobId) localStorage.setItem('idlebrain.activeJobId', state.activeJobId);
+  else localStorage.removeItem('idlebrain.activeJobId');
+}
+
+function withActiveJobQuery(path, extra = {}) {
+  const url = new URL(path, window.location.origin);
+  if (state.activeJobId) url.searchParams.set('job', state.activeJobId);
+  Object.entries(extra || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
+  });
+  return `${url.pathname}${url.search}`;
 }
 
 function syncOverlayJobId(resp) {
@@ -867,7 +1190,135 @@ function withOverlayJobQuery(path, extra = {}) {
 // ================================================================
 // TOAST
 // ================================================================
+const FIELD_ERROR_MAP = {
+  inputDir: 'inputDirError',
+  atlasPath: 'atlasPathError',
+  structPath: 'structPathError',
+};
+const FIELD_INPUT_MAP = {
+  inputDir: 'inputDir',
+  atlasPath: 'atlasPath',
+  structPath: 'structPath',
+};
+const FRONTEND_ERRORS_KEY = 'brainfast.frontendErrors';
+
+function loadFrontendErrors() {
+  try {
+    const raw = sessionStorage.getItem(FRONTEND_ERRORS_KEY);
+    const items = raw ? JSON.parse(raw) : [];
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistFrontendErrors() {
+  try {
+    sessionStorage.setItem(
+      FRONTEND_ERRORS_KEY,
+      JSON.stringify((state.frontendErrors || []).slice(-50)),
+    );
+  } catch {}
+}
+
+function normalizeFieldKey(field) {
+  const raw = String(field || '').trim();
+  if (!raw) return '';
+  const map = {
+    'input.slice_dir': 'inputDir',
+    'inputDir': 'inputDir',
+    'atlasPath': 'atlasPath',
+    'structPath': 'structPath',
+  };
+  return map[raw] || raw;
+}
+
+function renderFieldIssues(issues = []) {
+  const byField = new Map();
+  (issues || []).forEach(issue => {
+    const field = normalizeFieldKey(issue?.field);
+    if (!field || byField.has(field)) return;
+    byField.set(field, String(issue?.message || '').trim());
+  });
+  Object.entries(FIELD_ERROR_MAP).forEach(([field, errorId]) => {
+    const errorEl = document.getElementById(errorId);
+    const inputEl = document.getElementById(FIELD_INPUT_MAP[field] || field);
+    const msg = byField.get(field) || '';
+    if (errorEl) {
+      errorEl.textContent = msg;
+      errorEl.classList.toggle('hidden', !msg);
+    }
+    if (inputEl) inputEl.classList.toggle('field-input-error', !!msg);
+  });
+}
+
+function renderErrorPanel() {
+  const merged = [...(state.backendErrors || []), ...(state.frontendErrors || [])]
+    .filter(item => item && item.message)
+    .sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
+  if (errorPanelList) {
+    errorPanelList.innerHTML = merged
+      .map(item => {
+        const step = escapeHtml(item.step || 'general');
+        const ts = escapeHtml(item.timestamp || '');
+        const message = escapeHtml(item.message || '');
+        const source = escapeHtml(item.source || 'backend');
+        const recoverable = item.recoverable === false ? 'blocking' : 'recoverable';
+        return `
+          <div class="error-item">
+            <div class="error-item-header">
+              <span class="error-item-step">${step}</span>
+              <span class="error-item-time">${ts}</span>
+            </div>
+            <div class="error-item-message">${message}</div>
+            <div class="error-item-source">${source} · ${recoverable}</div>
+          </div>
+        `;
+      })
+      .join('');
+  }
+  if (errorPanelEmpty) errorPanelEmpty.classList.toggle('hidden', merged.length > 0);
+  if (errorBadge) {
+    errorBadge.textContent = String(merged.length);
+    errorBadge.classList.toggle('hidden', merged.length <= 0);
+  }
+}
+
+function pushPersistentError(message, opts = {}) {
+  const item = {
+    timestamp: new Date().toISOString(),
+    message: String(message || '').trim(),
+    step: String(opts.step || 'ui'),
+    recoverable: opts.recoverable !== false,
+    source: String(opts.source || 'frontend'),
+  };
+  if (!item.message) return;
+  state.frontendErrors = [...(state.frontendErrors || []), item].slice(-50);
+  persistFrontendErrors();
+  renderErrorPanel();
+  if (errorPanelBody) {
+    errorPanelBody.classList.remove('hidden');
+    errorPanelToggle?.setAttribute('aria-expanded', 'true');
+  }
+  if (!state.running && statusBadge) {
+    statusBadge.textContent = t('status.error');
+    statusBadge.className = 'status-badge error';
+  }
+}
+
+async function refreshErrorLog() {
+  try {
+    const res = await fetch(withActiveJobQuery('/api/error-log')).then(r => r.json());
+    state.backendErrors = Array.isArray(res?.errors) ? res.errors : [];
+    renderErrorPanel();
+  } catch {}
+}
+
 function showToast(msg, type = 'info', duration = 4500) {
+  if (type === 'error') {
+    pushPersistentError(msg, { step: 'ui', source: 'frontend', recoverable: true });
+    return;
+  }
   const container = document.getElementById('toastContainer');
   // Deduplicate: skip if an identical message is already showing
   const existing = Array.from(container.children);
@@ -976,6 +1427,7 @@ document.querySelectorAll('.nav-btn[data-tab]').forEach(btn => {
     document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
     if (btn.dataset.tab === 'results') refreshOutputsAndFiles();
     if (btn.dataset.tab === 'qc')      refreshQcAll();
+    if (btn.dataset.tab === 'projects') { loadProjects(); refreshBatchQueue(); }
   };
 });
 
@@ -1044,6 +1496,25 @@ function setProgress(p, text) {
   barFill.style.width = `${p}%`;
   stepText.textContent = text;
   progressPct.textContent = `${Math.round(p)}%`;
+}
+function formatEtaSeconds(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  if (total < 60) return `${total}s`;
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  if (mins < 60) return secs ? `${mins}m ${secs}s` : `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins ? `${hours}h ${remMins}m` : `${hours}h`;
+}
+function getRunEtaSeconds(status) {
+  const done = Number(status?.slicesDone || 0);
+  const total = Number(status?.slicesTotal || 0);
+  const startEpoch = Number(status?.startEpoch || 0);
+  if (!(status?.running) || done <= 0 || total <= done || startEpoch <= 0) return null;
+  const elapsed = Math.max(1, Math.floor(Date.now() / 1000 - startEpoch));
+  const perSlice = elapsed / done;
+  return Math.max(1, Math.round((total - done) * perSlice));
 }
 function setRunning(r) {
   state.running = r;
@@ -1115,6 +1586,7 @@ async function validatePaths(showMsg = true) {
   });
   try {
     const res = await fetch(`/api/validate?${q}`).then(r => r.json());
+    renderFieldIssues(res.fieldIssues || []);
     if (!res.ok) {
       const issues = res.issues.join('; ');
       validateStatus.textContent = t('toast.validateFail', { issues });
@@ -1125,6 +1597,7 @@ async function validatePaths(showMsg = true) {
     } else {
       validateStatus.textContent = t('toast.validateOk');
       validateStatus.className = 'validate-status';
+       renderFieldIssues([]);
       if (!state.running) { statusBadge.textContent = t('status.idle'); statusBadge.className = 'status-badge'; }
     }
     return res.ok;
@@ -1405,6 +1878,7 @@ document.getElementById('editMasksBtn').onclick = async function() {
 // ================================================================
 let _autopickAbortFlag = false;
 let _modalCloseTimer = null;
+let _autopickToken = '';
 
 function _showAutopickModal() {
   const modal = document.getElementById('autopickModal');
@@ -1420,9 +1894,11 @@ function _showAutopickModal() {
   document.getElementById('autopickProgressMsg').textContent = t('progress.starting');
   document.getElementById('autopickStepText').textContent = '';
   document.getElementById('autopickErrorDetail').classList.add('hidden');
+  document.getElementById('autopickModalActions').style.display = 'flex';
   document.getElementById('autopickModalFooter').classList.add('hidden');
   document.getElementById('autopickModalFooter').style.display = 'none';
   _autopickAbortFlag = false;
+  _autopickToken = '';
   const closeBtn = document.getElementById('autopickModalClose');
   if (closeBtn) closeBtn.onclick = () => {
     _autopickAbortFlag = true;
@@ -1469,11 +1945,29 @@ function _showAutopickError(errMsg) {
     detailEl.textContent = errMsg || 'Unknown error';
     detailEl.classList.remove('hidden');
   }
+  const actions = document.getElementById('autopickModalActions');
+  if (actions) actions.style.display = 'none';
   const footer = document.getElementById('autopickModalFooter');
   if (footer) { footer.classList.remove('hidden'); footer.style.display = 'flex'; }
   // Auto-close after 5 seconds so the user isn't stuck
   _scheduleCloseModal(5000);
 }
+
+document.getElementById('autopickModalCancel').onclick = async () => {
+  _autopickAbortFlag = true;
+  const msgEl = document.getElementById('autopickProgressMsg');
+  if (msgEl) msgEl.textContent = 'Cancelling...';
+  if (_autopickToken) {
+    try {
+      await fetch('/api/atlas/autopick/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: _autopickToken }),
+      });
+    } catch {}
+  }
+  _scheduleCloseModal(300);
+};
 
 async function _runAutopickAsync(payload) {
   _showAutopickModal();
@@ -1508,6 +2002,7 @@ async function _runAutopickAsync(payload) {
     _showAutopickError('No progress token returned from server');
     return null;
   }
+  _autopickToken = token;
 
   // Poll for progress
   while (!_autopickAbortFlag) {
@@ -1530,6 +2025,11 @@ async function _runAutopickAsync(payload) {
       _scheduleCloseModal(900);
       return { ok: true, jobId: status.jobId, ...status.result };
     }
+    if (status.status === 'cancelled') {
+      showToast('Auto-pick cancelled.', 'warning', 2500);
+      _scheduleCloseModal(300);
+      return null;
+    }
     if (status.status === 'error') {
       _showAutopickError(status.error || 'Unknown error during autopick');
       return null;
@@ -1540,6 +2040,7 @@ async function _runAutopickAsync(payload) {
 
 async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
   _showAutopickModal();
+  document.getElementById('autopickModalActions').style.display = 'none';
   // Update modal title
   const h2 = document.querySelector('#autopickModal h2') || document.querySelector('#autopickModal .modal-title');
   if (h2) h2.textContent = modalTitle || `\uD83E\uDDE0 ${t('progress.processing')}`;
@@ -1567,6 +2068,7 @@ async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
     return startRes;
   }
   const token = startRes.token;
+  _autopickToken = token;
   while (!_autopickAbortFlag) {
     await new Promise(r => setTimeout(r, 700));
     let status;
@@ -1582,6 +2084,11 @@ async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
       if (status.jobId) syncOverlayJobId({ jobId: status.jobId });
       _scheduleCloseModal(700);
       return { ok: true, ...status };
+    }
+    if (status.status === 'cancelled') {
+      showToast('Task cancelled.', 'warning', 2500);
+      _scheduleCloseModal(300);
+      return null;
     }
     if (status.status === 'error') {
       _showAutopickError(status.error || 'Unknown error');
@@ -1719,43 +2226,137 @@ document.getElementById('landmarkViewBtn').onclick = async () => {
 };
 
 // ================================================================
+// RUN PAYLOAD / PREFLIGHT
+// ================================================================
+function buildRunPayload() {
+  const channels = state.runAll ? ['red', 'green', 'farred'] : [state.channel];
+  return {
+    configPath: '../configs/run_config.template.json',
+    inputDir: document.getElementById('inputDir').value,
+    outputDir: document.getElementById('outputDir').value,
+    atlasPath: document.getElementById('atlasPath').value,
+    structPath: document.getElementById('structPath').value,
+    channels,
+    params: {
+      inputDir: document.getElementById('inputDir').value,
+      outputDir: document.getElementById('outputDir').value,
+      atlasPath: document.getElementById('atlasPath').value,
+      structPath: document.getElementById('structPath').value,
+      realSlicePath: document.getElementById('realSlicePath').value,
+      pixelSizeUm: document.getElementById('pixelSizeUm').value,
+      slicingPlane: document.getElementById('slicingPlane').value,
+      rotateAtlas: document.getElementById('rotateAtlas').value,
+      flipAtlas: document.getElementById('flipAtlas').value,
+      alignMode: document.getElementById('alignMode').value,
+      maxPoints: document.getElementById('maxPoints').value,
+      minDistance: document.getElementById('minDistance').value,
+      ransacResidual: document.getElementById('ransacResidual').value,
+      confidenceThreshold: parseFloat(document.getElementById('confidenceThreshold')?.value || '0') || 0,
+      version: versionText.textContent,
+    },
+  };
+}
+
+function phaseLabel(phase) {
+  const key = `progress.phase.${String(phase || '').trim()}`;
+  const translated = t(key);
+  return translated === key ? String(phase || 'running') : translated;
+}
+
+function computeRunProgress(status) {
+  const progress = status?.progress || {};
+  const stepCurrent = Math.max(0, Number(progress.stepCurrent || 0));
+  const stepTotal = Math.max(0, Number(progress.stepTotal || 0));
+  const slicesDone = Math.max(0, Number(status?.slicesDone || 0));
+  const slicesTotal = Math.max(0, Number(status?.slicesTotal || 0));
+  if (stepCurrent <= 0 || stepTotal <= 0) {
+    if (slicesTotal > 0) return Math.min(96, 20 + Math.round((slicesDone / slicesTotal) * 70));
+    return Math.min(94, 20 + Math.floor((status?.logCount || 0) * 0.6));
+  }
+  const completedSteps = Math.max(0, stepCurrent - 1);
+  const sliceFraction = slicesTotal > 0 && progress.phase === 'registration'
+    ? (slicesDone / slicesTotal)
+    : 0;
+  const pct = ((completedSteps + sliceFraction) / stepTotal) * 100;
+  return Math.max(5, Math.min(progress.phase === 'done' ? 100 : 98, Math.round(pct)));
+}
+
+function showPreflightModal(issues = []) {
+  return new Promise(resolve => {
+    const hasBlocking = (issues || []).some(item => item?.severity === 'error');
+    preflightModalTitle.textContent = t('preflight.title');
+    preflightModalDesc.textContent = hasBlocking ? t('preflight.desc.error') : t('preflight.desc.warn');
+    preflightIssuesEl.innerHTML = (issues || [])
+      .map(item => {
+        const severity = String(item?.severity || 'warning').toLowerCase();
+        const field = escapeHtml(item?.field || 'general');
+        const message = escapeHtml(item?.message || '');
+        return `
+          <div class="preflight-issue ${escapeHtml(severity)}">
+            <div class="preflight-issue-header">
+              <span class="preflight-issue-badge">${escapeHtml(severity)}</span>
+              <span class="preflight-issue-field">${field}</span>
+            </div>
+            <div class="preflight-issue-message">${message}</div>
+          </div>
+        `;
+      })
+      .join('');
+    preflightContinueBtn.classList.toggle('hidden', hasBlocking);
+    preflightModal.classList.remove('hidden');
+
+    const close = result => {
+      preflightModal.classList.add('hidden');
+      preflightContinueBtn.onclick = null;
+      preflightCancelBtn.onclick = null;
+      document.getElementById('preflightModalClose').onclick = null;
+      resolve(result);
+    };
+
+    preflightContinueBtn.onclick = () => close(true);
+    preflightCancelBtn.onclick = () => close(false);
+    document.getElementById('preflightModalClose').onclick = () => close(false);
+  });
+}
+
+async function runPreflightGate(payload) {
+  try {
+    const res = await fetch('/api/pipeline/preflight', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(r => r.json());
+    const issues = Array.isArray(res?.issues) ? res.issues : [];
+    if (!issues.length) return true;
+    return await showPreflightModal(issues);
+  } catch (err) {
+    showToast(`Preflight failed: ${err?.message || err || '?'}`, 'error');
+    return false;
+  }
+}
+
+// ================================================================
 // RUN PIPELINE
 // ================================================================
 document.getElementById('runBtn').onclick = async () => {
   if (state.running) return;
   if (!(await validatePaths(true))) return;
+  const payload = buildRunPayload();
+  if (!(await runPreflightGate(payload))) return;
   setRunning(true);
   setProgress(5, t('progress.queued'));
-  const channels = state.runAll ? ['red', 'green', 'farred'] : [state.channel];
-  const params = {
-    inputDir: document.getElementById('inputDir').value,
-    outputDir: document.getElementById('outputDir').value,
-    atlasPath: document.getElementById('atlasPath').value,
-    structPath: document.getElementById('structPath').value,
-    realSlicePath: document.getElementById('realSlicePath').value,
-    pixelSizeUm: document.getElementById('pixelSizeUm').value,
-    slicingPlane: document.getElementById('slicingPlane').value,
-    rotateAtlas: document.getElementById('rotateAtlas').value,
-    flipAtlas: document.getElementById('flipAtlas').value,
-    hemisphere: document.getElementById('oneClickHemisphere')?.value || '',
-    scope: document.getElementById('oneClickScope')?.value || 'whole',
-    alignMode: document.getElementById('alignMode').value,
-    maxPoints: document.getElementById('maxPoints').value,
-    minDistance: document.getElementById('minDistance').value,
-    ransacResidual: document.getElementById('ransacResidual').value,
-    version: versionText.textContent,
-  };
   const res = await fetch('/api/run', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ configPath: '../configs/run_config.template.json',
-      inputDir: document.getElementById('inputDir').value, channels, params }),
+    body: JSON.stringify(payload),
   }).then(r => r.json());
   if (!res.ok) {
     showToast(t('toast.runFailed', { err: res.error || '?' }), 'error');
     setRunning(false); setProgress(0, t('progress.startFailed')); return;
   }
-  setProgress(20, t('progress.running', { ch: channels.join(' + ') }));
-  showToast(t('toast.runStarted', { channels: channels.join(' + ') }), 'info', 5000);
+  setActiveJobId(res.jobId || '');
+  state.startEpoch = Math.floor(Date.now() / 1000);
+  setProgress(20, t('progress.running', { ch: payload.channels.join(' + ') }));
+  showToast(t('toast.runStarted', { channels: payload.channels.join(' + ') }), 'info', 5000);
   await pollLogsUntilDone();
   setProgress(100, t('progress.done'));
   await refreshOutputs();
@@ -1764,56 +2365,95 @@ document.getElementById('runBtn').onclick = async () => {
 };
 
 // ================================================================
-// POLL LOGS
+// UNIFIED POLL (/api/poll — replaces pollLogsUntilDone + _pollSliceProgress + refreshErrorLog)
 // ================================================================
-async function pollLogsUntilDone() {
-  while (true) {
-    const [s, logsData] = await Promise.all([
-      fetch('/api/status').then(r => r.json()),
-      fetch('/api/logs').then(r => r.json()),
-    ]);
+let _uniPollTimer = null;
 
-    // Keep status badge in sync with backend state
-    if (s.running && !state.running) setRunning(true);
+function _applyPollResponse(p) {
+  // Structured errors
+  state.backendErrors = Array.isArray(p?.errors) ? p.errors : [];
+  renderErrorPanel();
 
-    // 保护前端的开发者日志不被后端的流水线日志覆盖
+  // Log tail
+  if (Array.isArray(p?.logTail) && logBox) {
     const feLogs = logBox.textContent.split('\n').filter(l => l.includes('❌') || l.includes('⚠️') || l.includes('[ready]'));
-    const srvLogs = logsData.logs.join('\n');
-    logBox.textContent = srvLogs + (feLogs.length ? '\n\n--- Frontend Dev Logs ---\n' + feLogs.join('\n') : '');
+    logBox.textContent = p.logTail.join('\n') + (feLogs.length ? '\n\n--- Frontend Dev Logs ---\n' + feLogs.join('\n') : '');
     logBox.scrollTop = logBox.scrollHeight;
-
-    // Update sidebar slice progress bar (visible at all times)
-    _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
-    renderWholeBrain3dStage(s.stage || null);
-
-    if (s.running) {
-      const lastLines = logsData.logs.slice(-10).join('\n');
-      const m = lastLines.match(/slices?\s+(\d+)\s*[\/／]\s*(\d+)/i);
-      if (m) {
-        const cur = Number(m[1]), total = Number(m[2]);
-        sliceProgress.classList.remove('hidden');
-        sliceProgress.textContent = t('progress.slices', { cur, total });
-        setProgress(20 + Math.round((cur / total) * 75), t('progress.running', { ch: s.currentChannel || '' }));
-      } else {
-        setProgress(Math.min(94, 20 + Math.floor((s.logCount || 0) * 0.6)), t('progress.running', { ch: s.currentChannel || '' }));
-        sliceProgress.classList.add('hidden');
-      }
-    }
-    if (!s.running) {
-      sliceProgress.classList.add('hidden');
-      if (s.error && s.error !== 'cancelled by user') showToast(s.error, 'error');
-      break;
-    }
-    await new Promise(r => setTimeout(r, 1200));
   }
+
+  // Slice progress bar
+  state.startEpoch = Number(p.startEpoch || state.startEpoch || 0) || null;
+  _updateSliceProgressBar(p.slicesDone || 0, p.slicesTotal || 0);
+
+  // Running state divergence detection
+  if (Boolean(p.running) !== state.running) setRunning(Boolean(p.running));
+
+  if (p.running) {
+    const cur = Number(p.slicesDone || 0);
+    const total = Number(p.slicesTotal || 0);
+    const etaSeconds = getRunEtaSeconds(p);
+    const phase = phaseLabel(p.progress?.phase || 'running');
+    const detail = String(p.progress?.message || '').trim() || t('progress.running', { ch: p.currentChannel || '' });
+    if (total > 0) {
+      sliceProgress.classList.remove('hidden');
+      sliceProgress.textContent = etaSeconds != null
+        ? t('progress.slicesEta', { cur, total, eta: formatEtaSeconds(etaSeconds) })
+        : t('progress.slices', { cur, total });
+    } else {
+      sliceProgress.classList.add('hidden');
+    }
+    setProgress(computeRunProgress(p), `${phase} · ${detail}`);
+  }
+}
+
+async function _runUnifiedPoll() {
+  try {
+    const p = await fetch(withActiveJobQuery('/api/poll')).then(r => r.json());
+    if (!p.ok) return;
+    _applyPollResponse(p);
+  } catch {}
+}
+
+function _startUnifiedPoll(activeMode = false) {
+  _stopUnifiedPoll();
+  _runUnifiedPoll();  // immediate first tick
+  const interval = activeMode ? 500 : 30000;
+  _uniPollTimer = setInterval(_runUnifiedPoll, interval);
+}
+
+function _stopUnifiedPoll() {
+  if (_uniPollTimer != null) { clearInterval(_uniPollTimer); _uniPollTimer = null; }
+}
+
+async function pollLogsUntilDone() {
+  _startUnifiedPoll(true);
+  while (true) {
+    await new Promise(r => setTimeout(r, 600));
+    try {
+      const p = await fetch(withActiveJobQuery('/api/poll')).then(r => r.json());
+      if (!p.ok) continue;
+      _applyPollResponse(p);
+      if (!p.running) {
+        state.startEpoch = null;
+        sliceProgress.classList.add('hidden');
+        if (p.error && p.error !== 'cancelled by user') showToast(p.error, 'error');
+        break;
+      }
+    } catch { continue; }
+  }
+  _startUnifiedPoll(false);  // switch to idle rate after done
 }
 
 // ================================================================
 // CANCEL
 // ================================================================
 document.getElementById('cancelBtn').onclick = async () => {
-  const res = await fetch('/api/cancel', { method: 'POST' }).then(r => r.json());
-  if (res.ok) { setRunning(false); setProgress(0, t('progress.cancelled')); sliceProgress.classList.add('hidden'); showToast(t('toast.cancelOk'), 'warning', 3000); }
+  const res = await fetch('/api/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: state.activeJobId || '' }),
+  }).then(r => r.json());
+  if (res.ok) { state.startEpoch = null; setRunning(false); setProgress(0, t('progress.cancelled')); sliceProgress.classList.add('hidden'); showToast(t('toast.cancelOk'), 'warning', 3000); }
   else showToast(t('toast.cancelNone'), 'info');
 };
 
@@ -1821,8 +2461,11 @@ document.getElementById('cancelBtn').onclick = async () => {
 // OPEN OUTPUT FOLDER
 // ================================================================
 document.getElementById('openOutputsBtn').onclick = async () => {
-  const info = await fetch('/api/info').then(r => r.json());
-  showToast(t('toast.outputsPath', { path: info.outputs }), 'info', 8000);
+  const [info, status] = await Promise.all([
+    fetch('/api/info').then(r => r.json()),
+    fetch(withActiveJobQuery('/api/status')).then(r => r.json()).catch(() => ({})),
+  ]);
+  showToast(t('toast.outputsPath', { path: status.outputsDir || info.outputs }), 'info', 8000);
 };
 
 // ================================================================
@@ -2041,10 +2684,10 @@ async function refreshQcAll() {
   try {
     const annSection = document.getElementById('annotatedSliceSection');
     const annImg = document.getElementById('annotatedSliceImg');
-    const ra = await fetch('/api/outputs/demo-annotated-slice', {method:'HEAD'});
+    const ra = await fetch(withActiveJobQuery('/api/outputs/demo-annotated-slice'), {method:'HEAD'});
     if (ra.ok) {
       annSection.style.display = '';
-      annImg.src = `/api/outputs/demo-annotated-slice?${Date.now()}`;
+      annImg.src = withActiveJobQuery('/api/outputs/demo-annotated-slice', { ts: Date.now() });
     }
   } catch {}
 
@@ -2052,10 +2695,10 @@ async function refreshQcAll() {
   try {
     const bestSection = document.getElementById('bestSliceSection');
     const bestImg = document.getElementById('bestSliceImg');
-    const r = await fetch('/api/outputs/demo-best-slice', {method:'HEAD'});
+    const r = await fetch(withActiveJobQuery('/api/outputs/demo-best-slice'), {method:'HEAD'});
     if (r.ok) {
       bestSection.style.display = '';
-      bestImg.src = `/api/outputs/demo-best-slice?${Date.now()}`;
+      bestImg.src = withActiveJobQuery('/api/outputs/demo-best-slice', { ts: Date.now() });
     }
   } catch {}
 
@@ -2064,34 +2707,198 @@ async function refreshQcAll() {
     const panelSection = document.getElementById('demoPanelSection');
     const panelImg = document.getElementById('demoPanelImg');
     const statsBar = document.getElementById('regStatsBar');
-    // Check if panel exists
-    const sliceListRes = await fetch('/api/outputs/reg-slice-list').then(r => r.json());
-    if (sliceListRes.ok && sliceListRes.count > 0) {
+    const panelHead = await fetch(withActiveJobQuery('/api/outputs/demo-panel'), { method: 'HEAD' });
+    if (panelHead.ok) {
       panelSection.style.display = '';
-      panelImg.src = `/api/outputs/demo-panel?${Date.now()}`;
-      // Load registration stats
+      panelImg.src = withActiveJobQuery('/api/outputs/demo-panel', { ts: Date.now() });
+      statsBar.innerHTML = '';
       try {
-        const stats = await fetch('/api/outputs/reg-stats').then(r => r.json());
+        const stats = await fetch(withActiveJobQuery('/api/outputs/reg-stats')).then(r => r.json());
         if (stats.ok) {
-          const scoreColor = stats.mean_score > 0.7 ? '#5c9' : stats.mean_score > 0.4 ? '#fc5' : '#f55';
-          statsBar.innerHTML = [
-            `<span>✅ <strong>${stats.ok_count}/${stats.total}</strong> slices registered</span>`,
-            `<span>Score mean: <strong style="color:${scoreColor}">${stats.mean_score.toFixed(3)}</strong></span>`,
-            `<span>Range: ${stats.min_score.toFixed(3)} – ${stats.max_score.toFixed(3)}</span>`,
-          ].join('<span style="color:#444">  |  </span>');
+          if (stats.mode === 'registration_run') {
+            statsBar.innerHTML = [
+              `<span>Pipeline: <strong>${escapeHtml(stats.pipeline || '-')}</strong></span>`,
+              `<span>NCC: <strong>${escapeHtml(formatFixed(stats.ncc, 4))}</strong></span>`,
+              `<span>SSIM: <strong>${escapeHtml(formatFixed(stats.ssim, 4))}</strong></span>`,
+              `<span>Dice: <strong>${escapeHtml(formatFixed(stats.dice, 4))}</strong></span>`,
+              `<span>Staining: <strong>${escapeHtml(formatPercent(stats.staining_rate))}</strong></span>`,
+              `<span>Coverage: <strong>${escapeHtml(formatPercent(stats.atlas_coverage))}</strong></span>`,
+            ].join('<span style="color:#444">  |  </span>');
+          } else {
+            const scoreColor = stats.mean_score > 0.7 ? '#5c9' : stats.mean_score > 0.4 ? '#fc5' : '#f55';
+            statsBar.innerHTML = [
+              `<span>✅ <strong>${stats.ok_count}/${stats.total}</strong> slices registered</span>`,
+              `<span>Score mean: <strong style="color:${scoreColor}">${stats.mean_score.toFixed(3)}</strong></span>`,
+              `<span>Range: ${stats.min_score.toFixed(3)} – ${stats.max_score.toFixed(3)}</span>`,
+            ].join('<span style="color:#444">  |  </span>');
+          }
         }
       } catch {}
+    } else {
+      panelSection.style.display = 'none';
     }
   } catch {}
 
+  // Load individual QC thumbnails (use registered slice gallery if available)
+  try {
+    // Prefer the vibrant registered slice overlays
+    const regList = await fetch(withActiveJobQuery('/api/outputs/reg-slice-list')).then(r => r.json());
+    if (regList.ok && regList.files.length > 0) {
+      empty.classList.add('hidden');
+      count.textContent = `${regList.count}`;
+      grid.innerHTML = '';
+      regList.files.forEach(fname => {
+        const wrap = document.createElement('div');
+        wrap.className = 'qc-thumb';
+        const img = document.createElement('img');
+        img.src = withActiveJobQuery(`/api/outputs/reg-slice/${fname}`, { ts: Date.now() });
+        img.alt = fname; img.onerror = () => wrap.remove();
+        const label = document.createElement('div');
+        label.className = 'qc-thumb-label';
+        const sliceIdx = parseInt(fname.replace('slice_','').replace('_overlay.png','')) || 0;
+        label.textContent = fname.replace('slice_', '').replace('_overlay.png', '');
+        wrap.appendChild(img); wrap.appendChild(label);
+        // Click → open side-by-side comparison
+        wrap.onclick = () => openLightbox(withActiveJobQuery(`/api/outputs/demo-comparison/${sliceIdx}`, { ts: Date.now() }), `Slice ${sliceIdx} — Raw vs Atlas`);
+        grid.appendChild(wrap);
+      });
+      return;
+    }
+    // Fallback to qc_overlays
+    const res = await fetch(withActiveJobQuery('/api/outputs/qc-list')).then(r => r.json());
+    if (!res.ok || res.files.length === 0) { grid.innerHTML = ''; empty.classList.remove('hidden'); count.textContent = ''; return; }
+    empty.classList.add('hidden');
+    count.textContent = `${res.count}`;
+    grid.innerHTML = '';
+    res.files.forEach(fname => {
+      const wrap = document.createElement('div');
+      wrap.className = 'qc-thumb';
+      const img = document.createElement('img');
+      img.src = withActiveJobQuery(`/api/outputs/qc-file/${fname}`, { ts: Date.now() });
+      img.alt = fname; img.onerror = () => wrap.remove();
+      const label = document.createElement('div');
+      label.className = 'qc-thumb-label';
+      label.textContent = fname.replace('overlay_', '').replace('.png', '');
+      wrap.appendChild(img); wrap.appendChild(label);
+      wrap.onclick = () => openLightbox(img.src, fname);
+      grid.appendChild(wrap);
+    });
+  } catch { showToast(t('toast.qcLoadFailed'), 'warning'); }
+
+  // Load Z continuity chart
+  refreshZContinuity();
 }
 document.getElementById('refreshQcAllBtn').onclick = refreshQcAll;
+
+// ----------------------------------------------------------------
+// Z-CONTINUITY SVG CHART
+// ----------------------------------------------------------------
+async function refreshZContinuity() {
+  const section = document.getElementById('zContinuitySection');
+  const chartDiv = document.getElementById('zContinuityChart');
+  const summaryDiv = document.getElementById('zContinuitySummary');
+  if (!section || !chartDiv || !summaryDiv) return;
+  try {
+    const r = await fetch(withActiveJobQuery('/api/outputs/z-continuity'));
+    if (!r.ok) { section.style.display = 'none'; return; }
+    const j = await r.json();
+    if (!j.ok || !Array.isArray(j.slice_ids) || j.slice_ids.length === 0) {
+      section.style.display = 'none'; return;
+    }
+    section.style.display = '';
+    const slices = j.slice_ids;
+    const orig = j.original_z;
+    const smooth = j.smoothed_z;
+    const outliers = j.is_outlier || slices.map(() => false);
+    const outlierCount = j.outlier_count || 0;
+
+    // SVG dimensions
+    const W = Math.max(600, slices.length * 6);
+    const H = 180;
+    const PAD = { t: 16, r: 20, b: 32, l: 48 };
+    const cW = W - PAD.l - PAD.r;
+    const cH = H - PAD.t - PAD.b;
+
+    const allZ = [...orig, ...(smooth || [])].filter(v => v != null);
+    const zMin = Math.min(...allZ);
+    const zMax = Math.max(...allZ);
+    const zRange = zMax - zMin || 1;
+    const xMin = Math.min(...slices);
+    const xMax = Math.max(...slices);
+    const xRange = xMax - xMin || 1;
+
+    const px = s => PAD.l + ((s - xMin) / xRange) * cW;
+    const py = z => PAD.t + (1 - (z - zMin) / zRange) * cH;
+
+    const pts = (arr) => arr.map((z, i) => `${px(slices[i]).toFixed(1)},${py(z).toFixed(1)}`).join(' ');
+
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;max-width:100%">`;
+
+    // Y-axis label
+    svg += `<text x="10" y="${PAD.t + cH/2}" text-anchor="middle" transform="rotate(-90,10,${PAD.t + cH/2})" fill="#888" font-size="11">AP index</text>`;
+
+    // Axes
+    svg += `<line x1="${PAD.l}" y1="${PAD.t}" x2="${PAD.l}" y2="${PAD.t+cH}" stroke="#444" stroke-width="1"/>`;
+    svg += `<line x1="${PAD.l}" y1="${PAD.t+cH}" x2="${PAD.l+cW}" y2="${PAD.t+cH}" stroke="#444" stroke-width="1"/>`;
+
+    // Y tick
+    [zMin, Math.round((zMin+zMax)/2), zMax].forEach(v => {
+      const y = py(v);
+      svg += `<line x1="${PAD.l-4}" y1="${y}" x2="${PAD.l}" y2="${y}" stroke="#555"/>`;
+      svg += `<text x="${PAD.l-6}" y="${y+4}" text-anchor="end" fill="#888" font-size="10">${v}</text>`;
+    });
+
+    // X ticks (every ~10 slices)
+    const step = Math.max(1, Math.round(slices.length / 10));
+    slices.filter((_, i) => i % step === 0).forEach(s => {
+      const x = px(s);
+      svg += `<line x1="${x}" y1="${PAD.t+cH}" x2="${x}" y2="${PAD.t+cH+4}" stroke="#555"/>`;
+      svg += `<text x="${x}" y="${PAD.t+cH+15}" text-anchor="middle" fill="#888" font-size="10">${s}</text>`;
+    });
+    svg += `<text x="${PAD.l + cW/2}" y="${H-2}" text-anchor="middle" fill="#888" font-size="11">slice</text>`;
+
+    // Smoothed line (green)
+    if (smooth && smooth.length === slices.length) {
+      svg += `<polyline points="${pts(smooth)}" fill="none" stroke="#4caf50" stroke-width="1.5" opacity="0.85"/>`;
+    }
+    // Original line (blue, thinner)
+    svg += `<polyline points="${pts(orig)}" fill="none" stroke="#5b9bd5" stroke-width="1.5" stroke-dasharray="4 2" opacity="0.7"/>`;
+
+    // Outlier markers (red circles)
+    outliers.forEach((isOut, i) => {
+      if (!isOut) return;
+      const x = px(slices[i]);
+      const y = py(orig[i]);
+      svg += `<circle cx="${x}" cy="${y}" r="4" fill="#e53935" opacity="0.9"/>`;
+    });
+
+    // Legend
+    const lx = PAD.l + cW - 130;
+    const ly = PAD.t + 4;
+    svg += `<line x1="${lx}" y1="${ly+6}" x2="${lx+18}" y2="${ly+6}" stroke="#5b9bd5" stroke-width="1.5" stroke-dasharray="4 2"/>`;
+    svg += `<text x="${lx+22}" y="${ly+10}" fill="#aaa" font-size="10">original</text>`;
+    svg += `<line x1="${lx}" y1="${ly+20}" x2="${lx+18}" y2="${ly+20}" stroke="#4caf50" stroke-width="1.5"/>`;
+    svg += `<text x="${lx+22}" y="${ly+24}" fill="#aaa" font-size="10">smoothed</text>`;
+    svg += `<circle cx="${lx+9}" cy="${ly+34}" r="4" fill="#e53935"/>`;
+    svg += `<text x="${lx+22}" y="${ly+38}" fill="#aaa" font-size="10">outlier</text>`;
+
+    svg += '</svg>';
+    chartDiv.innerHTML = svg;
+
+    // Summary badge
+    if (outlierCount > 0) {
+      summaryDiv.innerHTML = `<span style="background:#b71c1c;color:#fff;padding:3px 10px;border-radius:12px;font-size:0.85em">${t('qc.zContinuityWarn', { n: outlierCount })}</span>`;
+    } else {
+      summaryDiv.innerHTML = `<span style="background:#1b5e20;color:#c8e6c9;padding:3px 10px;border-radius:12px;font-size:0.85em">${t('qc.zContinuityOk')}</span>`;
+    }
+  } catch { section.style.display = 'none'; }
+}
 
 async function regenDemoVisuals() {
   const btn = document.getElementById('regenDemoBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Regenerating...'; }
   try {
-    const r = await fetch('/api/outputs/refresh-demo', { method: 'POST' });
+    const r = await fetch(withActiveJobQuery('/api/outputs/refresh-demo'), { method: 'POST' });
     const j = await r.json();
     if (j.ok) {
       showToast(t('toast.regenStarted'), 'info');
@@ -2121,31 +2928,37 @@ async function refreshOutputs() {
     let data = null;
     let useHierarchy = false;
     try {
-      const hierText = await fetch('/api/outputs/hierarchy').then(r => r.ok ? r.text() : null);
+      const hierText = await fetch(withActiveJobQuery('/api/outputs/hierarchy')).then(r => r.ok ? r.text() : null);
       if (hierText) { data = parseCsv(hierText); useHierarchy = true; }
     } catch {}
     if (!data) {
-      const leaf = await fetch('/api/outputs/leaf').then(r => r.text());
+      const leaf = await fetch(withActiveJobQuery('/api/outputs/leaf')).then(r => r.text());
       data = parseCsv(leaf);
     }
     state.allResults = data;
     state.useHierarchy = useHierarchy;
+    state.cellSummary = null;
+    await refreshCellSummary();
     renderResultsTable(state.allResults);
 
     // Load static cell count chart
     try {
-      const chartRes = await fetch('/api/outputs/cell-chart', { method: 'HEAD' });
+      const chartRes = await fetch(withActiveJobQuery('/api/outputs/cell-chart'), { method: 'HEAD' });
       const chartSection = document.getElementById('cellChartSection');
       const chartImg = document.getElementById('cellChartImg');
       if (chartRes.ok && chartSection && chartImg) {
         chartSection.style.display = '';
-        chartImg.src = `/api/outputs/cell-chart?${Date.now()}`;
+        chartImg.src = withActiveJobQuery('/api/outputs/cell-chart', { ts: Date.now() });
       }
     } catch {}
+    refreshApDensity();
+    refreshCoexpression();
+    refreshZContinuity();
+    await refreshDetectionConfidenceSamples();
     compareRows.innerHTML = '';
     for (const ch of ['red', 'green', 'farred']) {
       try {
-        const txt = await fetch(`/api/outputs/leaf/${ch}`).then(r => (r.ok ? r.text() : ''));
+        const txt = await fetch(withActiveJobQuery(`/api/outputs/leaf/${ch}`)).then(r => (r.ok ? r.text() : ''));
         if (!txt) continue;
         const arr = parseCsv(txt);
         const total = arr.reduce((s, x) => s + Number(x.count || 0), 0);
@@ -2154,44 +2967,145 @@ async function refreshOutputs() {
         compareRows.appendChild(tr);
       } catch {}
     }
+    await refreshRegistrationRuns();
     await refreshHistory();
   } catch (err) {
     console.error('Refresh outputs failed:', err);
   }
 }
 
-// Colour palette for chart bars (depth-2 major regions)
-const CHART_COLORS = [
-  '#e57373','#ff9800','#ffeb3b','#66bb6a','#26c6da',
-  '#5c6bc0','#ab47bc','#ec407a','#26a69a','#8d6e63',
-  '#78909c','#ffa726',
-];
+async function refreshCellSummary() {
+  const section = document.getElementById('resultSummarySection');
+  const cards = document.getElementById('resultSummaryCards');
+  const warnings = document.getElementById('resultSummaryWarnings');
+  const lead = document.getElementById('resultSummaryLead');
+  if (!section || !cards || !warnings || !lead) return;
 
-function renderRegionChart(data) {
+  try {
+    const res = await fetch(withActiveJobQuery('/api/outputs/cell-summary')).then(r => r.json());
+    const summary = res?.ok ? res.summary : null;
+    state.cellSummary = summary || null;
+    if (!summary) {
+      section.style.display = 'none';
+      cards.innerHTML = '';
+      warnings.innerHTML = '';
+      lead.textContent = t('summary.none');
+      return;
+    }
+
+    section.style.display = '';
+    lead.textContent = `${summary.slice_summary || '-'} · ${summary.mode_note || ''}`.trim();
+    warnings.innerHTML = '';
+    (summary.warnings || []).forEach((message) => {
+      const item = document.createElement('div');
+      item.className = 'results-warning';
+      item.textContent = String(message || '');
+      warnings.appendChild(item);
+    });
+
+    const topRegion = summary.top_region
+      ? `${summary.top_region.label} · ${Number(summary.top_region.count || 0).toLocaleString()}`
+      : '-';
+    const mappedText = `${Number(summary.mapped_count || 0).toLocaleString()} (${formatPercent(summary.mapped_pct || 0)})`;
+    const outsideText = `${Number(summary.outside_count || 0).toLocaleString()} (${formatPercent(summary.outside_pct || 0)})`;
+    cards.innerHTML = [
+      renderSummaryCard(t('summary.sample'), summary.sample_name || '-', summary.slice_summary || ''),
+      renderSummaryCard(t('summary.scope'), summary.scope_label || '-', summary.scope_kind || ''),
+      renderSummaryCard(t('summary.mode'), summary.counting_mode || '-', summary.mode_note || ''),
+      renderSummaryCard(t('summary.detectors'), summary.detectors || '-', ''),
+      renderSummaryCard(t('summary.detected'), Number(summary.total_detected || 0).toLocaleString(), ''),
+      renderSummaryCard(t('summary.mapped'), mappedText, ''),
+      renderSummaryCard(t('summary.outside'), outsideText, ''),
+      renderSummaryCard(t('summary.regions'), Number(summary.regions_mapped || 0).toLocaleString(), ''),
+      renderSummaryCard(t('summary.topRegion'), topRegion, ''),
+    ].join('');
+  } catch (err) {
+    console.error('Refresh cell summary failed:', err);
+    section.style.display = 'none';
+    cards.innerHTML = '';
+    warnings.innerHTML = '';
+  }
+}
+
+async function refreshDetectionConfidenceSamples() {
+  const section = document.getElementById('cellConfidenceSection');
+  const grid = document.getElementById('cellConfidenceGrid');
+  const empty = document.getElementById('cellConfidenceEmpty');
+  if (!section || !grid || !empty) return;
+
+  try {
+    const res = await fetch(withActiveJobQuery('/api/outputs/detection-samples')).then(r => r.json());
+    if (!res.ok || !Array.isArray(res.samples) || !res.samples.length) {
+      section.style.display = 'none';
+      grid.innerHTML = '';
+      empty.style.display = '';
+      return;
+    }
+
+    section.style.display = '';
+    empty.style.display = 'none';
+    grid.innerHTML = '';
+    res.samples.forEach(sample => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'cell-confidence-card';
+      const title = sample.source_name || `slice ${sample.slice_id ?? ''}`;
+      const subtitle = `${Number(sample.count || 0).toLocaleString()} ${t('cellconf.cells')}`;
+      const detectorText = sample.detectors ? `${t('cellconf.detector')}: ${sample.detectors}` : '';
+      const sampleUrl = withActiveJobQuery(sample.url || '', { ts: Date.now() });
+      card.innerHTML = `
+        <img src="${sampleUrl}" alt="${escapeHtml(title)}" />
+        <div class="cell-confidence-meta">
+          <div class="cell-confidence-title">${escapeHtml(title)}</div>
+          <div class="cell-confidence-subtitle">${escapeHtml(subtitle)}</div>
+          <div class="cell-confidence-detector">${escapeHtml(detectorText)}</div>
+        </div>
+      `;
+      card.onclick = () => openLightbox(sampleUrl, title);
+      grid.appendChild(card);
+    });
+  } catch (err) {
+    console.error('Refresh detection samples failed:', err);
+    section.style.display = 'none';
+  }
+}
+
+function renderSummaryCard(label, value, note = '') {
+  return `
+    <article class="result-summary-card">
+      <div class="result-summary-label">${escapeHtml(label)}</div>
+      <div class="result-summary-value">${escapeHtml(value)}</div>
+      <div class="result-summary-note">${escapeHtml(note || '')}</div>
+    </article>
+  `;
+}
+
+function safeDepth(value) {
+  const parsed = Number.parseInt(value ?? 0, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.min(parsed, 12);
+}
+
+function renderRegionChart(summary) {
   const section = document.getElementById('chartSection');
   const container = document.getElementById('regionChart');
-  if (!data || !data.length) { section.style.display = 'none'; return; }
-  // Pick depth-2 regions with count > 0
-  const regions = data.filter(d => parseInt(d.depth||0) === 2 && Number(d.count||0) > 0)
-                      .sort((a,b) => Number(b.count)-Number(a.count));
+  const regions = Array.isArray(summary?.major_regions) ? summary.major_regions : [];
   if (!regions.length) { section.style.display = 'none'; return; }
-  const total = regions.reduce((s,r) => s + Number(r.count), 0);
   const maxCount = regions[0] ? Number(regions[0].count) : 1;
   section.style.display = '';
   container.innerHTML = '';
-  regions.forEach((r, i) => {
-    const count = Number(r.count);
-    const pct = (count / total * 100).toFixed(1);
+  regions.forEach((r) => {
+    const count = Number(r.count || 0);
+    const pct = Number(r.pct || 0) * 100;
     const barPct = (count / maxCount * 100).toFixed(1);
-    const color = CHART_COLORS[i % CHART_COLORS.length];
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:7px';
+    row.className = 'region-chart-row';
     row.innerHTML = `
-      <div style="width:110px;text-align:right;font-size:0.82em;color:#ccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.region_name||''}">${r.acronym||r.region_name||''}</div>
-      <div style="flex:1;background:#222;border-radius:3px;height:18px;position:relative">
-        <div style="width:${barPct}%;background:${color};height:100%;border-radius:3px;transition:width 0.4s ease"></div>
+      <div class="region-chart-label" title="${escapeHtml(r.label || '')}">${escapeHtml(r.label || '-')}</div>
+      <div class="region-chart-bar">
+        <div class="region-chart-fill" style="width:${barPct}%;background:${escapeHtml(r.color || '#78909C')}"></div>
       </div>
-      <div style="width:80px;font-size:0.82em;color:#aaa">${count.toLocaleString()} <span style="color:#666">(${pct}%)</span></div>`;
+      <div class="region-chart-value">${count.toLocaleString()} <span>(${pct.toFixed(1)}%)</span></div>`;
     container.appendChild(row);
   });
 }
@@ -2250,7 +3164,7 @@ function renderResultsTable(data) {
   resultRows.innerHTML = '';
   const keyword = (document.getElementById('regionSearch')?.value || '').toLowerCase();
   const filtered = keyword ? data.filter(d => (d.region_name || d.region || '').toLowerCase().includes(keyword) || (d.acronym || '').toLowerCase().includes(keyword)) : data;
-  const rootCount = data.find(d => parseInt(d.depth||0)===0);
+  const rootCount = data.find(d => safeDepth(d.depth) === 0);
   const total = rootCount ? Number(rootCount.count||0) : Math.max(...data.map(d=>Number(d.count||0)));
 
   // Sort into tree order for hierarchy mode
@@ -2260,6 +3174,14 @@ function renderResultsTable(data) {
   // Show/hide depth controls
   const depthControls = document.getElementById('treeDepthControls');
   if (depthControls) depthControls.classList.toggle('hidden', !treeMode);
+
+  // Morphology: check if CSV has these columns
+  const hasMorph = data.length > 0 && (data[0].mean_elongation !== undefined || data[0].mean_area_px !== undefined);
+  const morphToggleLabel = document.getElementById('morphToggleLabel');
+  const morphToggle = document.getElementById('morphToggle');
+  if (morphToggleLabel) morphToggleLabel.style.display = hasMorph ? 'flex' : 'none';
+  const showMorph = hasMorph && morphToggle && morphToggle.checked;
+  document.querySelectorAll('.morph-col').forEach(el => el.style.display = showMorph ? '' : 'none');
 
   // Build ancestor-collapsed lookup for click-based collapse
   const collapsedAncestor = new Set();
@@ -2283,7 +3205,13 @@ function renderResultsTable(data) {
     const toggle = treeMode && hasKids
       ? `<span class="tree-toggle${isCollapsed ? ' collapsed' : ''}" data-rid="${rid}">\u25BC</span>`
       : (treeMode ? '<span style="display:inline-block;width:16px"></span>' : '');
-
+    const ciLow = d.ci_low != null ? Number(d.ci_low).toFixed(0) : null;
+    const ciHigh = d.ci_high != null ? Number(d.ci_high).toFixed(0) : null;
+    const ciStr = ciLow != null && ciHigh != null
+      ? `<span style="font-size:0.78em;color:#666">[${ciLow}–${ciHigh}]</span>` : '';
+    const morphCols = showMorph
+      ? `<td class="morph-col" style="text-align:right;color:#888;font-size:0.85em">${d.mean_elongation != null ? Number(d.mean_elongation).toFixed(2) : '—'}</td><td class="morph-col" style="text-align:right;color:#888;font-size:0.85em">${d.mean_area_px != null ? Number(d.mean_area_px).toFixed(0) : '—'}</td><td class="morph-col" style="text-align:right;color:#888;font-size:0.85em">${d.mean_mean_intensity != null ? Number(d.mean_mean_intensity).toFixed(0) : '—'}</td>`
+      : '<td class="morph-col" style="display:none"></td><td class="morph-col" style="display:none"></td><td class="morph-col" style="display:none"></td>';
     const tr = document.createElement('tr');
     tr.dataset.depth = depth;
     tr.dataset.rid = rid;
@@ -2301,7 +3229,7 @@ function renderResultsTable(data) {
     // Track collapsed ancestors for descendants
     if (isCollapsed || hidden) collapsedAncestor.add(rid);
 
-    tr.innerHTML = `<td>${indent}${toggle}${name}${acronym}</td><td style="text-align:right">${countStr}</td><td style="color:#888;font-size:0.85em">${pct}</td><td>${bar}</td>`;
+    tr.innerHTML = `<td>${indent}${toggle}${name}${acronym}</td><td style="text-align:right">${countStr}</td><td class="ci-col" style="text-align:right">${ciStr}</td><td style="color:#888;font-size:0.85em">${pct}</td><td>${bar}</td>${morphCols}`;
     resultRows.appendChild(tr);
   });
 
@@ -2319,10 +3247,11 @@ function renderResultsTable(data) {
   }
 
   const meta = document.getElementById('resultsMeta');
-  meta.textContent = keyword
+  const baseMeta = keyword
     ? t('results.filtered', { found: filtered.length, total: data.length })
     : t('results.total', { n: data.length });
-  if (!keyword) renderRegionChart(data);
+  meta.textContent = `${baseMeta} · ${t('results.tableHint')}`;
+  if (!keyword) renderRegionChart(state.cellSummary);
 }
 
 document.getElementById('regionSearch').addEventListener('input', () => renderResultsTable(state.allResults));
@@ -2337,18 +3266,26 @@ document.querySelectorAll('.depth-btn').forEach(btn => {
     renderResultsTable(state.allResults);
   });
 });
+document.getElementById('morphToggle')?.addEventListener('change', () => renderResultsTable(state.allResults));
 document.getElementById('refreshBtn').onclick = refreshOutputs;
-document.getElementById('exportBtn').onclick   = () => window.open('/api/outputs/leaf', '_blank');
+document.getElementById('exportBtn').onclick      = () => window.open(withActiveJobQuery('/api/outputs/leaf'), '_blank');
+document.getElementById('exportExcelBtn').onclick  = () => window.open(withActiveJobQuery('/api/outputs/excel'), '_blank');
 
 // ================================================================
 // METHODS TEXT EXPORT
 // ================================================================
+function openTextModal(title, description, text) {
+  if (methodsModalTitleEl) methodsModalTitleEl.textContent = title;
+  if (methodsModalDescEl) methodsModalDescEl.textContent = description;
+  document.getElementById('methodsText').textContent = text;
+  document.getElementById('methodsModal').classList.remove('hidden');
+}
+
 document.getElementById('exportMethodsBtn').onclick = async () => {
   try {
-    const res = await fetch('/api/export/methods-text').then(r => r.json());
+    const res = await fetch(withActiveJobQuery('/api/export/methods-text')).then(r => r.json());
     if (!res.ok) { showToast(t('toast.methodsFailed'), 'error'); return; }
-    document.getElementById('methodsText').textContent = res.text;
-    document.getElementById('methodsModal').classList.remove('hidden');
+    openTextModal(t('methods.title'), t('methods.desc'), res.text);
   } catch { showToast(t('toast.methodsFailed'), 'error'); }
 };
 document.getElementById('methodsModalClose').onclick  = () => document.getElementById('methodsModal').classList.add('hidden');
@@ -2364,7 +3301,7 @@ document.getElementById('methodsCopyBtn').onclick = async () => {
 // ================================================================
 async function refreshHistory() {
   try {
-    const h = await fetch('/api/history').then(r => r.json());
+    const h = await fetch(withActiveJobQuery('/api/history')).then(r => r.json());
     historyList.innerHTML = '';
     (h.history || []).slice().reverse().forEach(item => {
       const li = document.createElement('li');
@@ -2379,6 +3316,281 @@ async function refreshHistory() {
 }
 
 // ================================================================
+// 3D REGISTRATION REPORTS
+// ================================================================
+function formatRunTimestamp(value) {
+  if (!value) return '-';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
+}
+
+function formatFixed(value, digits = 4) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(digits) : '-';
+}
+
+function formatPercent(value, digits = 1) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${(n * 100).toFixed(digits)}%` : '-';
+}
+
+function metricDeltaInfo(finalValue, beforeValue, lowerIsBetter = false) {
+  const after = Number(finalValue);
+  const before = Number(beforeValue);
+  if (!Number.isFinite(after) || !Number.isFinite(before)) {
+    return { text: 'final only', cls: 'neutral' };
+  }
+  const delta = after - before;
+  if (Math.abs(delta) < 1e-6) {
+    return { text: 'no change', cls: 'neutral' };
+  }
+  const direction = lowerIsBetter ? -delta : delta;
+  return {
+    text: `${delta > 0 ? '+' : ''}${delta.toFixed(4)}`,
+    cls: direction > 0 ? 'good' : 'bad',
+  };
+}
+
+function renderRegistrationMetric(label, finalValue, beforeValue, opts = {}) {
+  const { lowerIsBetter = false, formatter = (v) => formatFixed(v, 4) } = opts;
+  const delta = metricDeltaInfo(finalValue, beforeValue, lowerIsBetter);
+  return `
+    <div class="registration-metric">
+      <div class="registration-metric-label">${escapeHtml(label)}</div>
+      <div class="registration-metric-value">${escapeHtml(formatter(finalValue))}</div>
+      <div class="registration-metric-delta ${delta.cls}">${escapeHtml(delta.text)}</div>
+    </div>
+  `;
+}
+
+function renderRegistrationPreview(url, caption) {
+  if (!url) {
+    return `
+      <div class="registration-preview">
+        <div class="registration-preview-empty">${escapeHtml(caption)}</div>
+      </div>
+    `;
+  }
+  const previewUrl = withActiveJobQuery(url, { ts: Date.now() });
+  return `
+    <div class="registration-preview">
+      <img src="${escapeHtml(previewUrl)}" alt="${escapeHtml(caption)}" data-lightbox-src="${escapeHtml(previewUrl)}" data-lightbox-caption="${escapeHtml(caption)}" />
+      <div class="registration-preview-caption">${escapeHtml(caption)}</div>
+    </div>
+  `;
+}
+
+function renderRegistrationMenu(run) {
+  const detailUrl = run?.artifacts?.report || run?.artifacts?.summary || run?.artifacts?.metadata || '';
+  const detailType = run?.artifacts?.report ? 'link' : 'text';
+  const detailTitle = run?.artifacts?.report ? '' : (run?.artifacts?.summary ? t('reg3d.summaryTitle') : t('reg3d.metadataTitle'));
+  const detailDesc = run?.artifacts?.report ? '' : (run?.artifacts?.summary ? t('reg3d.summaryDesc') : t('reg3d.metadataDesc'));
+  const pinLabel = t('reg3d.pinReport');
+  return `
+    <div class="registration-menu-wrap" data-registration-menu="${escapeHtml(run.name || '')}">
+      <button
+        class="registration-menu-trigger"
+        type="button"
+        aria-label="${escapeHtml(t('reg3d.menu'))}"
+        data-registration-menu-btn="${escapeHtml(run.name || '')}"
+      >⋯</button>
+      <div class="registration-menu-dropdown">
+        <button
+          type="button"
+          class="registration-menu-item"
+          data-registration-detail="${escapeHtml(run.name || '')}"
+          data-detail-url="${escapeHtml(detailUrl)}"
+          data-detail-type="${escapeHtml(detailType)}"
+          data-detail-title="${escapeHtml(detailTitle)}"
+          data-detail-desc="${escapeHtml(detailDesc)}"
+        >${escapeHtml(t('reg3d.detailInfo'))}</button>
+        <button
+          type="button"
+          class="registration-menu-item"
+          data-registration-delete="${escapeHtml(run.name || '')}"
+        >${escapeHtml(t('reg3d.deleteBad'))}</button>
+        <button
+          type="button"
+          class="registration-menu-item"
+          data-registration-pin="${escapeHtml(run.name || '')}"
+        >${escapeHtml(pinLabel)}</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderRegistrationRunCard(run) {
+  const metrics = run.metrics || {};
+  const pre = run.pre_metrics || {};
+  const staining = run.staining_stats || {};
+  const targetText = run.target_um === null || run.target_um === undefined
+    ? 'native'
+    : `${formatFixed(run.target_um, 1)} um`;
+  return `
+    <article class="registration-card">
+      <div class="registration-card-header">
+        <div class="registration-card-header-main">
+          <div class="registration-card-title">${escapeHtml(run.input_name || run.name || 'Unnamed run')}</div>
+          <div class="registration-card-subtitle">${escapeHtml(run.verdict_body || '')}</div>
+        </div>
+        <div class="registration-card-header-side">
+          ${run.pinned ? `<span class="registration-pill registration-pill-pinned">${escapeHtml(t('reg3d.pinned'))}</span>` : ''}
+          <span class="registration-badge ${escapeHtml(run.verdict_tone || 'neutral')}">${escapeHtml(run.verdict_title || '')}</span>
+          ${renderRegistrationMenu(run)}
+        </div>
+      </div>
+
+      <div class="registration-meta">
+        <div class="registration-meta-label">${escapeHtml(t('reg3d.pipeline'))}</div>
+        <div class="registration-meta-value">${escapeHtml(run.pipeline_label || '-')}</div>
+        <div class="registration-meta-label">${escapeHtml(t('reg3d.hemisphere'))}</div>
+        <div class="registration-meta-value">${escapeHtml(run.hemisphere || '-')}</div>
+        <div class="registration-meta-label">${escapeHtml(t('reg3d.target'))}</div>
+        <div class="registration-meta-value">${escapeHtml(targetText)}</div>
+        <div class="registration-meta-label">${escapeHtml(t('reg3d.updated'))}</div>
+        <div class="registration-meta-value">${escapeHtml(formatRunTimestamp(run.updated_at))}</div>
+      </div>
+
+      <div class="registration-preview-grid">
+        ${renderRegistrationPreview(run?.artifacts?.overview_before, run?.artifacts?.overview_before ? t('reg3d.before') : t('reg3d.noBefore'))}
+        ${renderRegistrationPreview(run?.artifacts?.overview, t('reg3d.after'))}
+      </div>
+
+      <div class="registration-metrics-grid">
+        ${renderRegistrationMetric('NCC', metrics.NCC, pre.NCC)}
+        ${renderRegistrationMetric('SSIM', metrics.SSIM, pre.SSIM)}
+        ${renderRegistrationMetric('Dice', metrics.Dice, pre.Dice)}
+        ${renderRegistrationMetric('MSE', metrics.MSE, pre.MSE, { lowerIsBetter: true })}
+        ${renderRegistrationMetric(t('reg3d.staining'), staining.staining_rate, undefined, { formatter: (v) => formatPercent(v) })}
+        ${renderRegistrationMetric(t('reg3d.coverage'), staining.atlas_coverage, undefined, { formatter: (v) => formatPercent(v) })}
+      </div>
+    </article>
+  `;
+}
+
+async function openRegistrationText(url, title, description) {
+  try {
+    const resp = await fetch(withActiveJobQuery(url));
+    if (!resp.ok) throw new Error('request failed');
+    const text = await resp.text();
+    const capped = text.length > 20000 ? `${text.slice(0, 20000)}\n...(truncated)` : text;
+    openTextModal(title, description, capped);
+  } catch (err) {
+    console.error('Open registration text failed:', err);
+    showToast(t('toast.runDetailsFailed'), 'warning');
+  }
+}
+
+function closeRegistrationMenus() {
+  document.querySelectorAll('.registration-menu-wrap.open').forEach((el) => el.classList.remove('open'));
+}
+
+function toggleRegistrationMenu(runName) {
+  const target = Array.from(document.querySelectorAll('.registration-menu-wrap')).find(
+    (el) => el.dataset.registrationMenu === runName
+  );
+  if (!target) return;
+  const nextState = !target.classList.contains('open');
+  closeRegistrationMenus();
+  if (nextState) target.classList.add('open');
+}
+
+async function pinRegistrationRun(runName) {
+  try {
+    const resp = await fetch(withActiveJobQuery(`/api/outputs/registration-run/${encodeURIComponent(runName)}/pin`), {
+      method: 'POST',
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      throw new Error(data?.error || 'pin failed');
+    }
+    showToast(t('reg3d.pinDone'), 'success', 2500);
+    await refreshRegistrationRuns();
+  } catch (err) {
+    console.error('Pin registration run failed:', err);
+    showToast(`${t('toast.runDetailsFailed')} ${err?.message || ''}`.trim(), 'warning');
+  }
+}
+
+async function deleteBadRegistrationRun(runName) {
+  if (!window.confirm(t('reg3d.deleteConfirm'))) return;
+  try {
+    const resp = await fetch(withActiveJobQuery(`/api/outputs/registration-run/${encodeURIComponent(runName)}/delete-bad`), {
+      method: 'POST',
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      throw new Error(data?.error || 'delete failed');
+    }
+    showToast(t('reg3d.deleteDone'), 'success', 2500);
+    await refreshRegistrationRuns();
+  } catch (err) {
+    console.error('Delete registration run failed:', err);
+    showToast(`${t('toast.runDetailsFailed')} ${err?.message || ''}`.trim(), 'warning');
+  }
+}
+
+async function refreshRegistrationRuns() {
+  const grid = document.getElementById('registrationRunsGrid');
+  const empty = document.getElementById('registrationRunsEmpty');
+  if (!grid || !empty) return;
+  try {
+    const res = await fetch(withActiveJobQuery('/api/outputs/registration-runs')).then(r => r.json());
+    const runs = Array.isArray(res?.runs) ? res.runs : [];
+    if (!res.ok || runs.length === 0) {
+      grid.innerHTML = '';
+      empty.classList.remove('hidden');
+      return;
+    }
+
+    empty.classList.add('hidden');
+    grid.innerHTML = runs.map(renderRegistrationRunCard).join('');
+
+    grid.querySelectorAll('[data-lightbox-src]').forEach((img) => {
+      img.onclick = () => openLightbox(img.dataset.lightboxSrc, img.dataset.lightboxCaption || '');
+    });
+    grid.querySelectorAll('[data-registration-menu-btn]').forEach((btn) => {
+      btn.onclick = (event) => {
+        event.stopPropagation();
+        toggleRegistrationMenu(btn.dataset.registrationMenuBtn || '');
+      };
+    });
+    grid.querySelectorAll('[data-registration-detail]').forEach((btn) => {
+      btn.onclick = () => {
+        closeRegistrationMenus();
+        const detailType = btn.dataset.detailType || 'link';
+        const detailUrl = btn.dataset.detailUrl || '';
+        if (!detailUrl) return;
+        if (detailType === 'text') {
+          openRegistrationText(detailUrl, btn.dataset.detailTitle || '', btn.dataset.detailDesc || '');
+          return;
+        }
+        window.open(withActiveJobQuery(detailUrl), '_blank');
+      };
+    });
+    grid.querySelectorAll('[data-registration-delete]').forEach((btn) => {
+      btn.onclick = () => {
+        closeRegistrationMenus();
+        deleteBadRegistrationRun(btn.dataset.registrationDelete || '');
+      };
+    });
+    grid.querySelectorAll('[data-registration-pin]').forEach((btn) => {
+      btn.onclick = () => {
+        closeRegistrationMenus();
+        pinRegistrationRun(btn.dataset.registrationPin || '');
+      };
+    });
+  } catch (err) {
+    console.error('Refresh 3D registration runs failed:', err);
+    grid.innerHTML = '';
+    empty.classList.remove('hidden');
+  }
+}
+
+document.getElementById('refreshRegistrationRunsBtn').onclick = refreshRegistrationRuns;
+document.addEventListener('click', () => closeRegistrationMenus());
+
+// ================================================================
 // INIT
 // ── Slice progress bar (sidebar, always visible) ─────────────────────────────
 function _updateSliceProgressBar(done, total) {
@@ -2388,7 +3600,10 @@ function _updateSliceProgressBar(done, total) {
   if (!wrap) return;
   if (done === 0 && total === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
-  txt.textContent = `${done} / ${total || '?'}`;
+  const etaSeconds = getRunEtaSeconds({ running: state.running, slicesDone: done, slicesTotal: total, startEpoch: state.startEpoch });
+  txt.textContent = etaSeconds != null
+    ? `${done} / ${total || '?'} · ${t('progress.eta', { eta: formatEtaSeconds(etaSeconds) })}`
+    : `${done} / ${total || '?'}`;
   const pct = total > 0 ? Math.round(done / total * 100) : 0;
   bar.style.width = pct + '%';
   // Change color when complete
@@ -2397,21 +3612,8 @@ function _updateSliceProgressBar(done, total) {
     : 'linear-gradient(90deg,#4CAF50,#81C784)';  // green = in progress
 }
 
-// Poll slice progress even when pipeline is not running via /api/run
-// (covers the background main.py pipeline case)
-async function _pollSliceProgress() {
-  try {
-    const s = await fetch('/api/status').then(r => r.json());
-    _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
-    renderWholeBrain3dStage(s.stage || null);
-    if (!s.running) {
-      await refreshVolumeQcSummary();
-    }
-  } catch {}
-}
-// Check on load + every 30s
-_pollSliceProgress();
-setInterval(_pollSliceProgress, 30000);
+// Start unified background poll at idle rate (30s); switches to 500ms during active run
+_startUnifiedPoll(false);
 
 // Sync quick pixel-size input (Step 1) ↔ main pixel-size input (Step 2)
 const _oneClickPixelSize = document.getElementById('oneClickPixelSize');
@@ -4081,7 +5283,7 @@ function updateManualPairsTable() {
   manualPairsBody.innerHTML = '';
   manualState.pairs.forEach((p, i) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i+1}</td><td>(${Math.round(p.real_x)}, ${Math.round(p.real_y)})</td><td>(${Math.round(p.atlas_x)}, ${Math.round(p.atlas_y)})</td><td><button onclick="removeManualPair(${i})" style="background:transparent;color:var(--danger);border:none;cursor:pointer;">✕?/button></td>`;
+  tr.innerHTML = `<td>${i+1}</td><td>(${Math.round(p.real_x)}, ${Math.round(p.real_y)})</td><td>(${Math.round(p.atlas_x)}, ${Math.round(p.atlas_y)})</td><td><button type="button" aria-label="Remove landmark pair ${i+1}" onclick="removeManualPair(${i})" style="background:transparent;color:var(--danger);border:none;cursor:pointer;">&times;</button></td>`;
     manualPairsBody.appendChild(tr);
   });
   manualPairsWrap.classList.toggle('hidden', manualState.pairs.length === 0);
@@ -4166,7 +5368,7 @@ async function refreshFileList() {
   const grid  = document.getElementById('outputFileGrid');
   const empty = document.getElementById('outputFileEmpty');
   try {
-    const res = await fetch('/api/outputs/file-list').then(r => r.json());
+  const res = await fetch(withActiveJobQuery('/api/outputs/file-list')).then(r => r.json());
     if (!res.ok || res.files.length === 0) { grid.innerHTML = ''; empty.classList.remove('hidden'); return; }
     empty.classList.add('hidden');
     grid.innerHTML = '';
@@ -4186,17 +5388,81 @@ async function refreshFileList() {
 
 async function handleOutputFileClick(f) {
   if (f.ext === '.png') {
-    openLightbox(`/api/outputs/named/${f.name}?${Date.now()}`, f.name);
+        openLightbox(withActiveJobQuery(`/api/outputs/named/${f.name}`, { ts: Date.now() }), f.name);
   } else if (f.ext === '.csv' || f.ext === '.json' || f.ext === '.txt') {
     try {
-      const text = await fetch(`/api/outputs/named/${f.name}`).then(r => r.text());
-      document.getElementById('methodsText').textContent = text.slice(0, 8000) + (text.length > 8000 ? '\n...(truncated)' : '');
-      document.getElementById('methodsModal').classList.remove('hidden');
+        const text = await fetch(withActiveJobQuery(`/api/outputs/named/${f.name}`)).then(r => r.text());
+      const capped = text.slice(0, 8000) + (text.length > 8000 ? '\n...(truncated)' : '');
+      openTextModal(f.name, t('outputs.previewDesc'), capped);
     } catch {}
   }
 }
 
 document.getElementById('refreshFileListBtn').onclick = refreshFileList;
+
+// ================================================================
+// CROSS-SAMPLE COMPARISON
+// ================================================================
+(function initSampleCompare() {
+  const dirList = document.getElementById('compareDirList');
+  const resultTable = document.getElementById('compareResultTable');
+
+  function addDirRow(dir = '', label = '') {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center';
+    row.innerHTML = `
+      <input class="compare-dir-input" type="text" value="${dir.replace(/"/g,'')}"
+        placeholder="${t('compare.multi.dirPlaceholder')}"
+        style="flex:3;padding:5px 8px;background:#1e1e1e;border:1px solid #333;border-radius:4px;color:#ddd;font-size:0.85em"/>
+      <input class="compare-label-input" type="text" value="${label.replace(/"/g,'')}"
+        placeholder="${t('compare.multi.label')}"
+        style="flex:1;padding:5px 8px;background:#1e1e1e;border:1px solid #333;border-radius:4px;color:#ddd;font-size:0.85em"/>
+      <button class="btn-ghost" style="padding:4px 8px;font-size:0.85em" onclick="this.closest('div').remove()">✕</button>`;
+    dirList.appendChild(row);
+  }
+
+  // Seed with 2 rows
+  addDirRow(); addDirRow();
+
+  document.getElementById('compareAddDirBtn').onclick = () => addDirRow();
+
+  document.getElementById('compareRunBtn').onclick = async () => {
+    const dirs = [...dirList.querySelectorAll('.compare-dir-input')].map(el => el.value.trim()).filter(Boolean);
+    const labels = [...dirList.querySelectorAll('.compare-label-input')].map(el => el.value.trim());
+    if (dirs.length < 2) { showToast(t('compare.multi.empty'), 'warning'); return; }
+
+    resultTable.innerHTML = '<div style="color:#888;padding:12px">Loading...</div>';
+    try {
+      const res = await fetch('/api/compare/regions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ output_dirs: dirs, labels }),
+      }).then(r => r.json());
+
+      if (!res.ok) { resultTable.innerHTML = `<div style="color:#e53935">${res.error || 'Error'}</div>`; return; }
+      const sampleCols = res.sample_labels || dirs.map((_, i) => labels[i] || `Sample ${i + 1}`);
+      const regions = res.regions || [];
+      if (!regions.length) { resultTable.innerHTML = `<div class="empty-hint">${t('compare.multi.noData')}</div>`; return; }
+
+      let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85em"><thead><tr>';
+      html += `<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #333;color:#aaa">Region</th>`;
+      sampleCols.forEach(s => { html += `<th style="text-align:right;padding:6px 8px;border-bottom:1px solid #333;color:#aaa">${s}</th>`; });
+      html += '</tr></thead><tbody>';
+      regions.forEach((row, ri) => {
+        const bg = ri % 2 === 0 ? '' : 'background:rgba(255,255,255,0.02)';
+        html += `<tr style="${bg}"><td style="padding:5px 8px;color:#ccc">${row.region_name || row.region || '-'}</td>`;
+        sampleCols.forEach((_, si) => {
+          const val = row[`count_${si}`] ?? row[sampleCols[si]] ?? '—';
+          html += `<td style="text-align:right;padding:5px 8px;color:#ddd">${typeof val === 'number' ? val.toLocaleString() : val}</td>`;
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      resultTable.innerHTML = html;
+    } catch (err) {
+      resultTable.innerHTML = `<div style="color:#e53935">Request failed: ${err?.message || err}</div>`;
+    }
+  };
+})();
 // Auto-refresh when switching to results tab
 const _origResultsRefresh = refreshOutputs;
 async function refreshOutputsAndFiles() {
@@ -4204,6 +5470,303 @@ async function refreshOutputsAndFiles() {
   await refreshFileList();
 }
 document.getElementById('refreshBtn').onclick = refreshOutputsAndFiles;
+
+// ----------------------------------------------------------------
+// AP-AXIS DENSITY PROFILE CHART
+// ----------------------------------------------------------------
+async function refreshApDensity() {
+  const section = document.getElementById('apDensitySection');
+  const chartDiv = document.getElementById('apDensityChart');
+  if (!section || !chartDiv) return;
+  try {
+    const r = await fetch(withActiveJobQuery('/api/outputs/ap-density'));
+    if (!r.ok) { section.style.display = 'none'; return; }
+    const j = await r.json();
+    if (!j.ok || !Array.isArray(j.ap_slices) || !j.ap_slices.length) {
+      section.style.display = 'none'; return;
+    }
+    section.style.display = '';
+    const items = j.ap_slices;
+    const maxCount = Math.max(...items.map(d => d.cell_count), 1);
+    const W = Math.max(600, items.length * 8);
+    const H = 160;
+    const PAD = { t: 12, r: 20, b: 36, l: 52 };
+    const cW = W - PAD.l - PAD.r;
+    const cH = H - PAD.t - PAD.b;
+
+    const barW = Math.max(2, cW / items.length - 1);
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;max-width:100%">`;
+
+    // Y-axis label
+    svg += `<text x="10" y="${PAD.t + cH/2}" text-anchor="middle" transform="rotate(-90,10,${PAD.t + cH/2})" fill="#888" font-size="11">cells</text>`;
+
+    // Axes
+    svg += `<line x1="${PAD.l}" y1="${PAD.t}" x2="${PAD.l}" y2="${PAD.t+cH}" stroke="#444" stroke-width="1"/>`;
+    svg += `<line x1="${PAD.l}" y1="${PAD.t+cH}" x2="${PAD.l+cW}" y2="${PAD.t+cH}" stroke="#444" stroke-width="1"/>`;
+
+    // Y ticks
+    [0, Math.round(maxCount/2), maxCount].forEach(v => {
+      const y = PAD.t + cH - (v / maxCount) * cH;
+      svg += `<line x1="${PAD.l-4}" y1="${y}" x2="${PAD.l}" y2="${y}" stroke="#555"/>`;
+      svg += `<text x="${PAD.l-6}" y="${y+4}" text-anchor="end" fill="#888" font-size="10">${v}</text>`;
+    });
+
+    // Bars
+    items.forEach((d, i) => {
+      const x = PAD.l + (i / items.length) * cW;
+      const bh = (d.cell_count / maxCount) * cH;
+      const y = PAD.t + cH - bh;
+      svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" fill="#5b9bd5" opacity="0.8" rx="1"/>`;
+    });
+
+    // X ticks (AP index labels, every ~8 items)
+    const step = Math.max(1, Math.round(items.length / 8));
+    items.filter((_, i) => i % step === 0).forEach((d, _, arr) => {
+      const idx = items.indexOf(d);
+      const x = PAD.l + (idx / items.length) * cW + barW / 2;
+      svg += `<text x="${x.toFixed(1)}" y="${PAD.t+cH+16}" text-anchor="middle" fill="#888" font-size="10">${d.ap_index}</text>`;
+    });
+    svg += `<text x="${PAD.l + cW/2}" y="${H-2}" text-anchor="middle" fill="#888" font-size="11">AP index</text>`;
+
+    svg += '</svg>';
+    chartDiv.innerHTML = svg;
+  } catch { section.style.display = 'none'; }
+}
+
+// ================================================================
+// CO-EXPRESSION TABLE
+// ================================================================
+async function refreshCoexpression() {
+  const section = document.getElementById('coexpressionSection');
+  const tableDiv = document.getElementById('coexpressionTable');
+  if (!section || !tableDiv) return;
+  try {
+    const r = await fetch(withActiveJobQuery('/api/outputs/coexpression'));
+    if (!r.ok) { section.style.display = 'none'; return; }
+    const j = await r.json();
+    if (!j.ok || !Array.isArray(j.regions) || !j.regions.length) {
+      section.style.display = 'none'; return;
+    }
+    section.style.display = '';
+    const rows = j.regions.slice(0, 200);
+    let html = `<table class="results-table"><thead><tr>
+      <th>${t('coexpr.th.region')}</th>
+      ${j.channel_red_available ? `<th>${t('coexpr.th.red')}</th>` : ''}
+      ${j.channel_green_available ? `<th>${t('coexpr.th.green')}</th>` : ''}
+    </tr></thead><tbody>`;
+    rows.forEach(r => {
+      const label = r.name ? `${r.acronym} — ${r.name}` : (r.acronym || '—');
+      html += `<tr>
+        <td>${label}</td>
+        ${j.channel_red_available ? `<td style="text-align:right">${Math.round(r.count_red)}</td>` : ''}
+        ${j.channel_green_available ? `<td style="text-align:right">${Math.round(r.count_green)}</td>` : ''}
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    tableDiv.innerHTML = html;
+  } catch { section.style.display = 'none'; }
+}
+
+// ================================================================
+// PROJECTS & BATCH QUEUE
+// ================================================================
+let _batchPollTimer = null;
+
+function _statusBadge(status) {
+  const map = { done: '#2e7d32', running: '#1565c0', queued: '#e65100', pending: '#555', error: '#b71c1c' };
+  const bg = map[status] || '#333';
+  const key = `sample.status.${status}`;
+  return `<span style="background:${bg};color:#fff;padding:2px 8px;border-radius:10px;font-size:0.75em;white-space:nowrap">${t(key) || status}</span>`;
+}
+
+async function loadProjects() {
+  const container = document.getElementById('projectsList');
+  if (!container) return;
+  try {
+    const res = await fetch('/api/projects').then(r => r.json());
+    if (!res.ok || !Array.isArray(res.projects) || !res.projects.length) {
+      container.innerHTML = `<div class="empty-hint">${t('projects.empty')}</div>`;
+      return;
+    }
+    container.innerHTML = '';
+    res.projects.forEach(proj => {
+      const card = document.createElement('div');
+      card.style.cssText = 'border:1px solid #2a2a2a;border-radius:8px;margin-bottom:10px;overflow:hidden';
+      card.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#1a1a1a;cursor:pointer" onclick="toggleProjectSamples(this,'${proj.id}')">
+          <div>
+            <strong style="color:#e0e0e0">${proj.name}</strong>
+            ${proj.description ? `<span style="color:#666;font-size:0.85em;margin-left:8px">${proj.description}</span>` : ''}
+          </div>
+          <span style="color:#555;font-size:0.85em">▶</span>
+        </div>
+        <div class="project-samples" id="proj-samples-${proj.id}" style="display:none;padding:10px 14px">
+          <div class="empty-hint" style="padding:6px 0">Loading…</div>
+        </div>
+        <div style="padding:8px 14px;border-top:1px solid #222;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input class="search-input" id="sample-name-${proj.id}" placeholder="${t('sample.namePh')}" style="flex:1;max-width:180px;padding:4px 8px;font-size:0.85em"/>
+          <input class="search-input" id="sample-cfg-${proj.id}" placeholder="${t('sample.configPh')}" style="flex:2;max-width:280px;padding:4px 8px;font-size:0.85em"/>
+          <input class="search-input" id="sample-dir-${proj.id}" placeholder="${t('sample.inputPh')}" style="flex:2;max-width:280px;padding:4px 8px;font-size:0.85em"/>
+          <button class="btn-secondary" style="padding:4px 10px;font-size:0.85em" onclick="addSampleToProject('${proj.id}')">${t('sample.addBtn')}</button>
+        </div>`;
+      container.appendChild(card);
+    });
+  } catch (err) {
+    container.innerHTML = `<div style="color:#e53935">Failed to load projects: ${err?.message || err}</div>`;
+  }
+}
+
+async function toggleProjectSamples(header, projectId) {
+  const panel = document.getElementById(`proj-samples-${projectId}`);
+  if (!panel) return;
+  if (panel.style.display === 'none') {
+    panel.style.display = '';
+    await loadProjectSamples(projectId);
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+async function loadProjectSamples(projectId) {
+  const panel = document.getElementById(`proj-samples-${projectId}`);
+  if (!panel) return;
+  try {
+    const res = await fetch(`/api/projects/${projectId}/samples`).then(r => r.json());
+    if (!res.ok || !Array.isArray(res.samples) || !res.samples.length) {
+      panel.innerHTML = `<div class="empty-hint" style="padding:4px 0">No samples yet.</div>`;
+      return;
+    }
+    panel.innerHTML = '';
+    res.samples.forEach(s => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid #1e1e1e;flex-wrap:wrap';
+      row.innerHTML = `
+        <span style="flex:2;color:#ccc;font-size:0.88em">${s.name || s.id}</span>
+        ${_statusBadge(s.status || 'pending')}
+        <span style="flex:3;color:#555;font-size:0.78em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.config_path || ''}">${s.config_path || '—'}</span>
+        <button class="btn-ghost" style="padding:3px 8px;font-size:0.8em" onclick="loadSampleAndRun('${s.config_path || ''}','${s.input_dir || ''}')">
+          ${t('sample.run')}
+        </button>
+        <button class="btn-ghost" style="padding:3px 8px;font-size:0.8em;color:#e53935" onclick="enqueueSample('${s.id}','${s.config_path || ''}','${s.input_dir || ''}')">
+          ${t('batch.enqueue')}
+        </button>`;
+      panel.appendChild(row);
+    });
+  } catch { panel.innerHTML = '<div class="empty-hint" style="padding:4px 0">Load failed.</div>'; }
+}
+
+async function addSampleToProject(projectId) {
+  const name = document.getElementById(`sample-name-${projectId}`)?.value.trim();
+  const cfg = document.getElementById(`sample-cfg-${projectId}`)?.value.trim();
+  const dir = document.getElementById(`sample-dir-${projectId}`)?.value.trim();
+  if (!name || !cfg) { showToast('Sample name and config path required.', 'warning'); return; }
+  try {
+    const res = await fetch(`/api/projects/${projectId}/samples`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, config_path: cfg, input_dir: dir }),
+    }).then(r => r.json());
+    if (res.ok) {
+      showToast('Sample added.', 'success');
+      await loadProjectSamples(projectId);
+    } else {
+      showToast(`Failed: ${res.error || '?'}`, 'error');
+    }
+  } catch (err) { showToast(`Error: ${err?.message}`, 'error'); }
+}
+
+function loadSampleAndRun(configPath, inputDir) {
+  if (configPath) {
+    const cfgEl = document.querySelector('[data-field="configPath"]') || document.getElementById('configPathInput');
+    if (cfgEl) cfgEl.value = configPath;
+  }
+  if (inputDir) {
+    const dirEl = document.getElementById('inputDir');
+    if (dirEl) dirEl.value = inputDir;
+  }
+  // Switch to workflow tab
+  document.querySelector('.nav-btn[data-tab="workflow"]')?.click();
+}
+
+async function enqueueSample(sampleId, configPath, inputDir) {
+  try {
+    const res = await fetch('/api/batch/enqueue', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sample_id: sampleId, config_path: configPath, input_dir: inputDir }),
+    }).then(r => r.json());
+    if (res.ok) { showToast('Enqueued.', 'success'); refreshBatchQueue(); }
+    else showToast(`Enqueue failed: ${res.error || '?'}`, 'error');
+  } catch (err) { showToast(`Error: ${err?.message}`, 'error'); }
+}
+
+async function refreshBatchQueue() {
+  const container = document.getElementById('batchQueueTable');
+  if (!container) return;
+  try {
+    const res = await fetch('/api/batch/status').then(r => r.json());
+    if (!res.ok) { container.innerHTML = `<div class="empty-hint">${t('batch.empty')}</div>`; return; }
+    const active = res.active;
+    const queued = Array.isArray(res.queued) ? res.queued : [];
+    if (!active && !queued.length) {
+      container.innerHTML = `<div class="empty-hint">${t('batch.empty')}</div>`;
+      clearInterval(_batchPollTimer); _batchPollTimer = null; return;
+    }
+    // Start polling if queue is active
+    if (!_batchPollTimer) {
+      _batchPollTimer = setInterval(() => {
+        if (document.getElementById('tab-projects')?.classList.contains('active')) refreshBatchQueue();
+        else { clearInterval(_batchPollTimer); _batchPollTimer = null; }
+      }, 10000);
+    }
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85em"><thead><tr>';
+    ['Sample', 'Status', 'Queued At', 'Action'].forEach(h => {
+      html += `<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #333;color:#aaa">${h}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    const allItems = active ? [{ ...active, _isActive: true }, ...queued] : queued;
+    allItems.forEach(item => {
+      const cancelBtn = !item._isActive
+        ? `<button class="btn-ghost" style="padding:2px 8px;font-size:0.8em;color:#e53935" onclick="cancelBatchItem('${item.sample_id || item.id}')">${t('batch.cancel')}</button>`
+        : '';
+      html += `<tr><td style="padding:5px 8px;color:#ccc">${item.sample_id || item.id || '—'}</td><td style="padding:5px 8px">${_statusBadge(item.status || (item._isActive ? 'running' : 'queued'))}</td><td style="padding:5px 8px;color:#666;font-size:0.8em">${item.queued_at || item.created_at || '—'}</td><td style="padding:5px 8px">${cancelBtn}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch { container.innerHTML = `<div class="empty-hint">${t('batch.empty')}</div>`; }
+}
+
+async function cancelBatchItem(sampleId) {
+  try {
+    const res = await fetch('/api/batch/cancel', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sample_id: sampleId }),
+    }).then(r => r.json());
+    if (res.ok) { showToast('Cancelled.', 'info'); refreshBatchQueue(); }
+    else showToast(`Cancel failed: ${res.error || '?'}`, 'error');
+  } catch (err) { showToast(`Error: ${err?.message}`, 'error'); }
+}
+
+async function createProject() {
+  const name = document.getElementById('newProjectName')?.value.trim();
+  const desc = document.getElementById('newProjectDesc')?.value.trim();
+  if (!name) { showToast('Project name required.', 'warning'); return; }
+  try {
+    const res = await fetch('/api/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description: desc }),
+    }).then(r => r.json());
+    if (res.ok) {
+      document.getElementById('newProjectName').value = '';
+      document.getElementById('newProjectDesc').value = '';
+      showToast('Project created.', 'success');
+      await loadProjects();
+    } else {
+      showToast(`Failed: ${res.error || '?'}`, 'error');
+    }
+  } catch (err) { showToast(`Error: ${err?.message}`, 'error'); }
+}
+
+document.getElementById('createProjectBtn')?.addEventListener('click', createProject);
+document.getElementById('refreshProjectsBtn')?.addEventListener('click', () => { loadProjects(); refreshBatchQueue(); });
 
 document.getElementById('pixelSizeUm')?.addEventListener('input', function() {
   this.dataset.userModified = '1';
@@ -4390,3 +5953,139 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
     }
   });
 });
+
+// ================================================================
+// GUIDED TOUR
+// ================================================================
+(function() {
+  const TOUR_KEY = 'idlebrain.tourDone';
+
+  const STEPS = [
+    {
+      target: '#inputDir',
+      titleKey: 'tour.step1.title',
+      bodyKey:  'tour.step1.body',
+      tab: 'workflow',
+    },
+    {
+      target: '#atlasPath',
+      titleKey: 'tour.step2.title',
+      bodyKey:  'tour.step2.body',
+      tab: 'workflow',
+    },
+    {
+      target: '#confidenceThreshold',
+      titleKey: 'tour.step3.title',
+      bodyKey:  'tour.step3.body',
+      tab: 'workflow',
+    },
+    {
+      target: '#runBtn',
+      titleKey: 'tour.step4.title',
+      bodyKey:  'tour.step4.body',
+      tab: 'workflow',
+    },
+    {
+      target: '#exportBtn',
+      titleKey: 'tour.step5.title',
+      bodyKey:  'tour.step5.body',
+      tab: 'results',
+    },
+  ];
+
+  let _overlay = null;
+  let _highlight = null;
+  let _tooltip = null;
+  let _stepIdx = 0;
+
+  function _switchTab(tabName) {
+    document.querySelectorAll('.nav-btn[data-tab]').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    const btn = document.querySelector(`.nav-btn[data-tab="${tabName}"]`);
+    const pane = document.getElementById(`tab-${tabName}`);
+    if (btn) btn.classList.add('active');
+    if (pane) pane.classList.add('active');
+  }
+
+  function _positionTooltip(targetEl, tooltipEl) {
+    const r = targetEl.getBoundingClientRect();
+    const tw = tooltipEl.offsetWidth || 310;
+    const th = tooltipEl.offsetHeight || 160;
+    const margin = 16;
+    let top = r.bottom + margin;
+    let left = r.left;
+    if (top + th > window.innerHeight - margin) top = r.top - th - margin;
+    if (left + tw > window.innerWidth - margin) left = window.innerWidth - tw - margin;
+    if (left < margin) left = margin;
+    if (top < margin) top = margin;
+    tooltipEl.style.top = top + 'px';
+    tooltipEl.style.left = left + 'px';
+  }
+
+  function _showStep(idx) {
+    _stepIdx = idx;
+    const step = STEPS[idx];
+    if (!step) { _endTour(true); return; }
+
+    if (step.tab) _switchTab(step.tab);
+
+    const targetEl = document.querySelector(step.target);
+    if (!targetEl) { _showStep(idx + 1); return; }  // skip missing elements
+
+    targetEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+
+    // Position highlight
+    setTimeout(() => {
+      const r = targetEl.getBoundingClientRect();
+      const pad = 6;
+      _highlight.style.top    = (r.top - pad) + 'px';
+      _highlight.style.left   = (r.left - pad) + 'px';
+      _highlight.style.width  = (r.width + pad * 2) + 'px';
+      _highlight.style.height = (r.height + pad * 2) + 'px';
+
+      // Build tooltip
+      const isLast = idx === STEPS.length - 1;
+      _tooltip.innerHTML = `
+        <h3>${t(step.titleKey)}</h3>
+        <p>${t(step.bodyKey)}</p>
+        <div class="tour-tooltip-footer">
+          <span class="tour-step-counter">${idx + 1} / ${STEPS.length}</span>
+          <div class="tour-btn-row">
+            <button class="tour-btn tour-btn-skip" id="_tourSkip">${t('tour.skip')}</button>
+            <button class="tour-btn tour-btn-next" id="_tourNext">${isLast ? t('tour.done') : t('tour.next')}</button>
+          </div>
+        </div>`;
+      document.getElementById('_tourSkip').onclick = () => _endTour(false);
+      document.getElementById('_tourNext').onclick = () => (isLast ? _endTour(true) : _showStep(idx + 1));
+
+      _positionTooltip(targetEl, _tooltip);
+    }, step.tab ? 120 : 0);
+  }
+
+  function startTour() {
+    if (!_overlay) {
+      _overlay   = document.createElement('div');
+      _highlight = document.createElement('div');
+      _tooltip   = document.createElement('div');
+      _overlay.className   = 'tour-overlay';
+      _highlight.className = 'tour-highlight';
+      _tooltip.className   = 'tour-tooltip';
+      document.body.append(_overlay, _highlight, _tooltip);
+    }
+    _overlay.style.display = _highlight.style.display = _tooltip.style.display = '';
+    _showStep(0);
+  }
+
+  function _endTour(completed) {
+    if (_overlay) { _overlay.style.display = _highlight.style.display = _tooltip.style.display = 'none'; }
+    if (completed) localStorage.setItem(TOUR_KEY, '1');
+  }
+
+  // Trigger on first visit
+  if (!localStorage.getItem(TOUR_KEY)) {
+    setTimeout(startTour, 1200);
+  }
+
+  // "?" button in sidebar
+  document.getElementById('startTourBtn')?.addEventListener('click', startTour);
+})();

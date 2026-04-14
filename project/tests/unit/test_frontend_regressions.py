@@ -68,7 +68,7 @@ def test_app_js_renders_whole_brain_stage_track_and_volume_qc():
         "function renderWholeBrain3dStage",
         "function refreshVolumeQcSummary",
         "function refreshSliceInspector",
-        "renderWholeBrain3dStage(s.stage || null)",
+        "renderWholeBrain3dStage(latestWholeBrainStage)",
         "t('wb3d.status.stage', {",
     ):
         assert snippet in js
@@ -156,9 +156,8 @@ def test_export_methods_uses_active_output_dir(tmp_path, monkeypatch, client):
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(ctx, "active_output_dir", lambda: out_dir)
-    ctx.OUTPUT_DIR = tmp_path / "stale_outputs"
-    ctx.OUTPUT_DIR.mkdir()
+    # Main uses job-based output dirs; default job maps to OUTPUT_DIR
+    ctx.OUTPUT_DIR = out_dir
 
     res = client.get("/api/export/methods-text")
 
@@ -166,7 +165,7 @@ def test_export_methods_uses_active_output_dir(tmp_path, monkeypatch, client):
     payload = res.get_json()
     assert payload["ok"] is True
     assert "2026-04-01 10:00:00" in payload["text"]
-    assert "Brain atlas registration" in payload["text"]
+    assert "脑图谱配准" in payload["text"]
     assert "仿射变换" in payload["text"]
 
 
@@ -174,9 +173,8 @@ def test_demo_best_slice_uses_active_output_dir(tmp_path, monkeypatch, client):
     out_dir = tmp_path / "run_demo"
     out_dir.mkdir()
     Image.new("RGB", (8, 8), (12, 34, 56)).save(out_dir / "demo_best_slice.jpg")
-    monkeypatch.setattr(ctx, "active_output_dir", lambda: out_dir)
-    ctx.OUTPUT_DIR = tmp_path / "stale_outputs"
-    ctx.OUTPUT_DIR.mkdir()
+    # Main uses job-based output dirs; default job maps to OUTPUT_DIR
+    ctx.OUTPUT_DIR = out_dir
 
     res = client.get("/api/outputs/demo-best-slice")
 
@@ -191,15 +189,15 @@ def test_reg_stats_uses_active_output_dir(tmp_path, monkeypatch, client):
         "slice_id,best_score,registration_ok\n0,0.81,true\n1,0.65,false\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(ctx, "active_output_dir", lambda: out_dir)
-    ctx.OUTPUT_DIR = tmp_path / "stale_outputs"
-    ctx.OUTPUT_DIR.mkdir()
+    # Main uses job-based output dirs; default job maps to OUTPUT_DIR
+    ctx.OUTPUT_DIR = out_dir
 
     res = client.get("/api/outputs/reg-stats")
 
     assert res.status_code == 200
     payload = res.get_json()
     assert payload["ok"] is True
+    assert payload["mode"] == "slice_qc"
     assert payload["total"] == 2
     assert payload["ok_count"] == 1
     assert payload["mean_score"] == pytest.approx(0.73, rel=1e-3)
@@ -221,30 +219,25 @@ def test_named_output_rejects_path_traversal(tmp_path, monkeypatch, client):
 def test_status_endpoint_returns_stage_progress(tmp_path, monkeypatch, client):
     out_dir = tmp_path / "run_3d"
     out_dir.mkdir()
-    (out_dir / "pipeline_progress.json").write_text(
-        (
-            "{"
-            '"stageName":"ANTS Registration",'
-            '"stageIndex":3,'
-            '"stageCount":6,'
-            '"percent":42,'
-            '"message":"Running SyN",'
-            '"artifacts":{"metrics_csv":"registration_metrics.csv"}'
-            "}"
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(ctx, "active_output_dir", lambda: out_dir)
-    ctx.run_state["outputDir"] = str(out_dir)
+    # Main uses job-based state; set up the default job's progress dict
+    ctx.OUTPUT_DIR = out_dir
+    ctx.run_state["progress"] = {
+        "phase": "registration",
+        "stepCurrent": 3,
+        "stepTotal": 6,
+        "slicesDone": 0,
+        "slicesTotal": 0,
+        "message": "Running SyN",
+    }
 
     res = client.get("/api/status")
 
     assert res.status_code == 200
     payload = res.get_json()
-    assert payload["stage"]["stageName"] == "ANTS Registration"
-    assert payload["stage"]["stageIndex"] == 3
-    assert payload["stage"]["percent"] == 42
-    assert payload["stage"]["artifacts"]["metrics_csv"] == "registration_metrics.csv"
+    assert payload["progress"]["phase"] == "registration"
+    assert payload["progress"]["stepCurrent"] == 3
+    assert payload["progress"]["stepTotal"] == 6
+    assert payload["progress"]["message"] == "Running SyN"
 
 
 def test_manual_preview_image_serves_png_from_selected_tiff(tmp_path, client):
@@ -292,7 +285,6 @@ def test_runner_forwards_explicit_output_dir(tmp_path, monkeypatch):
     config_path.write_text("{}", encoding="utf-8")
     input_dir = tmp_path / "input"
     input_dir.mkdir()
-    explicit_out = tmp_path / "custom_out"
 
     original_project_root = ctx.PROJECT_ROOT
     original_output_dir = ctx.OUTPUT_DIR
@@ -301,10 +293,12 @@ def test_runner_forwards_explicit_output_dir(tmp_path, monkeypatch):
     class FakePopen:
         last_cmd = None
         last_cwd = None
+        last_env = None
 
         def __init__(self, cmd, cwd=None, stdout=None, stderr=None, text=None, env=None):
             FakePopen.last_cmd = list(cmd)
             FakePopen.last_cwd = cwd
+            FakePopen.last_env = dict(env) if env else {}
             self.stdout = io.StringIO("")
 
         def wait(self):
@@ -312,6 +306,10 @@ def test_runner_forwards_explicit_output_dir(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ctx.subprocess, "Popen", FakePopen)
     ctx.PROJECT_ROOT = tmp_path
+    ctx.OUTPUT_DIR = tmp_path / "outputs"
+    ctx.OUTPUT_DIR.mkdir(exist_ok=True)
+
+    test_job_id = "test-job-42"
 
     try:
         ctx._runner(
@@ -319,18 +317,19 @@ def test_runner_forwards_explicit_output_dir(tmp_path, monkeypatch):
             str(input_dir),
             ["red"],
             run_params={"inputDir": str(input_dir)},
-            output_name="",
-            output_dir=str(explicit_out),
+            job_id=test_job_id,
         )
-        recorded_output_dir = ctx.run_state["outputDir"]
-        recorded_cmd = list(FakePopen.last_cmd)
+        job_state = ctx.get_job_state(test_job_id)
+        recorded_output_dir = job_state["outputs_dir"]
+        recorded_env = dict(FakePopen.last_env)
+        expected_out = str(ctx._job_output_dir(test_job_id))
     finally:
         ctx.PROJECT_ROOT = original_project_root
         ctx.OUTPUT_DIR = original_output_dir
         ctx.run_state.clear()
         ctx.run_state.update(original_run_state)
 
-    assert recorded_output_dir == str(explicit_out)
-    assert "--output-dir" in recorded_cmd
-    out_arg = recorded_cmd[recorded_cmd.index("--output-dir") + 1]
-    assert out_arg == str(explicit_out)
+    assert recorded_output_dir == expected_out
+    # Main passes output dir via env var, not CLI flag
+    assert recorded_env.get("BRAINCOUNT_OUTPUT_DIR") == expected_out
+    assert recorded_env.get("BRAINCOUNT_JOB_ID") == test_job_id

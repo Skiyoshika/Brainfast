@@ -12,6 +12,10 @@ from flask import Blueprint, jsonify, request, send_from_directory
 from PIL import Image
 
 import project.frontend.server_context as ctx
+from project.frontend.api_errors import (
+    ERR_INVALID_INPUT,
+    ERR_NOT_FOUND,
+)
 from project.frontend.services.overlay_service import (
     apply_liquify_and_render,
     render_overlay_from_label,
@@ -67,7 +71,9 @@ def overlay_preview():
             )
 
     if not real_path.exists() or not label_path.exists():
-        return jsonify({"ok": False, "error": "real or label path not found"}), 400
+        return jsonify(
+            {"ok": False, "error": "real or label path not found", "error_code": ERR_NOT_FOUND}
+        ), 400
 
     out = ctx._job_file(job_id, "overlay_preview.png")
     hover_label_path = ctx._job_file(job_id, "overlay_label_preview.tif")
@@ -116,7 +122,7 @@ def overlay_preview():
 def overlay_preview_status():
     token = request.args.get("token", "")
     if not token or token not in ctx._preview_tasks:
-        return jsonify({"ok": False, "error": "unknown token"}), 404
+        return jsonify({"ok": False, "error": "unknown token", "error_code": ERR_NOT_FOUND}), 404
     task = ctx._preview_tasks[token]
     resp = {
         "ok": True,
@@ -158,7 +164,9 @@ def overlay_liquify_drag():
         warp_params = {}
 
     if not real_path.exists():
-        return jsonify({"ok": False, "error": "real path not found"}), 400
+        return jsonify(
+            {"ok": False, "error": "real path not found", "error_code": ERR_NOT_FOUND}
+        ), 400
 
     hover_label_path = ctx._job_file(job_id, "overlay_label_preview.tif")
     if hover_label_path.exists():
@@ -185,7 +193,9 @@ def overlay_liquify_drag():
             }
         ]
     if not drags:
-        return jsonify({"ok": False, "error": "no drags provided"}), 400
+        return jsonify(
+            {"ok": False, "error": "no drags provided", "error_code": ERR_INVALID_INPUT}
+        ), 400
 
     calib_dir = ctx._job_manual_calibration_dir(job_id)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -222,7 +232,7 @@ def overlay_liquify_drag():
             render_kwargs,
         )
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": str(e), "error_code": ERR_INVALID_INPUT}), 400
 
     return jsonify(
         {
@@ -243,10 +253,18 @@ def overlay_calibration_finalize():
     job_id = ctx._payload_job_id(payload)
     real_path = Path(payload.get("realPath", ""))
     if not real_path.exists():
-        return jsonify({"ok": False, "error": "real path not found"}), 400
+        return jsonify(
+            {"ok": False, "error": "real path not found", "error_code": ERR_NOT_FOUND}
+        ), 400
     hover_label_path = ctx._job_file(job_id, "overlay_label_preview.tif")
     if not hover_label_path.exists():
-        return jsonify({"ok": False, "error": "no calibrated label to finalize"}), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "no calibrated label to finalize",
+                "error_code": ERR_INVALID_INPUT,
+            }
+        ), 400
 
     raw_real_z = payload.get("realZIndex", None)
     real_z_index = None if raw_real_z in (None, "", "null") else int(raw_real_z)
@@ -295,7 +313,7 @@ def overlay_calibration_finalize():
             ),
         )
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": str(e), "error_code": ERR_INVALID_INPUT}), 400
 
     manifest = {
         "timestamp": ts,
@@ -343,11 +361,15 @@ def overlay_export():
     fmt = str(payload.get("format", "png")).strip().lower()
     allowed = {"png", "jpg", "jpeg", "tif", "tiff", "bmp"}
     if fmt not in allowed:
-        return jsonify({"ok": False, "error": f"unsupported format: {fmt}"}), 400
+        return jsonify(
+            {"ok": False, "error": f"unsupported format: {fmt}", "error_code": ERR_INVALID_INPUT}
+        ), 400
 
     src = ctx._job_file(job_id, "overlay_preview.png")
     if not src.exists():
-        return jsonify({"ok": False, "error": "overlay preview not found"}), 404
+        return jsonify(
+            {"ok": False, "error": "overlay preview not found", "error_code": ERR_NOT_FOUND}
+        ), 404
 
     export_dir = ctx._job_output_dir(job_id) / "exports"
     export_dir.mkdir(parents=True, exist_ok=True)
@@ -363,7 +385,7 @@ def overlay_export():
             else:
                 im.save(out)
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": str(e), "error_code": ERR_INVALID_INPUT}), 400
 
     return jsonify({"ok": True, "path": str(out), "format": ext, "jobId": job_id})
 
@@ -373,13 +395,15 @@ def overlay_region_at():
     job_id = ctx._query_job_id()
     label = ctx._load_hover_label(job_id)
     if label is None:
-        return jsonify({"ok": False, "error": "preview label not available yet"}), 404
+        return jsonify(
+            {"ok": False, "error": "preview label not available yet", "error_code": ERR_NOT_FOUND}
+        ), 404
 
     try:
         x = int(float(request.args.get("x", "-1")))
         y = int(float(request.args.get("y", "-1")))
     except Exception:
-        return jsonify({"ok": False, "error": "invalid x/y"}), 400
+        return jsonify({"ok": False, "error": "invalid x/y", "error_code": ERR_INVALID_INPUT}), 400
 
     h, w = label.shape[:2]
     if x < 0 or y < 0 or x >= w or y >= h:
@@ -431,7 +455,9 @@ def overlay_atlas_layer():
     label_z_index = None if raw_label_z in (None, "", "null") else int(raw_label_z)
 
     if not label_path.exists() or not real_path.exists():
-        return jsonify({"ok": False, "error": "label or real path not found"}), 400
+        return jsonify(
+            {"ok": False, "error": "label or real path not found", "error_code": ERR_NOT_FOUND}
+        ), 400
     try:
         out = ctx._job_file(job_id, "atlas_layer_rgba.png")
         diagnostic = render_overlay_from_label(
@@ -456,14 +482,16 @@ def overlay_atlas_layer():
         )
         return jsonify({"ok": True, "diagnostic": diagnostic, "jobId": job_id})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": str(e), "error_code": ERR_INVALID_INPUT}), 400
 
 
 @bp.get("/outputs/atlas-layer")
 def get_atlas_layer():
     fp = ctx._job_file(ctx._query_job_id(), "atlas_layer_rgba.png")
     if not fp.exists():
-        return jsonify({"ok": False, "error": "atlas layer not rendered yet"}), 404
+        return jsonify(
+            {"ok": False, "error": "atlas layer not rendered yet", "error_code": ERR_NOT_FOUND}
+        ), 404
     return send_from_directory(str(fp.parent), fp.name)
 
 
@@ -482,12 +510,16 @@ def outputs_overlay_preview():
         candidates = sorted(job_dir.glob("overlay_*.png"))
         if candidates:
             return send_from_directory(str(candidates[0].parent), candidates[0].name)
-    return jsonify({"ok": False, "error": "overlay preview not found"}), 404
+    return jsonify(
+        {"ok": False, "error": "overlay preview not found", "error_code": ERR_NOT_FOUND}
+    ), 404
 
 
 @bp.get("/outputs/overlay-compare")
 def outputs_overlay_compare():
     fp = ctx._job_file(ctx._query_job_id(), "overlay_compare.png")
     if not fp.exists():
-        return jsonify({"ok": False, "error": "overlay compare not found"}), 404
+        return jsonify(
+            {"ok": False, "error": "overlay compare not found", "error_code": ERR_NOT_FOUND}
+        ), 404
     return send_from_directory(fp.parent, fp.name)

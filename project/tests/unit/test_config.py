@@ -10,8 +10,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.config_validation import load_config, validate_runtime_config  # noqa: E402
-from scripts.exceptions import (  # noqa: E402
+from scripts.config_validation import (
+    collect_runtime_config_issues,
+    load_config,
+    validate_runtime_config,
+)
+from scripts.exceptions import (
     AlignmentScoreError,
     AtlasError,
     BrainfastError,
@@ -36,6 +40,7 @@ def _minimal_valid_cfg() -> dict:
             "active_channel": "red",
         },
         "detection": {"primary_model": "fallback"},
+        "registration": {},
         "dedup": {"neighbor_slices": 1, "r_xy_um": 8.0},
         "outputs": {
             "leaf_csv": "outputs/leaf.csv",
@@ -89,6 +94,18 @@ class TestValidateRuntimeConfig(unittest.TestCase):
         cfg["dedup"]["neighbor_slices"] = -1
         issues = validate_runtime_config(cfg)
         self.assertTrue(any("neighbor_slices" in i for i in issues))
+
+    def test_collect_runtime_config_issues_warns_on_zero_refine_range(self):
+        cfg = _minimal_valid_cfg()
+        cfg["registration"] = {"atlas_z_refine_range": 0}
+        issues = collect_runtime_config_issues(cfg)
+        self.assertTrue(
+            any(
+                issue["field"] == "registration.atlas_z_refine_range"
+                and issue["severity"] == "warning"
+                for issue in issues
+            )
+        )
 
 
 class TestExceptionHierarchy(unittest.TestCase):

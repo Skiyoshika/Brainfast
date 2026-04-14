@@ -3,125 +3,78 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "v*.*.*"
   workflow_dispatch:
-
-permissions:
-  contents: write
+    inputs:
+      tag:
+        description: "Version tag to build (e.g. v0.5.1)"
+        required: false
 
 jobs:
-  build-desktop:
-    name: Build Desktop Release
+  # ── Build Windows EXE and upload to GitHub Release ────────────────────────
+  build-windows-exe:
+    name: Build Windows EXE
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0   # full history for setuptools-scm
 
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
-        shell: pwsh
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[desktop]" -r project/frontend/requirements-desktop-build.txt pytest pytest-cov
+          pip install -e ".[advanced]" pyinstaller
 
-      - name: Write version metadata
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}"
-          if ([string]::IsNullOrWhiteSpace($tag)) {
-            $tag = "0.0.0-dev"
-          }
-          $buildDate = Get-Date -Format "yyyy-MM-dd"
-          python project/scripts/write_version_metadata.py --version $tag --commit "${{ github.sha }}" --build-date $buildDate
-
-      - name: Run unit tests
-        shell: pwsh
-        run: |
-          python -m pytest project/tests/unit -v --tb=short
-
-      - name: Build desktop app
-        shell: pwsh
-        working-directory: project/frontend
-        run: |
-          python -m PyInstaller --noconfirm BrainfastUI.spec
-
-      - name: Decode signing certificate
-        if: ${{ secrets.BRAINFAST_CODESIGN_PFX_BASE64 != '' }}
-        shell: pwsh
-        run: |
-          $pfxPath = Join-Path $env:RUNNER_TEMP "brainfast-codesign.pfx"
-          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.BRAINFAST_CODESIGN_PFX_BASE64 }}"))
-          "BRAINFAST_CODESIGN_PFX=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Sign desktop executable
-        if: ${{ secrets.BRAINFAST_CODESIGN_PFX_BASE64 != '' && secrets.BRAINFAST_CODESIGN_PASSWORD != '' }}
-        shell: pwsh
+      - name: Write version.json
         env:
-          BRAINFAST_CODESIGN_PASSWORD: ${{ secrets.BRAINFAST_CODESIGN_PASSWORD }}
-          BRAINFAST_CODESIGN_TIMESTAMP_URL: ${{ secrets.BRAINFAST_CODESIGN_TIMESTAMP_URL }}
-        run: |
-          python project/scripts/sign_release_assets.py --file "project/frontend/dist/BrainfastUI/BrainfastUI.exe"
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python project/scripts/build_version_json.py
 
-      - name: Install NSIS
+      - name: Build EXE with PyInstaller
+        run: |
+          pyinstaller `
+            --onefile `
+            --name brainfast `
+            --add-data "project/frontend/index.html;project/frontend" `
+            --add-data "project/frontend/app.js;project/frontend" `
+            --add-data "project/frontend/styles.css;project/frontend" `
+            --add-data "project/version.json;project" `
+            --hidden-import=flask `
+            --hidden-import=scipy `
+            --hidden-import=skimage `
+            project/frontend/server.py
+        shell: pwsh
+
+      - name: Rename EXE with version
         shell: pwsh
         run: |
-          choco install nsis -y --no-progress
+          $version = "${{ github.ref_name }}"
+          Move-Item dist\brainfast.exe "dist\brainfast-${version}-windows.exe"
 
-      - name: Build NSIS installer
-        shell: pwsh
-        run: |
-          $version = (Get-Content project/version.json | ConvertFrom-Json).version
-          $env:PATH += ";C:\Program Files (x86)\NSIS;C:\Program Files\NSIS"
-          makensis /DAPP_VERSION=$version /DDIST_DIR="$PWD\project\frontend\dist\BrainfastUI" /DOUTPUT_FILE="$PWD\project\frontend\dist\Brainfast-$version-setup.exe" nsis/brainfast_setup.nsi
-
-      - name: Sign NSIS installer
-        if: ${{ secrets.BRAINFAST_CODESIGN_PFX_BASE64 != '' && secrets.BRAINFAST_CODESIGN_PASSWORD != '' }}
-        shell: pwsh
-        env:
-          BRAINFAST_CODESIGN_PASSWORD: ${{ secrets.BRAINFAST_CODESIGN_PASSWORD }}
-          BRAINFAST_CODESIGN_TIMESTAMP_URL: ${{ secrets.BRAINFAST_CODESIGN_TIMESTAMP_URL }}
-        run: |
-          $version = (Get-Content project/version.json | ConvertFrom-Json).version
-          python project/scripts/sign_release_assets.py --file "project/frontend/dist/Brainfast-$version-setup.exe"
-
-      - name: Archive desktop build
-        shell: pwsh
-        run: |
-          $version = (Get-Content project/version.json | ConvertFrom-Json).version
-          $distDir = "project/frontend/dist/BrainfastUI"
-          $zipPath = "project/frontend/dist/Brainfast-$version-windows.zip"
-          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-          Compress-Archive -Path "$distDir\*" -DestinationPath $zipPath
-          $hash = (Get-FileHash $zipPath -Algorithm SHA256).Hash
-          Set-Content -Path "project/frontend/dist/Brainfast-$version-windows.sha256.txt" -Value "$hash  Brainfast-$version-windows.zip"
-          $installerPath = "project/frontend/dist/Brainfast-$version-setup.exe"
-          $installerHash = (Get-FileHash $installerPath -Algorithm SHA256).Hash
-          Set-Content -Path "project/frontend/dist/Brainfast-$version-setup.sha256.txt" -Value "$installerHash  Brainfast-$version-setup.exe"
-
-      - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: brainfast-desktop-release
-          path: |
-            project/frontend/dist/Brainfast-*-windows.zip
-            project/frontend/dist/Brainfast-*-windows.sha256.txt
-            project/frontend/dist/Brainfast-*-setup.exe
-            project/frontend/dist/Brainfast-*-setup.sha256.txt
-
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          files: dist/brainfast-*.exe
           generate_release_notes: true
-          files: |
-            project/frontend/dist/Brainfast-*-windows.zip
-            project/frontend/dist/Brainfast-*-windows.sha256.txt
-            project/frontend/dist/Brainfast-*-setup.exe
-            project/frontend/dist/Brainfast-*-setup.sha256.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Run integration tests on self-hosted runner (has atlas file) ──────────
+  # Requires a self-hosted runner registered with label: brainfast
+  # To enable: add runner at repo Settings → Actions → Runners
+  #
+  # integration-tests:
+  #   name: Integration tests (self-hosted)
+  #   runs-on: [self-hosted, brainfast]
+  #   needs: build-windows-exe
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Run integration tests
+  #       run: python -m pytest project/tests/integration/ -v --tb=short

@@ -32,6 +32,10 @@ _log = logging.getLogger(__name__)
 _CELLPOSE_MODEL_CACHE: dict[tuple[str, bool], Any] = {}
 
 
+class CellposeDetectionError(RuntimeError):
+    """Raised when Cellpose was requested but could not produce a valid run."""
+
+
 def _read_gray(slice_path: Path) -> np.ndarray:
     img = imread(str(slice_path))
     if img.ndim == 3:
@@ -180,16 +184,38 @@ def _load_cellpose_model(model_type: str, use_gpu: bool):
     return result
 
 
-def _masks_to_centroids(masks: np.ndarray, detector: str) -> pd.DataFrame:
+def _masks_to_centroids(
+    masks: np.ndarray,
+    detector: str,
+    intensity_image: np.ndarray | None = None,
+) -> pd.DataFrame:
+    _empty_cols = [
+        "cell_id",
+        "x",
+        "y",
+        "score",
+        "detector",
+        "area_px",
+        "elongation",
+        "mean_intensity",
+    ]
     if masks is None or masks.size == 0 or int(np.max(masks)) <= 0:
-        return pd.DataFrame(columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+        return pd.DataFrame(columns=_empty_cols)
+
+    base_props = ["label", "centroid", "area"]
+    extra_props: list[str] = []
+    if intensity_image is not None:
+        extra_props.append("mean_intensity")
+    # minor/major axis needs ≥3px objects; safe to request always
+    extra_props += ["minor_axis_length", "major_axis_length"]
 
     props = measure.regionprops_table(
         masks.astype(np.int32, copy=False),
-        properties=("label", "centroid", "area"),
+        intensity_image=intensity_image,
+        properties=base_props + extra_props,
     )
     if not props or len(props.get("label", [])) == 0:
-        return pd.DataFrame(columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+        return pd.DataFrame(columns=_empty_cols)
 
     df = pd.DataFrame(
         {
@@ -201,7 +227,25 @@ def _masks_to_centroids(masks: np.ndarray, detector: str) -> pd.DataFrame:
     df["score"] = np.clip(np.sqrt(df["area_px"].astype(np.float32)), 0.0, None)
     df["cell_id"] = np.arange(1, len(df) + 1, dtype=np.int32)
     df["detector"] = str(detector)
-    return df[["cell_id", "x", "y", "score", "detector", "area_px"]]
+
+    # elongation: minor/major axis ratio (1.0 = circle, 0.0 = line)
+    minor = np.asarray(props.get("minor_axis_length", []), dtype=np.float32)
+    major = np.asarray(props.get("major_axis_length", []), dtype=np.float32)
+    if len(minor) == len(df) and len(major) == len(df):
+        with np.errstate(invalid="ignore", divide="ignore"):
+            elong = np.where(major > 0, minor / major, 1.0)
+        df["elongation"] = np.clip(elong, 0.0, 1.0).astype(np.float32)
+    else:
+        df["elongation"] = np.float32(1.0)
+
+    # mean_intensity from intensity image
+    if intensity_image is not None and "mean_intensity" in props:
+        mi = np.asarray(props["mean_intensity"], dtype=np.float32)
+        df["mean_intensity"] = mi if len(mi) == len(df) else np.float32(0.0)
+    else:
+        df["mean_intensity"] = np.float32(0.0)
+
+    return df[_empty_cols]
 
 
 def _dedup_xy(df: pd.DataFrame, radius_px: float = 4.0) -> pd.DataFrame:
@@ -273,6 +317,7 @@ def detect_cells_fallback(
     min_distance: int = 8,
     threshold_abs: float = 200.0,
 ) -> pd.DataFrame:
+    _cols = ["cell_id", "x", "y", "score", "detector", "area_px", "elongation", "mean_intensity"]
     img = _read_gray(slice_path)
     coords = peak_local_max(
         img,
@@ -289,9 +334,11 @@ def detect_cells_fallback(
                 "score": float(img[y, x]),
                 "detector": "fallback_peak",
                 "area_px": 1.0,
+                "elongation": 1.0,
+                "mean_intensity": float(img[y, x]),
             }
         )
-    return pd.DataFrame(rows, columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+    return pd.DataFrame(rows, columns=_cols)
 
 
 def detect_cells_log_fallback(
@@ -301,6 +348,7 @@ def detect_cells_log_fallback(
     num_sigma: int = 8,
     threshold_rel: float = 0.03,
 ) -> pd.DataFrame:
+    _cols = ["cell_id", "x", "y", "score", "detector", "area_px", "elongation", "mean_intensity"]
     img = _read_gray(slice_path)
     x = _norm_for_cellpose(img)
     blobs = blob_log(
@@ -311,14 +359,22 @@ def detect_cells_log_fallback(
         threshold=float(threshold_rel),
     )
     if blobs is None or len(blobs) == 0:
-        return pd.DataFrame(columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+        return pd.DataFrame(columns=_cols)
 
+    h, w = img.shape[:2]
     rows = []
     for i, b in enumerate(blobs, 1):
         y, x0, sigma = float(b[0]), float(b[1]), float(b[2])
         r = np.sqrt(2.0) * sigma
-        y0 = int(np.clip(round(y), 0, img.shape[0] - 1))
-        x1 = int(np.clip(round(x0), 0, img.shape[1] - 1))
+        y0 = int(np.clip(round(y), 0, h - 1))
+        x1 = int(np.clip(round(x0), 0, w - 1))
+        # Disk mean intensity: sample pixels within radius r
+        iy0 = int(max(0, y0 - r))
+        iy1 = int(min(h, y0 + r + 1))
+        ix0 = int(max(0, x1 - r))
+        ix1 = int(min(w, x1 + r + 1))
+        patch = img[iy0:iy1, ix0:ix1]
+        mean_int = float(np.mean(patch)) if patch.size > 0 else float(img[y0, x1])
         rows.append(
             {
                 "cell_id": i,
@@ -327,9 +383,71 @@ def detect_cells_log_fallback(
                 "score": float(img[y0, x1]),
                 "detector": "fallback_log",
                 "area_px": float(np.pi * r * r),
+                "elongation": 1.0,  # circular blob approximation
+                "mean_intensity": mean_int,
             }
         )
-    return pd.DataFrame(rows, columns=["cell_id", "x", "y", "score", "detector", "area_px"])
+    return pd.DataFrame(rows, columns=_cols)
+
+
+def _tile_starts(length: int, tile_size: int, overlap: int) -> list[int]:
+    if tile_size <= 0 or length <= tile_size:
+        return [0]
+    step = max(1, int(tile_size) - int(overlap))
+    starts = list(range(0, max(1, length - tile_size + 1), step))
+    last = max(0, int(length) - int(tile_size))
+    if not starts or starts[-1] != last:
+        starts.append(last)
+    return sorted(set(int(v) for v in starts))
+
+
+def _eval_cellpose_masks(
+    model: Any,
+    imgf: np.ndarray,
+    *,
+    slice_label: str,
+    model_type: str,
+    diameter_px: float | None,
+    channels: list[int],
+    flow_threshold: float,
+    cellprob_threshold: float,
+    min_size: int,
+    batch_size: int,
+    tile_overlap: float,
+    resample: bool,
+    raise_on_error: bool,
+):
+    kwargs = dict(
+        diameter=diameter_px,
+        channels=channels,
+        flow_threshold=float(flow_threshold),
+        cellprob_threshold=float(cellprob_threshold),
+        min_size=max(0, int(min_size)),
+        batch_size=max(1, int(batch_size)),
+        tile=True,
+        tile_overlap=float(tile_overlap),
+        resample=bool(resample),
+        normalize=False,
+    )
+
+    try:
+        return model.eval(imgf, **kwargs)
+    except TypeError:
+        kwargs2 = dict(diameter=diameter_px, channels=channels)
+        try:
+            return model.eval(imgf, **kwargs2)
+        except Exception as exc:
+            if raise_on_error:
+                raise CellposeDetectionError(
+                    f"Cellpose eval failed for model '{model_type}' on {slice_label}: {exc}"
+                ) from exc
+            return None
+    except Exception as exc:
+        if raise_on_error:
+            raise CellposeDetectionError(
+                f"Cellpose eval failed for model '{model_type}' on {slice_label}: {exc}"
+            ) from exc
+        return None
 
 
 def _safe_tile_size(
@@ -382,39 +500,119 @@ def detect_cells_cellpose(
     flow_threshold: float = 0.4,
     cellprob_threshold: float = 0.0,
     min_size: int = 8,
+    batch_size: int = 1,
+    tile_overlap: float = 0.05,
+    resample: bool = False,
+    external_tile_size_px: int | None = None,
+    external_tile_overlap_px: int = 64,
+    raise_on_error: bool = False,
     return_masks: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, np.ndarray]:
     try:
         model, _is_legacy = _load_cellpose_model(model_type=model_type, use_gpu=use_gpu)
     except Exception as exc:
-        raise CellposeRuntimeError(f"Failed to load Cellpose model '{model_type}': {exc}") from exc
+        if raise_on_error:
+            raise CellposeDetectionError(
+                f"failed to load Cellpose model '{model_type}' (gpu={bool(use_gpu)}): {exc}"
+            ) from exc
+        empty = pd.DataFrame()
+        return (empty, np.empty((0, 0), dtype=np.int32)) if return_masks else empty
 
     img = _read_gray(slice_path)
     imgf = _norm_for_cellpose(img)
 
+    # Only pass channels for legacy Cellpose (v2/v3).
+    # Cellpose-SAM v4+ ignores channels and warns if present; do NOT pass it.
+    ch = channels if isinstance(channels, list) and len(channels) == 2 else [0, 0]
+
+    tile_size = int(external_tile_size_px or 0)
+    if tile_size <= 0 and not use_gpu and max(imgf.shape[:2]) > 384:
+        tile_size = 384
+    overlap_px = max(0, int(external_tile_overlap_px))
+
     # Build eval kwargs — compatible with Cellpose v2/v3/v4.
-    # v4 (Cellpose-SAM): `channels` is deprecated, eval returns 3 values.
-    # v2/v3: eval returns 4 values (masks, flows, styles, diams).
-    kwargs: dict[str, Any] = dict(
+    eval_kwargs: dict[str, Any] = dict(
         diameter=diameter_px,
         flow_threshold=float(flow_threshold),
         cellprob_threshold=float(cellprob_threshold),
         min_size=max(0, int(min_size)),
+        batch_size=max(1, int(batch_size)),
+        tile=True,
+        tile_overlap=float(tile_overlap),
+        resample=bool(resample),
+        normalize=False,
     )
 
     # Tile-based inference to prevent OOM with small cells / large upscale
     bsize = _safe_tile_size(imgf.shape, diameter_px, vram_gb=8.0)
     if bsize is not None:
-        kwargs["bsize"] = bsize
+        eval_kwargs["bsize"] = bsize
 
-    # Only pass channels for legacy Cellpose (v2/v3).
-    # Cellpose-SAM v4+ ignores channels and warns if present; do NOT pass it.
     if _is_legacy:
-        ch = channels if isinstance(channels, list) and len(channels) == 2 else [0, 0]
-        kwargs["channels"] = ch
+        eval_kwargs["channels"] = ch
 
+    if tile_size > 0 and max(imgf.shape[:2]) > tile_size:
+        tile_rows: list[pd.DataFrame] = []
+        y_starts = _tile_starts(int(imgf.shape[0]), tile_size, overlap_px)
+        x_starts = _tile_starts(int(imgf.shape[1]), tile_size, overlap_px)
+        for y0 in y_starts:
+            y1 = min(int(imgf.shape[0]), int(y0) + tile_size)
+            for x0 in x_starts:
+                x1 = min(int(imgf.shape[1]), int(x0) + tile_size)
+                tile_img = imgf[y0:y1, x0:x1]
+                result = _eval_cellpose_masks(
+                    model,
+                    tile_img,
+                    slice_label=f"{slice_path.name}@y{y0}:{y1},x{x0}:{x1}",
+                    model_type=model_type,
+                    diameter_px=diameter_px,
+                    channels=ch,
+                    flow_threshold=flow_threshold,
+                    cellprob_threshold=cellprob_threshold,
+                    min_size=min_size,
+                    batch_size=batch_size,
+                    tile_overlap=tile_overlap,
+                    resample=resample,
+                    raise_on_error=raise_on_error,
+                )
+                if result is None:
+                    continue
+                masks, flows, styles, diams = result
+                tile_intensity = img[y0:y1, x0:x1].astype(np.float32)
+                tile_df = _masks_to_centroids(
+                    masks,
+                    detector=f"cellpose_{model_type}",
+                    intensity_image=tile_intensity,
+                )
+                if tile_df.empty:
+                    continue
+                tile_df["x"] = tile_df["x"].astype(np.float32) + float(x0)
+                tile_df["y"] = tile_df["y"].astype(np.float32) + float(y0)
+                tile_rows.append(tile_df)
+        _ecols = [
+            "cell_id",
+            "x",
+            "y",
+            "score",
+            "detector",
+            "area_px",
+            "elongation",
+            "mean_intensity",
+        ]
+        if not tile_rows:
+            empty = pd.DataFrame(columns=_ecols)
+            return (empty, np.zeros(imgf.shape[:2], dtype=np.int32)) if return_masks else empty
+        out = pd.concat(tile_rows, ignore_index=True)
+        out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
+        df = out[_ecols]
+        if return_masks:
+            # Tiled path: no composite mask available
+            return df, np.zeros(imgf.shape[:2], dtype=np.int32)
+        return df
+
+    # Single-image (non-tiled) inference
     try:
-        result = model.eval(imgf, **kwargs)
+        result = model.eval(imgf, **eval_kwargs)
         masks = result[0]  # works for both 3-tuple (v4) and 4-tuple (v2/v3)
     except (TypeError, RuntimeError) as exc:
         # OOM or API incompatibility — retry with conservative settings
@@ -428,21 +626,37 @@ def detect_cells_cellpose(
             result = model.eval(imgf, **kwargs2)
             masks = result[0]
         except Exception as exc2:
-            raise CellposeRuntimeError(
-                f"Cellpose inference failed for '{slice_path.name}' (model={model_type}): {exc2}"
-            ) from exc2
+            if raise_on_error:
+                raise CellposeDetectionError(
+                    f"Cellpose inference failed for '{slice_path.name}' (model={model_type}): {exc2}"
+                ) from exc2
+            empty = pd.DataFrame()
+            return (empty, np.empty((0, 0), dtype=np.int32)) if return_masks else empty
     except Exception as exc:
-        raise CellposeRuntimeError(
-            f"Cellpose inference failed for '{slice_path.name}' (model={model_type}): {exc}"
-        ) from exc
+        if raise_on_error:
+            raise CellposeDetectionError(
+                f"Cellpose inference failed for '{slice_path.name}' (model={model_type}): {exc}"
+            ) from exc
+        empty = pd.DataFrame()
+        return (empty, np.empty((0, 0), dtype=np.int32)) if return_masks else empty
 
-    df = _masks_to_centroids(masks, detector=f"cellpose_{model_type}")
+    df = _masks_to_centroids(
+        masks,
+        detector=f"cellpose_{model_type}",
+        intensity_image=img.astype(np.float32),
+    )
     if return_masks:
         return df, masks
     return df
 
 
-def _run_cellpose_by_name(slice_path: Path, model_name: str, cfg: dict[str, Any]) -> pd.DataFrame:
+def _run_cellpose_by_name(
+    slice_path: Path,
+    model_name: str,
+    cfg: dict[str, Any],
+    *,
+    raise_on_error: bool = False,
+) -> pd.DataFrame:
     det_cfg = cfg.get("detection", {})
     model_type = _resolve_model_type(model_name)
     d_px = _diameter_px(det_cfg, cfg)
@@ -451,6 +665,12 @@ def _run_cellpose_by_name(slice_path: Path, model_name: str, cfg: dict[str, Any]
     flow_thr = float(det_cfg.get("cellpose_flow_threshold", 0.4))
     prob_thr = float(det_cfg.get("cellpose_cellprob_threshold", 0.0))
     min_sz = int(det_cfg.get("cellpose_min_size_px", 8))
+    batch_size = int(det_cfg.get("cellpose_batch_size", 1))
+    tile_overlap = float(det_cfg.get("cellpose_tile_overlap", 0.05))
+    resample = bool(det_cfg.get("cellpose_resample", False))
+    tile_size_px = det_cfg.get("cellpose_external_tile_size_px", None)
+    external_tile_size_px = int(tile_size_px) if tile_size_px not in (None, "", 0) else None
+    external_tile_overlap_px = int(det_cfg.get("cellpose_external_tile_overlap_px", 64))
 
     return detect_cells_cellpose(
         slice_path=slice_path,
@@ -461,6 +681,12 @@ def _run_cellpose_by_name(slice_path: Path, model_name: str, cfg: dict[str, Any]
         flow_threshold=flow_thr,
         cellprob_threshold=prob_thr,
         min_size=min_sz,
+        batch_size=batch_size,
+        tile_overlap=tile_overlap,
+        resample=resample,
+        external_tile_size_px=external_tile_size_px,
+        external_tile_overlap_px=external_tile_overlap_px,
+        raise_on_error=raise_on_error,
     )
 
 
@@ -488,31 +714,49 @@ def detect_cells(slice_path: Path, cfg: dict[str, Any]) -> pd.DataFrame:
 
     # Track whether a Cellpose model was requested so we can distinguish
     # "Cellpose ran and found 0 cells" from "Cellpose crashed".
-    cellpose_requested = _is_cellpose_model(primary) or _is_cellpose_model(secondary)
+    requested_cellpose = _is_cellpose_model(primary) or _is_cellpose_model(secondary)
+    allow_fallback_raw = det_cfg.get("allow_fallback", None)
+    allow_fallback = (
+        bool(allow_fallback_raw) if allow_fallback_raw is not None else auto_switch
+    )
+    cellpose_errors: list[Exception] = []
 
     primary_df = pd.DataFrame()
     if _is_cellpose_model(primary):
         try:
-            primary_df = _run_cellpose_by_name(slice_path, primary, cfg)
-        except CellposeRuntimeError:
-            if not auto_switch:
+            primary_df = _run_cellpose_by_name(
+                slice_path,
+                primary,
+                cfg,
+                raise_on_error=not allow_fallback,
+            )
+        except (CellposeDetectionError, CellposeRuntimeError) as exc:
+            cellpose_errors.append(exc)
+            if not allow_fallback:
                 raise
             _log.warning(
                 "Cellpose primary model '%s' failed for %s; falling back to non-Cellpose detector",
                 primary,
                 slice_path.name,
             )
-            cellpose_requested = False  # allow fallback
+            primary_df = pd.DataFrame()
         if not primary_df.empty and not merge_secondary:
             out = _dedup_xy(primary_df, radius_px=within_slice_dedup_px)
             out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
             return out
 
+    secondary_df = pd.DataFrame()
     if _is_cellpose_model(secondary):
         try:
-            secondary_df = _run_cellpose_by_name(slice_path, secondary, cfg)
-        except CellposeRuntimeError:
-            if not auto_switch:
+            secondary_df = _run_cellpose_by_name(
+                slice_path,
+                secondary,
+                cfg,
+                raise_on_error=not allow_fallback,
+            )
+        except (CellposeDetectionError, CellposeRuntimeError) as exc:
+            cellpose_errors.append(exc)
+            if not allow_fallback:
                 raise
             _log.warning(
                 "Cellpose secondary model '%s' failed for %s; falling back to non-Cellpose detector",
@@ -520,28 +764,21 @@ def detect_cells(slice_path: Path, cfg: dict[str, Any]) -> pd.DataFrame:
                 slice_path.name,
             )
             secondary_df = pd.DataFrame()
-            cellpose_requested = False  # allow fallback
-        else:
-            if not secondary_df.empty:
-                if primary_df.empty:
-                    out = _dedup_xy(secondary_df, radius_px=within_slice_dedup_px)
-                    out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
-                    return out
-                if merge_secondary:
-                    combined = pd.concat([primary_df, secondary_df], ignore_index=True)
-                    out = _dedup_xy(combined, radius_px=within_slice_dedup_px)
-                    out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
-                    return out
+        if not secondary_df.empty:
+            if primary_df.empty:
+                out = _dedup_xy(secondary_df, radius_px=within_slice_dedup_px)
+                out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
+                return out
+            if merge_secondary:
+                combined = pd.concat([primary_df, secondary_df], ignore_index=True)
+                out = _dedup_xy(combined, radius_px=within_slice_dedup_px)
+                out["cell_id"] = np.arange(1, len(out) + 1, dtype=np.int32)
+                return out
 
-    # If Cellpose was configured and we still haven't returned, both models
-    # either produced empty results or failed.  When auto_switch is False and
-    # Cellpose was the explicit choice, refuse to silently fall through to a
-    # weaker detector — surface it as an error instead.
-    if cellpose_requested and not auto_switch:
-        raise CellposeRuntimeError(
-            f"Cellpose models ({primary}, {secondary}) returned no cells for "
-            f"'{slice_path.name}' and auto_switch_on_distortion is disabled"
-        )
+    if requested_cellpose and not allow_fallback:
+        if cellpose_errors:
+            raise cellpose_errors[0]
+        return pd.DataFrame(columns=["cell_id", "x", "y", "score", "detector", "area_px"])
 
     fallback_model = str(det_cfg.get("fallback_model", "log")).lower()
     if "log" in fallback_model:

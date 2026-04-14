@@ -1,0 +1,45 @@
+{
+  "project": {
+    "name": "sample_3d_miki_like_ants",
+    "version": "internal-1.0"
+  },
+  "input": {
+    "slice_dir": "data/35_C0_demo",
+    "pixel_size_um_xy": 5.0,
+    "slice_spacing_um": 24.765
+  },
+  "registration": {
+    "backend": "ants",
+    "atlas_z_z_scale": 0.2,
+    "atlas_z_offset": 150,
+    "atlas_hemisphere": "left",
+    "fixed_template_path": "../Sample/Miki/brain_registration/20260313_133224_miki_reg_ch0/registered_output/template_left_half.nii.gz",
+    "fixed_annotation_path": "../Sample/Miki/brain_registration/20260313_133224_miki_reg_ch0/registered_output/annotation_left_half.nii.gz",
+    "ants": {
+      "transform_type": "SyN",
+      "random_seed": 42,
+      "verbose": true,
+      "reg_iterations": [40, 20, 0]
+    },
+    "laplacian": {
+      "enabled": true,
+      "axis": 0,
+      "rtol": 0.01,
+      "maxiter": 250,
+      "normal_radius": 3,
+      "degree_thresh_deg": 5.0,
+      "distance_neighbours": 30,
+      "template_min_component": 25,
+      "data_min_component": 100,
+      "print_every": 10,
+      "chunk_slices": 16
+    }
+  },
+  "volume_prep": {
+    "native_xy": true,
+    "pad_z": 1,
+    "pad_y": 0,
+    "pad_x": 0,
+    "normalize": false
+  }
+}

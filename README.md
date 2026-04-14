@@ -1,167 +1,248 @@
+[中文文档 →](README.zh-CN.md)
+
+---
+
 # Brainfast
 
-Brainfast 是一个面向真实实验流程的脑图谱配准与细胞计数工作区。
+**Brain atlas registration + cell counting for cleared-tissue microscopy.**
 
-它不是单纯的“把 atlas 叠上去”的演示工具，而是一条完整链路：
-Allen 图谱自动选层 -> 配准与人工复审 -> 校准样本沉淀 -> 自动学习 -> 全脑细胞计数与 QC 导出。
+Brainfast is a local, privacy-first desktop tool that registers fluorescence microscopy sections against the [Allen Mouse Brain Atlas (CCFv3)](https://atlas.brain-map.org/) and counts labelled cells per anatomical region — with a browser UI, no cloud upload, and full reproducibility metadata.
 
-Brainfast is a practical workspace for Allen atlas alignment, manual correction, calibration learning, and whole-brain cell counting.
+> Built for neuroscience labs working with lightsheet or confocal TIFF stacks from cleared half-brain or whole-brain samples.
 
-## Install / 安装
+---
+
+## What it does
+
+| Step | What happens |
+|------|-------------|
+| **Auto AP selection** | Matches each section to its atlas coronal plane by filename Z-coordinate or template cross-correlation |
+| **Registration** | Affine placement → thin-plate spline (TPS) nonlinear warp to conform tissue boundary to atlas outline |
+| **Cell detection** | Multi-scale LoG (built-in) or Cellpose instance segmentation, configurable per channel |
+| **Deduplication** | 3-D KD-tree clustering removes cross-slice duplicates before counting |
+| **Region mapping** | Each cell centroid is mapped into the Allen CCFv3 annotation volume |
+| **Hierarchical counts** | Counts roll up through the full Allen ontology tree (leaf → area → division → …) |
+| **QC & export** | Z-continuity chart, edge-SSIM per slice, Excel/CSV export, auto-generated Methods paragraph |
+
+---
+
+## Key features
+
+- **Browser UI** — 4-tab single-page app (Workflow / QC / Results / Projects), no install beyond Python
+- **Bilingual** — full EN/ZH interface toggle, all labels and hints translated
+- **Garwood 95% CI** — Wilson-Hilferty Poisson confidence intervals on every region count
+- **Atlas fingerprint** — SHA-256 of `annotation_25.nii.gz` written to `detection_summary.json` for reproducibility
+- **Projects & batch queue** — SQLite-backed sample management, FIFO batch worker
+- **Cross-sample comparison** — merge leaf CSVs from multiple runs into a pivot table
+- **Multi-channel co-expression** — per-region red/green channel counts side-by-side
+- **3D volume pipeline** — full volumetric registration via ANTs or Elastix with HTML run reports
+- **Light/dark theme** — localStorage-persisted theme toggle
+- **Docker-ready** — `Dockerfile` + `docker-compose.yml` for headless Linux server deployment
+- **97 unit tests**, CI on GitHub Actions (Windows + Ubuntu)
+
+---
+
+## Quick start
+
+### Requirements
+
+- Python 3.10 or 3.11
+- Windows 10/11 (primary) · Linux via Docker
+- `annotation_25.nii.gz` — Allen CCFv3 25 µm annotation (place in `project/`)
+- NVIDIA GPU recommended for Cellpose; LoG detector works on CPU
+
+### Install
+
+```powershell
+git clone https://github.com/Skiyoshika/Brainfast.git
+cd Brainfast
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -e ".[advanced,dev]"
+```
+
+### Environment check
+
+Before running the pipeline, validate your environment:
 
 ```bash
-python -m venv .venv && .venv\Scripts\activate
-pip install -e ".[dev]"               # minimal 2D (no Cellpose, no ANTs)
-pip install -e ".[advanced,dev]"      # + Cellpose GPU detection
-pip install -e ".[wholebrain,dev]"    # + ANTs 3D registration
-pip install -e ".[full,dev]"          # everything
+cd project
+python scripts/check_env.py --config configs/run_config.template.json
 ```
 
-## Start Here / 从这里开始
+`check_env.py` does real import smoke tests, not just `find_spec()`.
+It verifies that numpy, scipy, skimage (and cellpose/ANTs when your config needs them) actually import and meet version bounds.
+It also checks runtime hotspots (`scipy.ndimage`, `skimage.segmentation`) in isolated subprocesses — a top-level `import scipy` can succeed while `scipy.ndimage` crashes due to ABI mismatch.
+A non-zero exit means your environment cannot run the configured pipeline.
 
-如果你是第一次打开这个仓库，建议按这个顺序：
+### Run
 
-1. 看完整说明：[project/README.md](project/README.md)
-2. 先做环境检查：
-   ```bash
-   cd project
-   python scripts/check_env.py --config configs/run_config.template.json
-   ```
-   `check_env.py` does real import smoke tests, not just `find_spec()`.
-   It verifies that numpy, scipy, skimage (and cellpose/ANTs when your config needs them) actually import and meet version bounds.
-   It also checks runtime hotspots (`scipy.ndimage`, `skimage.segmentation`) in isolated subprocesses — a top-level `import scipy` can succeed while `scipy.ndimage` crashes due to ABI mismatch.
-   A non-zero exit means your environment cannot run the configured pipeline.
-3. 启动界面：
-   ```bash
-   cd project/frontend
-   python server.py
-   ```
-4. 浏览器打开：`http://127.0.0.1:8787`
+```powershell
+# Windows — double-click or:
+.\Start_Brainfast.bat
 
-## Architecture / 架构图
-
-```mermaid
-flowchart LR
-  subgraph UI["Interaction Layer / 交互层"]
-    A["Desktop / Web UI<br/>一键模式 / 专业模式 / 人工复审"]
-  end
-
-  subgraph APP["Application Layer / 应用层"]
-    B["Flask API + Job Workspace<br/>参数校验 / 文件路由 / 任务隔离"]
-  end
-
-  subgraph REG["Registration Core / 配准核心"]
-    C["Atlas Auto-Pick<br/>自动选层"]
-    D["Tissue-Guided Registration<br/>组织引导配准"]
-    E["Label Postprocess<br/>拓扑清理 / 边界平滑"]
-    F["Overlay Render + Hover Metadata<br/>叠加渲染与脑区查询"]
-  end
-
-  subgraph LEARN["Calibration Loop / 校准学习闭环"]
-    G["Manual Liquify / Landmark Fix<br/>液化拖拽 / 手动地标"]
-    H["Training Sample Pack<br/>Ori + Label + Show"]
-    I["learn_from_trainset.py"]
-    J["Tuned Params JSON"]
-  end
-
-  subgraph COUNT["Quant Pipeline / 计数量化"]
-    K["Cell Detection"]
-    L["Deduplication"]
-    M["Map to Registered Label"]
-    N["Structure Tree Aggregation"]
-  end
-
-  subgraph OUT["Outputs / 输出"]
-    O["Preview PNG / Registered Label / CSV / QC"]
-  end
-
-  A --> B
-  B --> C --> D --> E --> F --> O
-  F --> G --> H --> I --> J --> D
-  B --> K --> L --> M --> N --> O
+# Or directly:
+python project\frontend\server.py
 ```
 
-## What You’ll Find / 你会在这里看到什么
+Open **http://127.0.0.1:8787** in your browser.
 
-- [project/README.md](project/README.md)
-  - 完整使用说明
-  - 新架构说明
-  - UI / CLI 启动方式
-  - 校准学习闭环
-  - 输出文件解释
-  - 回归测试命令
-- [REPRODUCE.md](REPRODUCE.md)
-  - 5 步端到端复现说明
-  - 软件级最小复现 + 本地样本复现实例
-- [CITATION.cff](CITATION.cff)
-  - 标准软件引用元数据
-- [CODE_SIGNING.md](CODE_SIGNING.md)
-  - Windows desktop code-signing setup for release builds
-- `project/scripts/`
-  - 配准、渲染、映射、聚合、训练、测试主逻辑
-- `project/frontend/`
-  - Flask 服务、网页 UI、桌面打包入口
+### Docker (Linux server)
 
-## Current Status / 当前状态
+```bash
+docker compose up -d
+# Open http://localhost:8787
+```
 
-当前版本已经从“研究原型”推进到“可验证、可继续开发的工程原型”：
+Set `BRAINFAST_HEADLESS=1` (already default in Docker) to disable the tkinter file-browser dialog.
 
-- Whole-brain automatic runs now use the native 3D volume-first truth path (`miki_3d`).
-- Key 3D artifacts include `outputs/volume/input_volume.nii.gz`, `outputs/template_prep/template_half.nii.gz`, `outputs/template_prep/annotation_half.nii.gz`, `outputs/ants_registration/ants_result.nii.gz`, `outputs/ants_registration/annotation_registered.nii.gz`, `outputs/laplacian_refinement/final_registered.nii.gz`, `outputs/truth_export/slice_*_registered_label.tif`, `outputs/truth_export/slice_*_overlay.png`, `outputs/slice_registration_qc.csv`, and `outputs/volume_registration_qc.csv`.
-- The 2D workflow remains available for preview and manual correction only.
-- 结果链路比之前更可信，去掉了伪映射和伪层级统计
-- 训练闭环已改成 `Label.tif` 真值优先
-- 增加了最小回归测试
-- 预览与人工校准路径已支持 `jobId` 隔离
+---
 
-但它还不是完全成型的云端多用户系统。更完整的模块化和任务队列仍然在后续演进范围内。
+## Workflow overview
 
-## Trust Policy / 信任策略
+```
+Input TIFF slices (Z-stack)
+      │
+      ▼
+Auto AP slice selection ──── atlas_autopick.py
+      │
+      ▼
+Registration: Affine → TPS nonlinear warp
+      │
+      ▼
+Manual review / liquify correction  ← browser UI
+      │
+      ▼
+Cell detection  (LoG · Cellpose · per-channel)
+      │
+      ▼
+3-D deduplication  (KD-tree, configurable radius)
+      │
+      ▼
+Atlas region mapping  (CCFv3 annotation lookup)
+      │
+      ▼
+Hierarchical aggregation + Garwood 95% CI
+      │
+      ▼
+cell_counts_leaf.csv · cell_counts_hierarchy.csv
+Excel export · Methods paragraph · Z-continuity chart
+```
 
-Hard rules for interpreting Brainfast outputs. These apply to all users and all samples.
+---
 
-1. **Do not trust region-level counts when registration overlays are visibly poor.**
-   If the atlas overlay does not match the tissue anatomy, downstream cell-to-region mapping is meaningless regardless of how good the detector is. Always verify registration quality before interpreting count tables.
+## Output files
 
-2. **Do not use Cellpose quality as a scapegoat for atlas-mapping failures before registration is verified.**
-   Cell detection and atlas registration are independent quality dimensions. A region showing zero counts may mean the detector missed cells, or it may mean the atlas label for that region was never placed on the tissue. Check registration first.
+| File | Contents |
+|------|----------|
+| `cell_counts_leaf.csv` | Per-region leaf counts with `ci_low`, `ci_high`, morphology columns |
+| `cell_counts_hierarchy.csv` | Counts rolled up through the full Allen ontology tree |
+| `cells_dedup.csv` | Deduplicated cell centroids (x, y, z_µm, score, region_id) |
+| `detection_summary.json` | Detector choice, sampling mode, totals, `atlas_sha256` |
+| `slice_registration_qc.csv` | Edge-SSIM per slice |
+| `z_smoothness_report.json` | AP-axis continuity analysis (outlier flags) |
+| `brainfast_results.xlsx` | 3-sheet Excel: Hierarchy / Leaf / Run parameters |
 
-3. **Do not expand sample coverage until at least one sample has completed a user-visible manual workflow.**
-   The current interactive workflow (load -> register -> correct -> detect -> export) is not yet completable end-to-end from the UI. Until it is, broad sample rollout will produce results that cannot be validated by the user.
+UI job outputs live in `project/outputs/jobs/<job_id>/`.
 
-For detailed gap analysis, see:
-- [`docs/superpowers/plans/interactive-workflow-gap-audit.md`](docs/superpowers/plans/interactive-workflow-gap-audit.md)
-- [`docs/superpowers/plans/registration-failure-taxonomy.md`](docs/superpowers/plans/registration-failure-taxonomy.md)
+---
 
-## Cellpose-SAM (`cpsam`) Integration
+## API (REST)
 
-Brainfast uses the **Cellpose** Python package (v4+) for cell detection. The default model is `cpsam` — Cellpose's built-in SAM-augmented model accessed via `cellpose.models.CellposeModel(pretrained_model="cpsam")`.
+The Flask server exposes a documented REST API.
+See [docs/api_reference.md](docs/api_reference.md) for all endpoints with `curl` examples.
 
-Key points:
-- There is **no separate `segment-anything` or SAM2 runtime** in this repo. The SAM component is internal to Cellpose.
-- Set `detection.primary_model` to `"cpsam"` in your run config. Other supported values: any Cellpose built-in model name, or `"log"` for the fallback Laplacian-of-Gaussian detector.
-- GPU inference is enabled by default (`detection.cellpose_gpu: true`). For large images, the pipeline automatically tiles to prevent OOM via `bsize`.
-- `Save Calibration + Learn` in the UI tunes atlas overlay parameters — it does **not** retrain or fine-tune Cellpose-SAM.
-- If Cellpose is not installed, the pipeline falls back to the LoG detector with a warning.
+Key endpoints:
 
-Install: `pip install -e ".[advanced]"` (includes Cellpose + SimpleITK).
+```bash
+POST /api/run               # start pipeline
+GET  /api/poll?job=...      # unified status + log tail + errors (replaces 3 polling loops)
+GET  /api/outputs/excel     # download Excel workbook
+GET  /api/outputs/z-continuity   # Z-axis continuity JSON
+POST /api/compare/regions   # cross-sample pivot table
+```
 
-## Stability & Release
+All error responses include a machine-readable `error_code` constant (e.g. `PIPELINE_ALREADY_RUNNING`, `CONFIG_PATH_DENIED`).
 
-Before declaring the pipeline stable for new samples, all gates in the
-[stability exit criteria](docs/superpowers/plans/stability-exit-criteria.md) must pass:
-repo-level (lint, tests, env validation, docs) and sample-level (canary buckets A/B/C each pass twice, then cohort rollout).
+---
 
-## Large Local Artifacts / 未纳入版本管理的大体积内容
+## Science methods
 
-- `Samples/`: microscope sample data
-- `repos/`: third-party upstream repository
-- `project/frontend/build`, `project/frontend/dist`: desktop build artifacts
+Algorithmic detail — registration stages, Garwood CI derivation, Z-continuity detection, atlas fingerprinting — is documented in [docs/science_methods.md](docs/science_methods.md).
 
-## License / 许可证
+**Methods paragraph template** (auto-generated by the UI):
 
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+> Brain atlas registration was performed using Brainfast v0.5 (run: …). Microscopy images were acquired at N µm/pixel. Section registration was carried out against the Allen Mouse Brain Atlas (CCFv3, annotation_25.nii.gz, 25 µm voxel spacing, sha256: …) using nonlinear (thin-plate spline) transformation. Alignment quality was evaluated by edge-SSIM. Cell counting used LoG on native single slices, followed by deduplication and hierarchical atlas aggregation. 95% Poisson confidence intervals were computed using the Garwood method. Channels: red.
 
-本项目采用 GNU Affero General Public License v3.0（AGPL-3.0）许可证。
+---
 
-See [LICENSE](LICENSE) for details.
+## Architecture
+
+```
+project/
+├── frontend/
+│   ├── server.py              Flask entry point (70-line orchestration layer)
+│   ├── server_context.py      Shared run state, job isolation, GC
+│   ├── blueprints/            11 API blueprints
+│   │   ├── api_pipeline.py    run / cancel / poll / preflight / methods-text
+│   │   ├── api_outputs.py     CSV / Excel / Z-continuity / AP-density / coexpression
+│   │   ├── api_projects.py    project + sample CRUD (SQLite)
+│   │   ├── api_batch.py       FIFO batch queue
+│   │   ├── api_compare.py     cross-sample region comparison
+│   │   └── …
+│   ├── index.html             Single-page UI (4 tabs, bilingual)
+│   ├── app.js                 Frontend JS (~3500 lines, full i18n)
+│   └── styles.css             Dark/light theme CSS variables
+├── scripts/
+│   ├── main.py                2D pipeline entry point
+│   ├── detect.py              LoG + Cellpose detection
+│   ├── map_and_aggregate.py   Region mapping + hierarchical counts + Garwood CI
+│   ├── z_smoothness.py        AP-axis continuity analysis
+│   └── …
+└── tests/
+    ├── unit/                  97 tests, no atlas file required
+    └── integration/           Requires annotation_25.nii.gz
+```
+
+**Security invariants (v0.5+):**
+- Config paths are containment-checked against `PROJECT_ROOT/configs` and `OUTPUT_DIR` — no arbitrary filesystem access
+- `running = True` is set inside `_run_state_lock` before thread start — no race condition on concurrent `/api/run`
+- `_job_states` is capped at 200 entries with LRU eviction — no unbounded memory growth
+
+---
+
+## Tests
+
+```powershell
+# Unit tests (no atlas file needed)
+python -m pytest project/tests/unit -v
+
+# With coverage (CI enforces ≥60%)
+python -m pytest project/tests/unit --cov=project/scripts --cov-report=term-missing
+
+# Lint
+ruff check project/scripts/ project/frontend/blueprints/
+```
+
+CI: [GitHub Actions](.github/workflows/test.yml) — unit tests on Windows + Ubuntu, ruff lint on every push/PR to `main`.
+
+Releases: [release workflow](.github/workflows/release.yml) — tag `v*.*.*` → auto-build Windows EXE → upload to GitHub Releases.
+
+---
+
+## Repository layout
+
+| Path | Purpose |
+|------|---------|
+| `project/configs/` | Run configs, Allen metadata, sample presets |
+| `project/frontend/` | Flask app, UI assets, desktop launcher |
+| `project/scripts/` | Registration, detection, mapping, aggregation, utility scripts |
+| `project/tests/` | Unit and integration test suites |
+| `project/train_data_set/` | Manual calibration pairs (17 samples) |
+| `docs/` | [User guide](docs/user_guide.md) · [API reference](docs/api_reference.md) · [Science methods](docs/science_methods.md) |
+
+---
+
+## License
+
+See [LICENSE](LICENSE).

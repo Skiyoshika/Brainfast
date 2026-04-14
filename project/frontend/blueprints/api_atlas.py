@@ -10,6 +10,9 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request
 
 import project.frontend.server_context as ctx
+from project.frontend.api_errors import (
+    ERR_NOT_FOUND,
+)
 
 bp = Blueprint("api_atlas", __name__, url_prefix="/api/atlas")
 
@@ -31,7 +34,13 @@ def atlas_autopick_z():
     slicing_plane = str(payload.get("slicingPlane", "coronal"))
     roi_mode = str(payload.get("roiMode", "auto"))
     if not real_path.exists():
-        return jsonify({"ok": False, "error": f"Real image not found: {real_path}"}), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": f"Real image not found: {real_path}",
+                "error_code": ERR_NOT_FOUND,
+            }
+        ), 400
     if not annotation_path.exists():
         return jsonify(
             {"ok": False, "error": f"Atlas annotation not found: {annotation_path}"}
@@ -50,6 +59,7 @@ def atlas_autopick_z():
         "result": None,
         "error": None,
         "jobId": job_id,
+        "cancel_requested": False,
     }
 
     ap_method = str(payload.get("apMethod", "auto"))
@@ -80,7 +90,7 @@ def atlas_autopick_z():
 def atlas_autopick_z_status():
     token = request.args.get("token", "")
     if not token or token not in ctx._autopick_tasks:
-        return jsonify({"ok": False, "error": "unknown token"}), 404
+        return jsonify({"ok": False, "error": "unknown token", "error_code": ERR_NOT_FOUND}), 404
     task = ctx._autopick_tasks[token]
     resp = {
         "ok": True,
@@ -94,6 +104,8 @@ def atlas_autopick_z_status():
     }
     if task["status"] == "done":
         resp["result"] = task["result"]
+    if task["status"] == "cancelled":
+        resp["cancelled"] = True
     if task["status"] == "error":
         resp["error"] = task["error"]
     return jsonify(resp)
@@ -110,3 +122,15 @@ def region_ap_ranges():
     with open(json_path) as f:
         regions = _json.load(f)
     return jsonify({"ok": True, "regions": regions})
+
+
+@bp.post("/autopick/cancel")
+def atlas_autopick_cancel():
+    payload = request.get_json(force=True) or {}
+    token = str(payload.get("token", "")).strip()
+    if not token or token not in ctx._autopick_tasks:
+        return jsonify({"ok": False, "error": "unknown token", "error_code": ERR_NOT_FOUND}), 404
+    task = ctx._autopick_tasks[token]
+    task["cancel_requested"] = True
+    task["message"] = "Cancelling..."
+    return jsonify({"ok": True, "token": token, "cancelled": True})

@@ -46,6 +46,7 @@ class TestTrainerState:
 class TestLoadTrainingData:
     def test_loads_images_and_masks(self, tmp_path):
         from tifffile import imwrite
+
         from project.scripts.cellpose_trainer import load_training_data
 
         # Create 3 image/mask pairs
@@ -61,13 +62,14 @@ class TestLoadTrainingData:
         assert images[0].shape == (32, 32)
 
     def test_empty_dir_raises(self, tmp_path):
-        from project.scripts.cellpose_trainer import load_training_data, TrainingError
+        from project.scripts.cellpose_trainer import TrainingError, load_training_data
         with pytest.raises(TrainingError, match="No training"):
             load_training_data(tmp_path)
 
     def test_insufficient_data_raises(self, tmp_path):
         from tifffile import imwrite
-        from project.scripts.cellpose_trainer import load_training_data, TrainingError
+
+        from project.scripts.cellpose_trainer import TrainingError, load_training_data
 
         # Only 1 pair — need at least 2
         imwrite(str(tmp_path / "a.tif"), np.zeros((8, 8), dtype=np.uint16))
@@ -127,6 +129,7 @@ class TestStartTraining:
 class TestUpdateConfigModel:
     def test_updates_config_file(self, tmp_path):
         import json
+
         from project.scripts.cellpose_trainer import _update_config_primary_model
 
         # Create a mock config file
@@ -155,8 +158,8 @@ class TestUpdateConfigModel:
 
 class TestClearModelCache:
     def test_clears_cache(self):
-        from project.scripts.detect import _CELLPOSE_MODEL_CACHE
         from project.scripts.cellpose_trainer import _clear_model_cache
+        from project.scripts.detect import _CELLPOSE_MODEL_CACHE
 
         # Add a dummy entry
         _CELLPOSE_MODEL_CACHE[("test", False)] = "dummy"

@@ -1,0 +1,24 @@
+{
+  "project": {
+    "name": "sample_3d_internal",
+    "version": "internal-1.0"
+  },
+  "input": {
+    "slice_dir": "data/35_C0_demo",
+    "pixel_size_um_xy": 5.0,
+    "slice_spacing_um": 24.765
+  },
+  "registration": {
+    "backend": "elastix",
+    "atlas_z_z_scale": 0.2,
+    "atlas_z_offset": 150,
+    "atlas_hemisphere": "left"
+  },
+  "volume_prep": {
+    "target_um": 25.0,
+    "pad_z": 1,
+    "pad_y": 10,
+    "pad_x": 10,
+    "normalize": true
+  }
+}

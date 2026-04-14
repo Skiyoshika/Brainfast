@@ -106,8 +106,9 @@ class TestMasksEndpoint:
 class TestSaveTrainingSample:
     def test_saves_image_and_mask_files(self, app, client, tmp_path, sample_slice):
         """Saves image + mask in Cellpose convention."""
-        import project.frontend.server_context as ctx
         from tifffile import imread
+
+        import project.frontend.server_context as ctx
 
         training_dir = ctx.PROJECT_ROOT / "cellpose_training"
 

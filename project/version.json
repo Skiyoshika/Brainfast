@@ -1,7 +1,7 @@
 {
-  "version": "0.3.0-desktop",
-  "build_date": "2026-03-30",
-  "commit": "",
+  "version": "0.5.1",
+  "build_date": "2026-03-20",
+  "commit": "6957aee",
   "repository": "https://github.com/Skiyoshika/Brainfast",
   "releases_api": "https://api.github.com/repos/Skiyoshika/Brainfast/releases/latest",
   "releases_page": "https://github.com/Skiyoshika/Brainfast/releases/latest"

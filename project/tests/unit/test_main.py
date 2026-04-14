@@ -176,7 +176,6 @@ def test_check_env_main_uses_dynamic_structure_source_and_warns_on_nrrd_fallback
 
     printed: list[tuple[bool, str, str, str]] = []
 
-    monkeypatch.setattr(check_env, "_module_available", lambda _name: True)
     monkeypatch.setattr(
         check_env, "default_structure_source", lambda _project_root: structure_source
     )

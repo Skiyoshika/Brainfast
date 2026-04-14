@@ -103,28 +103,40 @@
 
 ---
 
-### 4. 默认 `ml_flip=false` 和整脑主路径自己的方向说明存在张力
+### 4. `ml_flip=false` 的现有证据还不足以支撑“全局默认正确”
 
-证据：
+现状：
 
 - 模板配置默认把 `ml_flip` 设成 `false`
 - 但 `project/scripts/whole_brain_3d.py` 的代码注释写得很明确：
   显微图像通常需要做 ML flip，才能和 Allen 左半球约定对齐
+- 现在已经补出了一份 A/B 记录：`docs/superpowers/plans/ml-flip-ab-evidence.md`
+- 但这份证据只覆盖了 `Sample 35`，且该样本使用的是 `atlas_hemisphere: "right_flipped"`
+- 这个样本恰好属于 `ml_flip` 影响最不敏感的一类，因为半球放置已经通过 `right_flipped` 路径部分消解
 
 结论：
 
-- 这是一个“默认值改变缺少充分证据”的问题
-- 如果没有真实 sample 的 A/B 结果支撑，这类改动不能被表述成“已经很稳”
+- 这已经不再是“完全没有证据”的问题，而是“证据覆盖范围过窄”的问题
+- 这份 A/B 结果足以削弱“`ml_flip=false` 明显错误”这种强表述
+- 但它还不足以支撑“所以 `ml_flip=false` 适合作为全局默认值”
 
 更直接地说：
 
-- 这可能正是你一直看到整脑配准 overlay 很差的来源之一
+- 目前最多只能说：对 `right_flipped` 的这个单一样本，`ml_flip=true/false` 差异不显著
+- 还不能推出：对左半球、整脑、方向不明确样本也都应该默认 `false`
 
 应该怎么改：
 
-- 用真实样本比较 `ml_flip=true/false`
-- 以 overlay 质量和 region mapping 一致性来决定默认值
-- 在没有证据前，不要把这个说成稳定结论
+- 把任务升级成样本矩阵，而不是单样本 A/B：
+  - `right_flipped` 半球样本
+  - `left` 半球样本
+  - `whole` 或方向不明确样本
+- 对每类至少 2 个样本做 `ml_flip=true/false` 对照
+- 用同一套门槛判断：
+  - registration QC 指标
+  - overlay 肉眼 spot-check
+  - region mapping 是否出现明显左右反转
+- 在覆盖这些样本类型之前，不要把某一个样本的结果上升成模板默认值结论
 
 ---
 

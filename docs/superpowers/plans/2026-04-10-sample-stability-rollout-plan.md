@@ -41,6 +41,23 @@ Use categories:
 - nonlinear warp distortion
 - output looks plausible in one slice but inconsistent across stack
 
+- [ ] **Step 2A: Define the `ml_flip` evidence matrix up front**
+
+Do not accept a single-sample A/B as sufficient evidence for the template default.
+
+Minimum matrix:
+- one `right_flipped` hemisphere sample
+- one `left` hemisphere sample
+- one `whole` or orientation-ambiguous sample
+
+For each sample compare `ml_flip=true/false` using:
+- registration QC metrics
+- overlay spot-check
+- left/right region consistency after mapping
+
+Promotion rule:
+- only change or defend the template default after this matrix is complete
+
 - [ ] **Step 3: Add a hard trust policy to the docs**
 
 Required policy:
@@ -329,6 +346,7 @@ Bucket design:
 - `Canary A`: one sample that already runs end-to-end today
 - `Canary B`: one weaker/noisier sample
 - `Canary C`: one shape/orientation outlier
+- Ensure the three canaries are not all from the same orientation regime; include `ml_flip`-sensitive coverage where possible
 
 - [ ] **Step 2: Define pass/fail gates for each canary run**
 

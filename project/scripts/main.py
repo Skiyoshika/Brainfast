@@ -329,7 +329,7 @@ def _quantify_against_exported_truth(
                 "registered_label_path": str(registered_label_path),
                 "overlay_path": str(overlay_path),
                 "registration_method": "3d_truth_export",
-                "score_type": "edge_ssim",
+                "score_type": "volume_truth_export",
                 "registration_ok": bool(reg_score >= 0.3),
                 "best_score": round(reg_score, 4),
                 "best_z": slice_id,

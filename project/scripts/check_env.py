@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import sys
 from pathlib import Path
 
@@ -40,10 +39,6 @@ OPTIONAL_MODULES = (
 )
 
 
-def _module_available(name: str) -> bool:
-    return importlib.util.find_spec(name) is not None
-
-
 def _module_importable(name: str) -> tuple[bool, str]:
     """Try a real import and return (ok, detail).
 
@@ -76,6 +71,54 @@ def _module_importable(name: str) -> tuple[bool, str]:
         return True, ver
     except Exception as exc:
         return False, str(exc)
+
+
+# Runtime hotspot checks.
+#
+# Top-level ``import scipy`` can succeed while ``scipy.ndimage`` crashes due
+# to ABI mismatch or missing DLLs.  We verify the EXACT import statements
+# used by the two heaviest entry points:
+#
+#   - project/frontend/server_context.py  (line 24):
+#       from scipy.ndimage import gaussian_filter, map_coordinates
+#
+#   - project/scripts/whole_brain_3d.py   (line 9):
+#       from scipy.ndimage import map_coordinates
+#
+# These checks run IN-PROCESS (same interpreter as check_env and pytest)
+# so there is no risk of subprocess resolving a different Python or
+# site-packages.  If these fail, check_env MUST return non-zero.
+
+_RUNTIME_HOTSPOT_IMPORTS: list[tuple[str, str]] = [
+    # (label, import statement to exec())
+    ("scipy.ndimage", "import scipy.ndimage"),
+    ("skimage.segmentation", "import skimage.segmentation"),
+    (
+        "server_context.py:24 (from scipy.ndimage import gaussian_filter, map_coordinates)",
+        "from scipy.ndimage import gaussian_filter, map_coordinates",
+    ),
+    (
+        "whole_brain_3d.py:9 (from scipy.ndimage import map_coordinates)",
+        "from scipy.ndimage import map_coordinates",
+    ),
+]
+
+
+def _check_runtime_hotspots() -> list[str]:
+    """Verify that runtime-critical imports work IN THIS PROCESS.
+
+    Uses exec() in the same interpreter — not a subprocess — so the check
+    sees exactly the same sys.path, site-packages, and ABI state as pytest
+    and the Flask server.  If scipy.ndimage crashes here, it will also
+    crash in server_context.py and whole_brain_3d.py.
+    """
+    failures: list[str] = []
+    for label, stmt in _RUNTIME_HOTSPOT_IMPORTS:
+        try:
+            exec(stmt)  # noqa: S102 — intentional; checked literal strings only
+        except Exception as exc:
+            failures.append(f"{label}: {exc}")
+    return failures
 
 
 # Version boundary checks for the numerical stack.
@@ -202,6 +245,20 @@ def main() -> int:
                     failures += 1
         else:
             _print_status(ok, "WARN", f"optional module '{name}'")
+
+    # --- Runtime hotspot checks (submodule importability) ---
+    hotspot_failures = _check_runtime_hotspots()
+    for msg in hotspot_failures:
+        _print_status(False, "FAIL", "runtime hotspot", msg)
+        failures += 1
+    if not hotspot_failures:
+        _print_status(
+            True,
+            "OK",
+            "runtime hotspots (in-process)",
+            f"all {len(_RUNTIME_HOTSPOT_IMPORTS)} checks passed"
+            " (scipy.ndimage, skimage.segmentation, server_context entry, whole_brain_3d entry)",
+        )
 
     structure_source = default_structure_source(project_root)
     required_assets = [

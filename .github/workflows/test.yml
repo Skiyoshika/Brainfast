@@ -83,6 +83,12 @@ jobs:
       - name: Run unit tests with full deps
         run: python -m pytest project/tests/unit/ -q --tb=short
 
+      - name: Run detector-preview unit tests
+        run: python -m pytest project/tests/unit/test_detect_preview_api.py -v --tb=short
+
+      - name: Run default-path integration smoke test
+        run: python -m pytest project/tests/integration/test_default_path_smoke.py -v --tb=short
+
   # ── Integration tests (self-hosted, has atlas file) ───────────────────────
   # Uncomment when self-hosted runner with annotation_25.nii.gz is available:
   # integration:

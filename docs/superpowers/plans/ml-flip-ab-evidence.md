@@ -35,8 +35,10 @@ and within run-to-run variability.  This is expected because:
    where the tissue orientation is ambiguous.
 
 **Default recommendation:** Keep `ml_flip=false` in the template config.
-Per-sample configs can override to `true` when the tissue orientation requires
-it (e.g. left-hemisphere or whole-brain samples without hemisphere config).
+Per-sample configs can override to `true` if needed.
+
+See [`ml-flip-matrix-summary.md`](ml-flip-matrix-summary.md) for the full
+3-sample evidence matrix confirming this recommendation.
 
 ## Reproduction
 

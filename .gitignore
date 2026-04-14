@@ -7,6 +7,7 @@
 Samples/
 data/
 outputs/
+*.nrrd
 
 # External dependency repo (already has its own git)
 repos/

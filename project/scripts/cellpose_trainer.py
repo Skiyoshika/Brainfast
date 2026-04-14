@@ -174,6 +174,50 @@ def _register_model(model_path: str) -> None:
         _log.warning("Could not register model: %s", exc)
 
 
+def _update_config_primary_model(model_name: str) -> None:
+    """Update the active config's primary_model to the newly trained model."""
+    import json
+
+    try:
+        import project.frontend.server_context as ctx
+        config_path_str = ctx.run_state.get("config_path")
+    except ImportError:
+        config_path_str = None
+
+    if not config_path_str:
+        # Fallback to template
+        candidates = []
+        try:
+            import project.frontend.server_context as ctx
+            candidates.append(ctx.PROJECT_ROOT / "configs" / "run_config.template.json")
+        except Exception:
+            pass
+        for p in candidates:
+            if p.exists():
+                config_path_str = str(p)
+                break
+
+    if not config_path_str:
+        _log.warning("No config file found to update primary_model")
+        return
+
+    config_path = Path(config_path_str)
+    if not config_path.exists():
+        _log.warning("Config file not found: %s", config_path)
+        return
+
+    try:
+        cfg = json.loads(config_path.read_text(encoding="utf-8-sig"))
+        if "detection" not in cfg:
+            cfg["detection"] = {}
+        old_model = cfg["detection"].get("primary_model", "")
+        cfg["detection"]["primary_model"] = model_name
+        config_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+        _log.info("Updated config %s: primary_model %s -> %s", config_path, old_model, model_name)
+    except Exception as exc:
+        _log.warning("Failed to update config primary_model: %s", exc)
+
+
 class CellposeTrainer:
     """Manages background Cellpose training with progress tracking."""
 
@@ -235,9 +279,10 @@ class CellposeTrainer:
                 if test_losses:
                     self.state.test_loss = test_losses[-1]
 
-                # Register model and clear cache
+                # Register model, clear cache, and update active config
                 _register_model(model_path)
                 _clear_model_cache()
+                _update_config_primary_model(model_name)
 
                 self.state.status = "completed"
                 _log.info(

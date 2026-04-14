@@ -229,6 +229,28 @@ def training_set_info():
     })
 
 
+@bp.post("/apply-model")
+def apply_model():
+    """Set a model as the active detection model.
+
+    Request JSON:
+        modelName: str — name of the model to apply
+
+    Updates the active config and clears the model cache.
+    """
+    from project.scripts.cellpose_trainer import _clear_model_cache, _update_config_primary_model
+
+    payload = request.get_json(force=True)
+    model_name = payload.get("modelName", "")
+    if not model_name:
+        return jsonify({"ok": False, "error": "modelName is required"}), 400
+
+    _update_config_primary_model(model_name)
+    _clear_model_cache()
+
+    return jsonify({"ok": True, "appliedModel": model_name})
+
+
 @bp.delete("/training-set/<name>")
 def delete_training_sample(name: str):
     """Delete a training sample by name."""

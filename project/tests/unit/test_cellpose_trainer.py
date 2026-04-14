@@ -122,3 +122,45 @@ class TestStartTraining:
         trainer.state.status = "training"
         trainer.cancel()
         assert trainer.state.status == "cancelled"
+
+
+class TestUpdateConfigModel:
+    def test_updates_config_file(self, tmp_path):
+        import json
+        from project.scripts.cellpose_trainer import _update_config_primary_model
+
+        # Create a mock config file
+        config_path = tmp_path / "config.json"
+        config_path.write_text(json.dumps({
+            "detection": {"primary_model": "cyto3"},
+            "other": "value",
+        }))
+
+        # Patch server_context to point to our config
+        import project.frontend.server_context as ctx
+        original = ctx.run_state.get("config_path")
+        ctx.run_state["config_path"] = str(config_path)
+        try:
+            _update_config_primary_model("brainfast_v1")
+
+            updated = json.loads(config_path.read_text())
+            assert updated["detection"]["primary_model"] == "brainfast_v1"
+            assert updated["other"] == "value"  # other keys preserved
+        finally:
+            if original is not None:
+                ctx.run_state["config_path"] = original
+            else:
+                ctx.run_state.pop("config_path", None)
+
+
+class TestClearModelCache:
+    def test_clears_cache(self):
+        from project.scripts.detect import _CELLPOSE_MODEL_CACHE
+        from project.scripts.cellpose_trainer import _clear_model_cache
+
+        # Add a dummy entry
+        _CELLPOSE_MODEL_CACHE[("test", False)] = "dummy"
+        assert len(_CELLPOSE_MODEL_CACHE) > 0
+
+        _clear_model_cache()
+        assert len(_CELLPOSE_MODEL_CACHE) == 0

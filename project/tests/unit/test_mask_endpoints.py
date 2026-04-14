@@ -251,3 +251,28 @@ class TestTrainingSetEndpoints:
     def test_delete_nonexistent_sample(self, client):
         resp = client.delete("/api/cellpose/training-set/nonexistent")
         assert resp.status_code == 404
+
+
+class TestApplyModel:
+    def test_apply_model(self, client):
+        with patch("project.scripts.cellpose_trainer._update_config_primary_model") as mock_update, \
+             patch("project.scripts.cellpose_trainer._clear_model_cache") as mock_clear:
+            resp = client.post(
+                "/api/cellpose/apply-model",
+                data=json.dumps({"modelName": "my_model"}),
+                content_type="application/json",
+            )
+            assert resp.status_code == 200
+            data = resp.get_json()
+            assert data["ok"] is True
+            assert data["appliedModel"] == "my_model"
+            mock_update.assert_called_once_with("my_model")
+            mock_clear.assert_called_once()
+
+    def test_apply_model_missing_name(self, client):
+        resp = client.post(
+            "/api/cellpose/apply-model",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        assert resp.status_code == 400

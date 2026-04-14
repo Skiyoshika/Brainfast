@@ -104,9 +104,19 @@ def _run_detection(slice_path: Path, cfg: dict) -> pd.DataFrame:
 def _run_detection_with_masks(slice_path: Path, cfg: dict):
     """Run detection and return (DataFrame, masks) if Cellpose, else (DataFrame, None)."""
     try:
-        from project.scripts.detect import detect_cells_cellpose, _resolve_model_type, _diameter_px, _use_gpu
+        from project.scripts.detect import (
+            _diameter_px,
+            _resolve_model_type,
+            _use_gpu,
+            detect_cells_cellpose,
+        )
     except ImportError:
-        from scripts.detect import detect_cells_cellpose, _resolve_model_type, _diameter_px, _use_gpu
+        from scripts.detect import (
+            _diameter_px,
+            _resolve_model_type,
+            _use_gpu,
+            detect_cells_cellpose,
+        )
 
     det_cfg = cfg.get("detection", {})
     model_type = _resolve_model_type(str(det_cfg.get("primary_model", "cpsam")))

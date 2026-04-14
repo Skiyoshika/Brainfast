@@ -136,7 +136,7 @@ def start_training():
         epochs: int — number of training epochs (default: 100)
         gpu: bool — use GPU (default: true)
     """
-    from project.scripts.cellpose_trainer import get_trainer, TrainingError
+    from project.scripts.cellpose_trainer import TrainingError, get_trainer
 
     payload = request.get_json(force=True)
     base_model = payload.get("baseModel", "cyto3")

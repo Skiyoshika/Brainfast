@@ -273,7 +273,7 @@ class CellposeTrainer:
                     self.state.loss_history = [
                         [i, tl, tel]
                         for i, (tl, tel) in enumerate(
-                            zip(train_losses, test_losses or train_losses)
+                            zip(train_losses, test_losses or train_losses, strict=False)
                         )
                     ]
                 if test_losses:

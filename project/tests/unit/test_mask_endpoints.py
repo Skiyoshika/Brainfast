@@ -101,3 +101,82 @@ class TestMasksEndpoint:
     def test_masks_not_available_returns_404(self, client):
         resp = client.get("/api/detect/preview/masks?jobId=nonexistent")
         assert resp.status_code == 404
+
+
+class TestSaveTrainingSample:
+    def test_saves_image_and_mask_files(self, app, client, tmp_path, sample_slice):
+        """Saves image + mask in Cellpose convention."""
+        import project.frontend.server_context as ctx
+        from tifffile import imread
+
+        training_dir = ctx.PROJECT_ROOT / "cellpose_training"
+
+        mask_data = np.array([[0, 1], [2, 0]], dtype=np.int32)
+        compressed = zlib.compress(mask_data.tobytes())
+
+        resp = client.post(
+            "/api/cellpose/save-training-sample",
+            data=json.dumps({
+                "imagePath": str(sample_slice),
+                "maskHex": compressed.hex(),
+                "width": 2,
+                "height": 2,
+            }),
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["trainingSetStats"]["totalImages"] >= 1
+
+        # Verify files exist with Cellpose naming convention
+        saved_name = Path(data["savedAs"]).stem  # e.g. "test_slice"
+        img_path = training_dir / f"{saved_name}.tif"
+        mask_path = training_dir / f"{saved_name}_masks.tif"
+        assert img_path.exists()
+        assert mask_path.exists()
+
+        # Verify mask content
+        saved_mask = imread(str(mask_path))
+        assert saved_mask.shape == (2, 2)
+        assert int(saved_mask.max()) == 2
+
+    def test_rejects_missing_image(self, client):
+        resp = client.post(
+            "/api/cellpose/save-training-sample",
+            data=json.dumps({
+                "imagePath": "/nonexistent/path.tif",
+                "maskHex": "deadbeef",
+                "width": 2,
+                "height": 2,
+            }),
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+
+    def test_training_stats_accumulate(self, app, client, tmp_path):
+        """Stats count increases as more samples are saved."""
+        import project.frontend.server_context as ctx
+
+        for i in range(3):
+            slice_path = tmp_path / f"slice_{i}.tif"
+            img = np.random.randint(0, 65535, (8, 8), dtype=np.uint16)
+            imwrite(str(slice_path), img)
+
+            mask_data = np.ones((8, 8), dtype=np.int32) * (i + 1)
+            compressed = zlib.compress(mask_data.tobytes())
+
+            resp = client.post(
+                "/api/cellpose/save-training-sample",
+                data=json.dumps({
+                    "imagePath": str(slice_path),
+                    "maskHex": compressed.hex(),
+                    "width": 8,
+                    "height": 8,
+                }),
+                content_type="application/json",
+            )
+            assert resp.status_code == 200
+
+        data = resp.get_json()
+        assert data["trainingSetStats"]["totalImages"] == 3

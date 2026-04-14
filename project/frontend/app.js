@@ -352,6 +352,12 @@ const LANGS = {
     'manualCount.pathChanged': 'Switched TIFF source. Previous manual points were cleared.',
     'manualCount.sliceCleared': 'Cleared points on current Z',
     'manualCount.allCleared': 'Cleared all manual count points',
+    'btn.editMasks': 'Edit Masks',
+    'maskEditor.title': 'Mask Editor',
+    'maskEditor.brushSize': 'Brush Size',
+    'maskEditor.opacity': 'Mask Opacity',
+    'maskEditor.cells': 'Cells',
+    'maskEditor.save': 'Save to Training Set',
   },
   zh: {
     'nav.workflow': '配准工作流',
@@ -693,6 +699,12 @@ const LANGS = {
     'manualCount.pathChanged': '已切换TIFF源文件，之前的手动计数点已清空。',
     'manualCount.sliceCleared': '已清空当前Z层的计数点',
     'manualCount.allCleared': '已清空全部手动计数点',
+    'btn.editMasks': '编辑掩码',
+    'maskEditor.title': '掩码编辑器',
+    'maskEditor.brushSize': '画笔大小',
+    'maskEditor.opacity': '掩码透明度',
+    'maskEditor.cells': '细胞',
+    'maskEditor.save': '保存到训练集',
   },
 };
 
@@ -1306,6 +1318,46 @@ document.getElementById('detectToggleOverlay').onclick = () => {
   const img = document.getElementById('detectOverlayImg');
   _detectOverlayVisible = !_detectOverlayVisible;
   img.style.display = _detectOverlayVisible ? '' : 'none';
+};
+
+document.getElementById('editMasksBtn').onclick = async function() {
+  var slicePath = document.getElementById('realSlicePath').value;
+  if (!slicePath) { showToast('No slice loaded', 'warning'); return; }
+
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = 'Loading...';
+
+  try {
+    var res = await fetch('/api/detect/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slicePath: slicePath,
+        jobId: getOverlayJobId(),
+        returnMasks: true,
+        params: {
+          model: document.getElementById('detectModelSelect').value,
+          diameter_um: parseFloat(document.getElementById('detectDiameterUm').value) || 12.0,
+          flow_threshold: parseFloat(document.getElementById('detectFlowThreshold').value),
+          cellprob_threshold: parseFloat(document.getElementById('detectCellprobThreshold').value),
+          min_size_px: parseInt(document.getElementById('detectMinSizePx').value, 10) || 8,
+          gpu: document.getElementById('detectGpuToggle').checked,
+        },
+      }),
+    });
+    var data = await res.json();
+    if (!data.ok) {
+      showToast('Detection failed: ' + (data.error || 'unknown'), 'error');
+      return;
+    }
+    MaskEditor.open(slicePath, getOverlayJobId());
+  } catch (err) {
+    showToast('Failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Edit Masks';
+  }
 };
 
 // ================================================================

@@ -176,9 +176,31 @@ def test_resolve_model_type_cyto():
 
 
 def test_resolve_model_type_empty_defaults_to_cpsam():
-    """An empty or unrecognized name should default to cpsam (Cellpose-SAM v4+)."""
+    """An empty name should default to cpsam (Cellpose-SAM v4+)."""
     assert _resolve_model_type("") == "cpsam"
-    assert _resolve_model_type("unknown_model") == "cpsam"
+
+
+def test_resolve_model_type_custom_path():
+    """Custom model paths (not built-in names) pass through unchanged."""
+    from project.scripts.detect import _resolve_model_type
+
+    # Absolute path to a custom model
+    assert _resolve_model_type("C:/Users/me/.cellpose/models/brainfast_v1") == "brainfast_v1"
+    assert _resolve_model_type("/home/user/models/my_custom") == "my_custom"
+
+    # Name that looks like a user-trained model (not a built-in)
+    assert _resolve_model_type("brainfast_v1_20260413") == "brainfast_v1_20260413"
+
+
+def test_resolve_model_type_builtin_names():
+    """Built-in model names still resolve correctly."""
+    from project.scripts.detect import _resolve_model_type
+
+    assert _resolve_model_type("cpsam") == "cpsam"
+    assert _resolve_model_type("cyto3") == "cyto3"
+    assert _resolve_model_type("cyto2") == "cyto2"
+    assert _resolve_model_type("nuclei") == "nuclei"
+    assert _resolve_model_type("cyto") == "cyto"
 
 
 # ── _is_cellpose_model tests ──────────────────────────────────────────────────
@@ -209,8 +231,9 @@ def test_is_cellpose_model_empty_returns_false():
     assert _is_cellpose_model("") is False
 
 
-def test_is_cellpose_model_fallback_peak_returns_false():
-    assert _is_cellpose_model("fallback_peak") is False
+def test_is_cellpose_model_fallback_peak_returns_true():
+    """'fallback_peak' is not a known non-Cellpose name, so it's treated as a custom model."""
+    assert _is_cellpose_model("fallback_peak") is True
 
 
 # ── _load_cellpose_model: CellposeModel (v4+) branch ──────────────────────────

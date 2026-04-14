@@ -51,11 +51,14 @@ def _norm_for_cellpose(img: np.ndarray) -> np.ndarray:
 def _resolve_model_type(name: str) -> str:
     """Resolve model name to Cellpose model type.
 
-    Cellpose v4+ (Cellpose-SAM) uses 'cpsam' as the unified model;
-    legacy names like cyto2/cyto3/nuclei are accepted but ignored by v4+.
+    Built-in aliases are normalized (e.g., "sam" → "cpsam").
+    Unknown names (user-trained models or paths) pass through unchanged
+    so they can be loaded via ``CellposeModel(pretrained_model=name)``.
     """
     s = str(name or "").strip().lower()
-    if "cpsam" in s or "sam" in s:
+    if not s:
+        return "cpsam"
+    if "cpsam" in s or s == "sam" or "cellpose-sam" in s:
         return "cpsam"
     if "nuclei" in s:
         return "nuclei"
@@ -65,14 +68,34 @@ def _resolve_model_type(name: str) -> str:
         return "cyto2"
     if "cyto" in s:
         return "cyto"
-    # Default to cpsam (Cellpose-SAM) for v4+
-    return "cpsam"
+    # Not a built-in — assume it's a user-trained model name or path.
+    # For path-like names, return just the basename to preserve path casing.
+    original = str(name or "").strip()
+    return Path(original).name if ("/" in original or "\\" in original) else original
+
+
+_BUILTIN_CELLPOSE_NAMES = {"cpsam", "sam", "cyto", "cyto2", "cyto3", "nuclei"}
 
 
 def _is_cellpose_model(name: str) -> bool:
-    """Return True if the model name refers to any Cellpose/Cellpose-SAM model."""
+    """Return True if the model name refers to any Cellpose model.
+
+    Returns True for built-in names, names starting with 'cellpose',
+    and any name that is not a known non-Cellpose detector
+    (like 'log', 'peak', 'threshold', 'reporter_positive', 'none').
+    """
     s = str(name or "").strip().lower()
-    return s.startswith("cellpose") or s in ("cpsam", "sam", "cyto", "cyto2", "cyto3", "nuclei")
+    if not s or s == "none":
+        return False
+    if s in _BUILTIN_CELLPOSE_NAMES:
+        return True
+    if s.startswith("cellpose"):
+        return True
+    # Non-Cellpose detector names
+    if s in ("log", "peak", "threshold", "reporter_positive", "fallback"):
+        return False
+    # Unknown name — assume it's a user-trained Cellpose model
+    return True
 
 
 def _pixel_size_um_from_cfg(cfg: dict[str, Any]) -> float | None:

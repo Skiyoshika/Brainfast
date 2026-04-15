@@ -66,17 +66,19 @@ jobs:
           $version = "${{ github.ref_name }}"
           Move-Item dist\brainfast.exe "dist\brainfast-${version}-windows.exe"
 
-      - name: Sign release asset
-        if: ${{ secrets.BRAINFAST_CODESIGN_PFX != '' && secrets.BRAINFAST_CODESIGN_PASSWORD != '' }}
-        shell: pwsh
-        env:
-          BRAINFAST_CODESIGN_PFX: ${{ secrets.BRAINFAST_CODESIGN_PFX }}
-          BRAINFAST_CODESIGN_PASSWORD: ${{ secrets.BRAINFAST_CODESIGN_PASSWORD }}
-        run: |
-          python project/scripts/sign_release_assets.py `
-            --file dist/brainfast-${{ github.ref_name }}-windows.exe `
-            --pfx $env:BRAINFAST_CODESIGN_PFX `
-            --password $env:BRAINFAST_CODESIGN_PASSWORD
+      # Optional code signing — enable by adding BRAINFAST_CODESIGN_PFX
+      # and BRAINFAST_CODESIGN_PASSWORD repository secrets.
+      # - name: Sign release asset
+      #   if: secrets.BRAINFAST_CODESIGN_PFX != ''
+      #   shell: pwsh
+      #   env:
+      #     BRAINFAST_CODESIGN_PFX: ${{ secrets.BRAINFAST_CODESIGN_PFX }}
+      #     BRAINFAST_CODESIGN_PASSWORD: ${{ secrets.BRAINFAST_CODESIGN_PASSWORD }}
+      #   run: |
+      #     python project/scripts/sign_release_assets.py `
+      #       --file dist/brainfast-${{ github.ref_name }}-windows.exe `
+      #       --pfx $env:BRAINFAST_CODESIGN_PFX `
+      #       --password $env:BRAINFAST_CODESIGN_PASSWORD
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2

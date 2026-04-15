@@ -113,7 +113,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e ".[advanced]" pytest pytest-cov
+        run: pip install -e ".[full,dev]"
 
       - name: Run integration tests
         run: |

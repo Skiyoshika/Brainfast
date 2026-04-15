@@ -201,6 +201,6 @@ def test_info_reads_version_json() -> None:
             resp = client.get("/api/info")
             assert resp.status_code == 200
             data = resp.get_json()
-            assert data["version"] == "0.5.1"
+            assert data["version"] == "1.0.0-rc1"
     finally:
         ctx.PROJECT_ROOT = saved

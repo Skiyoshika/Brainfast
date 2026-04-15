@@ -17,7 +17,7 @@ def normalize_version(value: str) -> str:
     return text
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Write Brainfast version metadata.")
     parser.add_argument("--version", required=True, help="Semantic version or git tag")
     parser.add_argument("--commit", default="", help="Git commit SHA")
@@ -27,7 +27,7 @@ def main() -> int:
         default=str(Path(__file__).resolve().parents[1] / "version.json"),
         help="Target version.json path",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     payload = {
         "version": normalize_version(args.version),

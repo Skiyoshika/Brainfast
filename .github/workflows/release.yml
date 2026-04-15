@@ -29,7 +29,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e ".[advanced]" pyinstaller
+          pip install -e ".[full,desktop,dev]"
+
+      - name: Validate runtime
+        run: python project/scripts/check_env.py --config project/configs/run_config.template.json
+
+      - name: Run release smoke tests
+        run: |
+          python -m pytest project/tests/integration/test_default_path_smoke.py -q
+          python -m pytest project/tests/unit/test_detect_preview_api.py -q
 
       - name: Write version.json
         env:
@@ -57,6 +65,18 @@ jobs:
         run: |
           $version = "${{ github.ref_name }}"
           Move-Item dist\brainfast.exe "dist\brainfast-${version}-windows.exe"
+
+      - name: Sign release asset
+        if: ${{ secrets.BRAINFAST_CODESIGN_PFX != '' && secrets.BRAINFAST_CODESIGN_PASSWORD != '' }}
+        shell: pwsh
+        env:
+          BRAINFAST_CODESIGN_PFX: ${{ secrets.BRAINFAST_CODESIGN_PFX }}
+          BRAINFAST_CODESIGN_PASSWORD: ${{ secrets.BRAINFAST_CODESIGN_PASSWORD }}
+        run: |
+          python project/scripts/sign_release_assets.py `
+            --file dist/brainfast-${{ github.ref_name }}-windows.exe `
+            --pfx $env:BRAINFAST_CODESIGN_PFX `
+            --password $env:BRAINFAST_CODESIGN_PASSWORD
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2

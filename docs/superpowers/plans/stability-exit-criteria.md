@@ -112,3 +112,14 @@ The pipeline is declared stable when:
 - 3/3 canary buckets pass twice each.
 - 60%+ of the sample cohort completes without new failure classes.
 - A `release_candidate_requirements.txt` is frozen and tagged.
+
+---
+
+## 6. Release readiness gate
+
+Before tag creation:
+- clean-room install of `.[full,desktop,dev]`
+- `check_env.py` green
+- `pytest project/tests -q` green
+- one manual browser acceptance pass recorded
+- `release_candidate_requirements.txt` frozen from the candidate commit

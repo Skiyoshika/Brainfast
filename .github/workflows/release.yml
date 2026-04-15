@@ -10,6 +10,9 @@ on:
         description: "Version tag to build (e.g. v0.5.1)"
         required: false
 
+permissions:
+  contents: write
+
 jobs:
   # ── Build Windows EXE and upload to GitHub Release ────────────────────────
   build-windows-exe:

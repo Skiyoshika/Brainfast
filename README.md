@@ -38,7 +38,17 @@ Brainfast is a local, privacy-first desktop tool that registers fluorescence mic
 - **3D volume pipeline** — full volumetric registration via ANTs or Elastix with HTML run reports
 - **Light/dark theme** — localStorage-persisted theme toggle
 - **Docker-ready** — `Dockerfile` + `docker-compose.yml` for headless Linux server deployment
-- **97 unit tests**, CI on GitHub Actions (Windows + Ubuntu)
+- **Validated by the full pytest suite**, CI on GitHub Actions (Windows + Ubuntu)
+
+---
+
+## Current workflow boundaries
+
+- 2D manual landmark / liquify correction is available in the browser UI.
+- The 3D whole-brain path is the default final-truth path and is still primarily automatic.
+- Cellpose-SAM (`cpsam`) is available as the default detector backend.
+- The product does not yet ship a detector-specific manual relabel / retrain workflow in the UI.
+- Region-level counts should only be trusted when registration QC is acceptable.
 
 ---
 
@@ -58,7 +68,21 @@ git clone https://github.com/Skiyoshika/Brainfast.git
 cd Brainfast
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -e ".[advanced,dev]"
+```
+
+#### Minimal 2D runtime
+```powershell
+pip install -e ".[dev]"
+```
+
+#### Default recommended runtime (`miki_3d + cpsam`)
+```powershell
+pip install -e ".[full,dev]"
+```
+
+#### Packaging / desktop build
+```powershell
+pip install -e ".[full,desktop,dev]"
 ```
 
 ### Environment check
@@ -200,7 +224,7 @@ project/
 │   ├── z_smoothness.py        AP-axis continuity analysis
 │   └── …
 └── tests/
-    ├── unit/                  97 tests, no atlas file required
+    ├── unit/                  Full test suite, no atlas file required
     └── integration/           Requires annotation_25.nii.gz
 ```
 

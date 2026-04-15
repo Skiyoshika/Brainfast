@@ -8,12 +8,12 @@ from tifffile import imread
 
 try:
     import nibabel as nib
-except Exception:
+except ImportError:
     nib = None
 
 try:
     from scripts.structure_tree import load_structure_table
-except Exception:
+except ImportError:
     from structure_tree import load_structure_table
 
 

@@ -3,8 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from tifffile import imwrite
-
 from scripts.make_demo_panel import (
     _apply_tissue_alpha,
     _clip_to_tissue,
@@ -14,6 +12,7 @@ from scripts.make_demo_panel import (
     _select_region_annotations,
     _tissue_support_from_raw,
 )
+from tifffile import imwrite
 
 
 def test_crop_to_brain_prefers_explicit_mask() -> None:

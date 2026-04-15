@@ -4,17 +4,16 @@ Tests use synthetic DataFrames so no atlas files are required.
 """
 from __future__ import annotations
 
-import pandas as pd
-import pytest
-
 # Allow import from project root
 import sys
 from pathlib import Path
 
+import pandas as pd
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from map_and_aggregate import aggregate_by_region
-
 
 # ---------------------------------------------------------------------------
 # Helpers

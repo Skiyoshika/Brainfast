@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import threading
 import uuid as _uuid_mod
 from pathlib import Path
@@ -16,11 +17,16 @@ from project.frontend.api_errors import (
 bp = Blueprint("api_atlas", __name__, url_prefix="/api/atlas")
 
 
+def _normalize_path(p: str) -> str:
+    """Normalize Windows paths: resolve double-backslashes, mixed separators."""
+    return os.path.normpath(p) if p else p
+
+
 @bp.post("/autopick-z")
 def atlas_autopick_z():
     payload = request.get_json(force=True)
-    real_path = Path(payload.get("realPath", ""))
-    annotation_path = Path(payload.get("annotationPath", ""))
+    real_path = Path(_normalize_path(payload.get("realPath", "")))
+    annotation_path = Path(_normalize_path(payload.get("annotationPath", "")))
     z_step = int(payload.get("zStep", 1))
     raw_real_z = payload.get("realZIndex", None)
     real_z_index = None if raw_real_z in (None, "", "null") else int(raw_real_z)
@@ -56,12 +62,20 @@ def atlas_autopick_z():
         "cancel_requested": False,
     }
 
+    ap_method = str(payload.get("apMethod", "auto"))
+    raw_ap_start = payload.get("apRangeStart", None)
+    raw_ap_end = payload.get("apRangeEnd", None)
+    ap_range = None
+    if raw_ap_start is not None and raw_ap_end is not None:
+        ap_range = (int(raw_ap_start), int(raw_ap_end))
     kwargs = dict(
         z_step=z_step,
         pixel_size_um=pixel_size_um,
         slicing_plane=slicing_plane,
         roi_mode=roi_mode,
         real_z_index=real_z_index,
+        ap_method=ap_method,
+        ap_range=ap_range,
     )
     t = threading.Thread(
         target=ctx._run_autopick_worker,
@@ -95,6 +109,19 @@ def atlas_autopick_z_status():
     if task["status"] == "error":
         resp["error"] = task["error"]
     return jsonify(resp)
+
+
+@bp.get("/region-ap-ranges")
+def region_ap_ranges():
+    """Return navigable brain regions with their AP slice ranges."""
+    import json as _json
+
+    json_path = Path(__file__).resolve().parent.parent.parent / "configs" / "region_ap_ranges.json"
+    if not json_path.exists():
+        return jsonify({"ok": False, "error": "region_ap_ranges.json not found"}), 404
+    with open(json_path) as f:
+        regions = _json.load(f)
+    return jsonify({"ok": True, "regions": regions})
 
 
 @bp.post("/autopick/cancel")

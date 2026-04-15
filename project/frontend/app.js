@@ -1,5 +1,5 @@
 ﻿/* ============================================================
-   Brainfast UI →?app.js
+   Brainfast UI - app.js
    Bilingual (EN default / 中文 toggle)
    ============================================================ */
 
@@ -9,11 +9,12 @@
 // ================================================================
 // LANGUAGE / i18n
 // ================================================================
-let currentLang = localStorage.getItem('idlebrain.lang') || 'en';
+let currentLang = localStorage.getItem('brainfast.lang') || 'en';
 
 const LANGS = {
   en: {
     'nav.workflow': 'Registration Workflow',
+    'nav.manualTiff': 'Manual TIFF Check',
     'nav.qc': 'Batch QC Review',
     'nav.results': 'Results',
     'nav.projects': 'Projects',
@@ -58,16 +59,16 @@ const LANGS = {
     'progress.phase.done': 'Done',
     'progress.phase.error': 'Error',
     'progress.phase.cancelled': 'Cancelled',
-    'btn.guide': '📖 Guide',
-    'btn.run': '▶ Run Pipeline',
-    'btn.cancel': '✕ Cancel',
-    'btn.openOutputs': '📁 Open Output Folder',
-    'btn.copy': '📋 Copy to Clipboard',
+    'btn.guide': '<i data-lucide="book-open" class="btn-icon"></i> Guide',
+    'btn.run': '<i data-lucide="play" class="btn-icon"></i> Run Pipeline',
+    'btn.cancel': '<i data-lucide="x" class="btn-icon"></i> Cancel',
+    'btn.openOutputs': '<i data-lucide="folder" class="btn-icon"></i> Open Output Folder',
+    'btn.copy': '<i data-lucide="clipboard-copy" class="btn-icon"></i> Copy to Clipboard',
     'btn.close': 'Close',
-    'btn.refreshResults': '🔁 Refresh',
-    'btn.exportCsv': '⬇️ Export CSV',
-    'btn.exportExcel': '📊 Export Excel',
-    'btn.exportMethods': '📝 Export Methods Text',
+    'btn.refreshResults': '<i data-lucide="refresh-cw" class="btn-icon"></i> Refresh',
+    'btn.exportCsv': '<i data-lucide="download" class="btn-icon"></i> Export CSV',
+    'btn.exportExcel': '<i data-lucide="download" class="btn-icon"></i> Export Excel',
+    'btn.exportMethods': '<i data-lucide="file-text" class="btn-icon"></i> Export Methods Text',
     'tour.btnTitle': 'Start guided tour',
     'tour.skip': 'Skip tour',
     'tour.next': 'Next →',
@@ -88,26 +89,41 @@ const LANGS = {
     'coexpr.th.red': 'Red (count)',
     'coexpr.th.green': 'Green (count)',
     'btn.browse': 'Browse',
-    'btn.savePreset': '💾 Save Config',
-    'btn.loadPreset': '📂 Load Config',
-    'btn.autoPick': '🎯 Auto-pick Atlas Slice',
-    'btn.refreshPreview': '🖼️ Refresh Preview',
+    'btn.savePreset': '<i data-lucide="save" class="btn-icon"></i> Save Config',
+    'btn.loadPreset': '<i data-lucide="folder-open" class="btn-icon"></i> Load Config',
+    'btn.autoPick': '<i data-lucide="crosshair" class="btn-icon"></i> Auto-pick Atlas Slice',
+    'btn.refreshPreview': '<i data-lucide="image" class="btn-icon"></i> Refresh Preview',
     'btn.extractSlice': '✓ Confirm Layer & Continue',
-    'btn.aiAlign': '🤖 AI Landmark Registration',
-    'btn.landmarkView': '🗺️ View Landmark Map',
-    'btn.startManual': '📌 Enter Manual Mode',
-    'btn.applyManual': '✕ Apply Manual Landmarks',
-    'btn.clearManual': '🗑 Clear Manual Points',
-    'btn.undo': '↗ Undo',
-    'btn.scalebar': '↔ Scale',
-    'btn.clearAnnotations': '🗑 Clear All',
-    'btn.exportFigure': '↙ Export Figure',
-    'btn.refreshQc': '🔁 Refresh',
-    'btn.regenDemo': '⚙️ Regen Demo',
-    'ch.red': '🔴 Red',
-    'ch.green': '🟢 Green',
-    'ch.farred': '🟠 Far-Red',
-    'ch.all': '▶ All Channels',
+    'btn.aiAlign': '<i data-lucide="bot" class="btn-icon"></i> AI Landmark Registration',
+    'btn.landmarkView': '<i data-lucide="map" class="btn-icon"></i> View Landmark Map',
+    'btn.startManual': '<i data-lucide="pin" class="btn-icon"></i> Enter Manual Mode',
+    'btn.applyManual': '<i data-lucide="check" class="btn-icon"></i> Apply Manual Landmarks',
+    'btn.clearManual': '<i data-lucide="trash-2" class="btn-icon"></i> Clear Manual Points',
+    'btn.undo': '<i data-lucide="undo-2" class="btn-icon"></i> Undo',
+    'btn.scalebar': '<i data-lucide="ruler" class="btn-icon"></i> Scale',
+    'btn.clearAnnotations': '<i data-lucide="trash-2" class="btn-icon"></i> Clear All',
+    'btn.exportFigure': '<i data-lucide="download" class="btn-icon"></i> Export Figure',
+    'btn.detectPreview': '<i data-lucide="scan" class="btn-icon"></i> Detect Cells',
+    'btn.detectParams': '<i data-lucide="settings" class="btn-icon"></i> Detection Parameters',
+    'detect.model': 'Model',
+    'detect.diameter': 'Diameter (µm)',
+    'detect.flowThreshold': 'Flow Threshold',
+    'detect.cellprobThreshold': 'Cell Probability',
+    'detect.minSize': 'Min Size (px)',
+    'detect.gpu': 'GPU',
+    'detect.running': 'Running cell detection…',
+    'detect.done': '{count} cells detected ({detector})',
+    'detect.error': 'Detection failed: {err}',
+    'detect.noSlice': 'Select a real slice first',
+    'detect.noRuntime': 'Cellpose not available — install cellpose to enable detection',
+    'btn.refreshQc': '<i data-lucide="refresh-cw" class="btn-icon"></i> Refresh',
+    'btn.regenDemo': '<i data-lucide="settings" class="btn-icon"></i> Regen Demo',
+    'btn.oneClickStart': 'Start One-Click Workflow',
+    'hint.oneClickFlow': 'Flow: auto-pick atlas → auto registration → manual review / liquify → export.',
+    'ch.red': '<span class="channel-dot channel-dot-red"></span> Red',
+    'ch.green': '<span class="channel-dot channel-dot-green"></span> Green',
+    'ch.farred': '<span class="channel-dot channel-dot-farred"></span> Far-Red',
+    'ch.all': '<i data-lucide="layers" class="btn-icon"></i> All Channels',
     'chname.red': 'Red',
     'chname.green': 'Green',
     'chname.farred': 'Far-Red',
@@ -123,6 +139,15 @@ const LANGS = {
     'label.outputDir': 'Output Folder',
     'label.atlasPath': 'Atlas Annotation File (annotation_25.nii.gz)',
     'label.structPath': 'Brain Region Mapping File (CSV/JSON)',
+    'label.workflowMode': 'Workflow Mode',
+    'label.sourceFile': 'Source TIFF',
+    'label.regScope': 'Registration Scope',
+    'opt.modeOneClick': 'One-Click Mode (Recommended)',
+    'opt.modePro': 'Professional Mode',
+    'opt.scopeSingle': 'Single-layer Registration (single-slice)',
+    'opt.scopeWhole': 'Whole-brain Registration (full workflow)',
+    'hint.scopeSingle': 'Single-layer mode will include Z-layer selection for 3D TIFF.',
+    'hint.scopeWhole': '3D volume will be processed slice-by-slice with auto AP localization.',
     'label.realSlicePath': 'Single Real Slice (preview / registration)',
     'label.atlasLabelPath': 'Single Atlas Slice (auto-generated by Auto-pick)',
     'label.pixelSizeUm': 'Pixel Size (µm/pixel)',
@@ -144,6 +169,32 @@ const LANGS = {
     'hint.maxPoints': 'Fewer points → faster but less accurate',
     'hint.minDistance': 'Pixels between detected landmarks',
     'hint.ransacResidual': 'Higher → more permissive matching',
+    'hint.scopeSingle': 'Single-layer mode will include Z-layer selection for 3D TIFF.',
+    'hint.scopeWhole': 'Whole-brain mode registers all Z-slices to the Allen Atlas automatically.',
+    'label.hemisphere': 'Hemisphere',
+    'opt.hemiAuto': 'Auto-detect (recommended)',
+    'opt.hemiFull': 'Full brain (both hemispheres)',
+    'opt.hemiLeft': 'Left hemisphere',
+    'opt.hemiRightFlipped': 'Right hemisphere (flipped, lateral=left)',
+    'hint.hemiAuto': 'Auto-detect tries all orientations and picks the best match.',
+    'hint.hemiFull': 'Register as a complete coronal section with both hemispheres.',
+    'hint.hemiLeft': 'Left hemisphere only — medial face on right side of image.',
+    'hint.hemiRightFlipped': 'Right hemisphere, flipped so lateral cortex is on the left side of the image.',
+    'label.atlasVersion': 'Atlas Version',
+    'opt.atlasCcfv3': 'CCFv3 (Allen 2017)',
+    'opt.atlasCcfv3bbp': 'CCFv3-BBP (Extended)',
+    'hint.atlasCcfv3': 'Standard Allen Mouse Brain CCFv3, 25\u00b5m resolution',
+    'hint.atlasCcfv3bbp': 'Blue Brain Project extended atlas with olfactory bulb, cerebellum, medulla improvements and averaged Nissl template',
+    'label.regMode': 'Registration Mode',
+    'opt.regCrossModal': 'Cross-Modal (Default)',
+    'opt.regNissl': 'Nissl Template (Single-Modal)',
+    'hint.regCrossModal': 'Matches fluorescence edges against atlas annotation edges',
+    'hint.regNissl': 'Matches fluorescence against averaged Nissl template for higher quality (requires CCFv3-BBP atlas)',
+    'label.targetRegion': 'Target Brain Region',
+    'hint.targetRegion': 'Select target region(s) to restrict AP search range (e.g., STN + CP for ChAT)',
+    'hint.targetRegionSelected': 'AP search restricted to slices {start}–{end} ({startMm} to {endMm} mm)',
+    'hint.targetRegionNone': 'No region selected — full atlas AP range will be searched',
+    'hint.channelGuide': 'For multi-channel data: load the reporter channel (C0) for registration. After registration, use Step 4 to process each channel separately.',
     'label.confidenceThreshold': 'Confidence Threshold',
     'hint.confidenceThreshold': 'Filter cell detections by minimum score (0 = keep all, 1 = strictest).',
     'opt.coronal': 'Coronal (default)',
@@ -161,8 +212,8 @@ const LANGS = {
     'opt.heightLock': 'Height-lock',
     'opt.affine': 'Affine (fast, small deformation)',
     'opt.nonlinear': 'Nonlinear (slow, large deformation)',
-    'adv.options': 'Advanced Options ▶',
-    'adv.params': 'Advanced Parameters ▶',
+    'adv.options': 'Advanced Options',
+    'adv.params': 'Advanced Parameters',
     'required': 'Required',
     'progress.slicesLabel': 'Slices registered',
     'progress.waiting': 'Waiting to start...',
@@ -174,13 +225,31 @@ const LANGS = {
     'progress.done': 'Done.',
     'progress.cancelled': 'Cancelled.',
     'progress.startFailed': 'Failed to start.',
+    'progress.starting': 'Starting...',
+    'progress.submitting': 'Submitting...',
+    'progress.processing': 'Processing...',
+    'toast.folderNotFile': 'Please select a .tif file, not a folder.',
+    'toast.pixelSizeMismatch': 'Warning: filename suggests pixel size ~{hint}\u00b5m but current value is {current}\u00b5m. Please verify.',
+    'progress.autopickFailed': 'Auto-pick failed',
+    'progress.extractingZ': 'Extracting selected Z slice...',
+    'progress.usingSlice': 'Using extracted slice: {path}',
     'log.title': 'Live Logs ▶',
     'log.ready': '[ready] Frontend initialized',
     'quality.title': 'Registration Quality',
     'quality.before': 'Before',
     'quality.after': 'After',
+    'quality.excellent': 'Excellent',
+    'quality.good': 'Good',
+    'quality.fair': 'Fair',
+    'quality.poor': 'Poor',
+    'quality.tip.excellent': 'Registration quality is excellent. Ready for cell counting.',
+    'quality.tip.good': 'Good registration. Minor manual correction may help.',
+    'quality.tip.fair': 'Fair registration. Manual landmark correction recommended.',
+    'quality.tip.poor': 'Poor registration. Please add manual landmarks to improve.',
     'quality.noImprove': 'Alignment did not improve. Try a different mode.',
     'results.title': 'Cell Counts by Brain Region',
+    'results.expandDepth': 'Expand to depth:',
+    'results.expandAll': 'All',
     'results.total': '{n} regions total',
     'results.filtered': 'Showing {found} of {total} regions',
     'results.expandHint': 'Expand to browse and search',
@@ -259,6 +328,20 @@ const LANGS = {
     'outputs.title': 'Output Files',
     'outputs.hint': 'Click a PNG to preview · Click CSV/JSON to view content',
     'outputs.empty': 'No output files yet',
+    'wb3d.status.title': '3D Registration Status',
+    'wb3d.status.notice': 'Whole-brain automatic truth comes from the 3D pipeline. The 2D tools elsewhere remain preview and manual-correction helpers only.',
+    'wb3d.status.idle': 'Waiting for a whole-brain 3D run',
+    'wb3d.status.stage': 'Stage {current}/{total}',
+    'wb3d.status.running': 'Running',
+    'wb3d.status.done': 'Done',
+    'wb3d.status.pending': 'Pending',
+    'wb3d.status.failed': 'Failed',
+    'wb3d.qc.title': '3D QC Summary',
+    'wb3d.qc.loading': 'Loading volume registration QC...',
+    'wb3d.qc.empty': 'Volume QC will appear after the 3D pipeline writes volume_registration_qc.csv.',
+    'wb3d.slice.title': 'Slice Inspector',
+    'wb3d.slice.hint': 'These overlays are exported from the final 3D truth volume. The 2D tools below remain auxiliary.',
+    'wb3d.slice.empty': 'No exported 3D slice overlays yet. Run the whole-brain 3D pipeline first.',
     'qc.hint': 'Click any image to enlarge. Generated after running the pipeline.',
     'qc.empty': 'No QC images yet. Please run the pipeline in the Registration Workflow tab first.',
     'qc.annotatedSliceTitle': 'Atlas Registration — Annotated Brain Regions',
@@ -271,14 +354,15 @@ const LANGS = {
     'qc.zContinuityWarn': '{n} AP outlier(s) detected — review registration for flagged slices',
     'qc.panelTitle': 'Whole-Brain Registration Overview',
     'qc.panelHint': 'Multi-slice atlas registration panel — click to view full size',
+    'tab.manualTiff.title': 'Manual TIFF Check',
     'tab.qc.title': 'Batch QC Review',
     'tab.results.title': 'Results',
     'ph.outputDir': '(default: outputs/)',
     'ph.atlasLabelPath': '(auto-filled by Auto-pick)',
-    'ph.regionSearch': '🔍 Search region name...',
+    'ph.regionSearch': 'Search region name...',
     'preview.placeholder': 'Preview will appear here after clicking "Refresh Preview"',
     'align.placeholder': 'Alignment comparison will appear here after running AI registration',
-    'manual.title': '✏️ Manual Landmark Correction',
+    'manual.title': '<i data-lucide="pen-tool" class="icon-inline"></i> Manual Landmark Correction',
     'manual.desc': 'Click corresponding points on real and atlas slices to add correction landmarks',
     'manual.realSide': 'Real Slice → click to mark point',
     'manual.atlasSide': 'Atlas Slice → click corresponding point',
@@ -298,15 +382,19 @@ const LANGS = {
     'lightbox.overlay': 'Overlay Preview',
     'lightbox.compare': 'Before / After Comparison',
     'lightbox.landmark': 'Landmark Map ({n} points)',
-    'guide.title': '📖 Getting Started Guide',
+    'guide.title': '<i data-lucide="book-open" class="icon-inline"></i> Getting Started Guide',
     'guide.step1': '<strong>Step 1 → Configure Paths:</strong> Click "Browse" to select your TIFF folder, Atlas annotation file, and brain region CSV. Fields marked "Required" must be filled in.',
     'guide.step2': '<strong>Step 2 → Preview Atlas:</strong> Set the slicing plane (usually Coronal), pixel size (default 0.65 µm), click "Auto-pick Atlas Slice", then "Refresh Preview" to check the initial overlay.',
     'guide.step3': '<strong>Step 3 → AI Registration:</strong> Choose the mode (Affine for small deformation; Nonlinear for tears/large warping), then click "AI Landmark Registration". Check the quality panel to confirm SSIM improved.',
     'guide.step4': '<strong>Step 4 → Run Pipeline:</strong> Select the fluorescence channel, then click "Run Pipeline". After completion, switch to the "Results" tab to view per-region cell counts.',
     'guide.step5': '<strong>Export:</strong> In the Results tab, click "Export CSV" for data. Click "Export Methods Text" to get a pre-written Methods paragraph you can paste directly into your paper.',
-    'guide.tip': '💡 Tip: All run parameters are automatically saved to outputs/run_params_YYYYMMDD_HHMMSS.json for reproducibility.',
+    'guide.tip': '<i data-lucide="lightbulb" class="icon-inline"></i> Tip: All run parameters are automatically saved to outputs/run_params_YYYYMMDD_HHMMSS.json for reproducibility.',
     'guide.ok': 'Got it → Start Using',
-    'methods.title': '📝 Methods Paragraph',
+    'guide.workflowHtml': '<ol><li><strong>Step 1 → Configure Paths:</strong> Click "Browse" to select your TIFF folder, Atlas annotation file, and brain region CSV.</li><li><strong>Step 2 → Preview Atlas:</strong> Set slicing plane, pixel size, click "Auto-pick Atlas Slice", then "Refresh Preview".</li><li><strong>Step 3 → AI Registration:</strong> Choose Affine or Nonlinear mode, click "AI Landmark Registration".</li><li><strong>Step 4 → Run Pipeline:</strong> Select fluorescence channel, click "Run Pipeline".</li><li><strong>Export:</strong> In Results tab, "Export CSV" for data, "Export Methods Text" for paper.</li></ol><p class="guide-tip">Tip: All parameters auto-saved to outputs/ for reproducibility.</p>',
+    'guide.manualCheckHtml': '<ol><li><strong>Load TIFF:</strong> Browse to your source TIFF file to view it slice by slice.</li><li><strong>Navigate Z:</strong> Use the mouse wheel or slider to scroll through Z layers.</li><li><strong>Manual Count:</strong> Left-click to add count points, right-click to remove. Points are tracked per Z layer.</li><li><strong>Export:</strong> Click "Export" to save your manual count data as CSV.</li></ol><p class="guide-tip">Tip: Use this tab to validate cell detection results against manual counts.</p>',
+    'guide.batchQcHtml': '<ol><li><strong>Overview Panel:</strong> Shows the 12-slice demo panel — a quick visual check of atlas registration quality across slices.</li><li><strong>Stats Bar:</strong> Displays registration success rate and mean quality score. Green = good, Yellow = marginal, Red = poor.</li><li><strong>Slice Gallery:</strong> Click any slice to see a detailed raw vs atlas comparison in the lightbox.</li><li><strong>Regenerate:</strong> Click "Regenerate" to refresh demo visuals after re-running registration.</li></ol>',
+    'guide.resultsHtml': '<ol><li><strong>Cell Count Table:</strong> Shows per-region cell counts, percentages, and hierarchical structure. Use depth filter to expand/collapse.</li><li><strong>Charts:</strong> Bar + pie chart showing distribution of cells across brain regions.</li><li><strong>Export CSV:</strong> Downloads the full cell count hierarchy table.</li><li><strong>Methods Text:</strong> Generates a paragraph describing your analysis pipeline for paper methods sections.</li></ol><p class="guide-tip">Tip: Toggle "Show hierarchy" for parent region rollup counts.</p>',
+    'methods.title': '<i data-lucide="file-text" class="icon-inline"></i> Methods Paragraph',
     'methods.desc': 'The following text is auto-generated from your most recent run parameters. Edit as needed before pasting into your Methods section.',
     'methods.loading': 'Loading...',
     'text.dialog': 'Enter annotation text:',
@@ -324,7 +412,7 @@ const LANGS = {
     'toast.previewUpdated': 'Preview updated',
     'toast.autoPickNeedPath': 'Please set both Real Slice and Atlas paths first',
     'toast.autoPickWaiting': 'Auto-picking best atlas slice...',
-    'toast.autoPickFailed': 'Auto-pick failed',
+    'toast.autoPickFailed': 'Auto-pick failed. See the progress dialog for details.',
     'toast.autoPickSuccess': 'Auto-picked: plane={plane}, Z={z}, score={score}',
     'toast.aspectWarning': 'Aspect ratio mismatch: real={ra}, atlas={aa}. Check pixel size or flip settings.',
     'toast.zDetected': '3D stack detected: {z} slices, {h}×{w} px',
@@ -339,6 +427,7 @@ const LANGS = {
     'toast.landmarkApplyFailed': 'Landmark alignment failed: {err}',
     'toast.landmarkSuccess': '{n} landmark pairs applied',
     'toast.alignUnexpected': 'Unexpected alignment error',
+    'toast.alignFailedManualHint': 'Auto-alignment could not find enough landmarks. Please add manual correction points below.',
     'toast.runFailed': 'Pipeline failed: {err}',
     'toast.runStarted': 'Pipeline started: {channels}',
     'toast.runComplete': 'Pipeline completed',
@@ -346,11 +435,84 @@ const LANGS = {
     'toast.cancelNone': 'No pipeline is running',
     'toast.outputsPath': 'Output folder: {path}',
     'toast.qcLoadFailed': 'Failed to load QC images',
+    'toast.chooseSourceFirst': 'Please choose source TIFF first.',
+    'toast.autoPickPreviewFailed': 'Auto-pick failed, cannot generate preview.',
+    'toast.oneClickDone': 'Registration done! Review the result, then click "Run Pipeline" to start cell counting.',
+    'toast.3dDetected': '3D detected. The Z selector is now shown below the Start button.',
+    'toast.regenStarted': 'Demo visuals regeneration started. Refreshing in 15s...',
+    'toast.regenFailed': 'Regen failed: {err}',
+    'toast.regenError': 'Regen error: {err}',
+    'toast.pixelSizeDetected': 'Pixel size auto-detected from TIFF: {size} µm/px',
+    'warn.pixelSizeNotDetected': 'Pixel size not detected from image metadata. Registration quality depends on this value \u2014 please verify or enter manually.',
+    'toast.atlasPathNotSet': 'Atlas annotation path not set. Check /api/info defaults.',
+    'toast.setRealSliceFirst': 'Please set Real Slice path first.',
+    'toast.autoLearnDone': 'Auto-learning finished. Tuned params updated.',
+    'toast.autoLearnStarted': 'Auto-learning started in background.',
+    'toast.devError': 'Dev Error: {msg}',
+    'toast.uncaughtError': 'Uncaught: {msg}',
+    'toast.promiseReject': 'Promise Reject: {msg}',
+    'hint.zChoose': 'Choose a Z layer below. Click "Extract This Slice" to continue immediately, or click Start again to use the selected Z.',
+
+    'manualCount.title': 'Manual TIFF Check',
+    'manualCount.desc': 'Open a source TIFF directly for visual inspection and manual counting. Use the mouse wheel to move through Z slices.',
+    'manualCount.source': 'Manual Count Source TIFF',
+    'manualCount.zoom': 'Zoom',
+    'manualCount.palette': 'Display',
+    'manualCount.palette.gray': 'Gray',
+    'manualCount.palette.green': 'Green',
+    'manualCount.palette.magenta': 'Magenta',
+    'manualCount.palette.amber': 'Amber',
+    'manualCount.palette.turbo': 'Turbo',
+    'manualCount.load': 'Load TIFF',
+    'manualCount.export': 'Export Count CSV',
+    'manualCount.undo': 'Undo Last Point',
+    'manualCount.clearSlice': 'Clear Current Z',
+    'manualCount.clearAll': 'Clear All Points',
+    'manualCount.z': 'Z',
+    'manualCount.sliceCount': 'Current Z',
+    'manualCount.totalCount': 'Total',
+    'manualCount.placeholder': 'Load a TIFF to start manual counting.',
+    'manualCount.help': 'Left click adds a count. Right click removes the nearest count. Mouse wheel moves through Z slices.',
+    'manualCount.ready': 'Loaded {name}. Mouse wheel changes Z. Left click adds a point.',
+    'manualCount.needPath': 'Please choose a TIFF source first',
+    'manualCount.loadFail': 'Failed to load TIFF: {err}',
+    'manualCount.noPoints': 'No manual count points to export',
+    'manualCount.exported': 'Manual count CSV exported',
+    'manualCount.pathChanged': 'Switched TIFF source. Previous manual points were cleared.',
+    'manualCount.sliceCleared': 'Cleared points on current Z',
+    'manualCount.allCleared': 'Cleared all manual count points',
+    'btn.editMasks': 'Edit Masks',
+    'maskEditor.title': 'Mask Editor',
+    'maskEditor.brushSize': 'Brush Size',
+    'maskEditor.opacity': 'Mask Opacity',
+    'maskEditor.cells': 'Cells',
+    'maskEditor.save': 'Save to Training Set',
+    'nav.training': 'Model Training',
+    'training.title': 'Cellpose Model Training',
+    'training.datasetTitle': 'Training Dataset',
+    'training.datasetDesc': 'Annotated images saved from the Mask Editor',
+    'training.images': 'Images',
+    'training.cells': 'Cells',
+    'training.avgPerImage': 'Avg/Image',
+    'training.readiness': 'Status',
+    'training.refresh': 'Refresh',
+    'training.configTitle': 'Training Configuration',
+    'training.configDesc': 'Select base model and start training',
+    'training.baseModel': 'Base Model',
+    'training.modelName': 'Model Name',
+    'training.epochs': 'Epochs',
+    'training.gpu': 'Use GPU',
+    'training.start': 'Start Training',
+    'training.cancel': 'Cancel Training',
+    'training.progressTitle': 'Training Progress',
+    'training.resultTitle': 'Training Complete',
+    'training.apply': 'Apply Model',
     'toast.runDetailsFailed': 'Failed to open run details.',
     'outputs.previewDesc': 'Text preview for the selected output file.',
   },
   zh: {
     'nav.workflow': '配准工作流',
+    'nav.manualTiff': '手动TIFF检查',
     'nav.qc': '批量QC审查',
     'nav.results': '统计结果',
     'nav.projects': '项目管理',
@@ -379,6 +541,15 @@ const LANGS = {
     'status.idle': '空闲',
     'status.running': '运行中...',
     'status.error': '错误',
+    'btn.guide': '<i data-lucide="book-open" class="btn-icon"></i> 使用指南',
+    'btn.run': '<i data-lucide="play" class="btn-icon"></i> 运行流水线',
+    'btn.cancel': '<i data-lucide="x" class="btn-icon"></i> 取消',
+    'btn.openOutputs': '<i data-lucide="folder" class="btn-icon"></i> 打开输出目录',
+    'btn.copy': '<i data-lucide="clipboard-copy" class="btn-icon"></i> 复制到剪贴板',
+    'btn.close': '关闭',
+    'btn.refreshResults': '<i data-lucide="refresh-cw" class="btn-icon"></i> 刷新',
+    'btn.exportCsv': '<i data-lucide="download" class="btn-icon"></i> 导出CSV',
+    'btn.exportMethods': '<i data-lucide="file-text" class="btn-icon"></i> 导出方法段落',
     'errorPanel.title': '错误面板',
     'errorPanel.empty': '当前没有记录到错误。',
     'preflight.title': '运行前检查',
@@ -395,16 +566,6 @@ const LANGS = {
     'progress.phase.done': '完成',
     'progress.phase.error': '错误',
     'progress.phase.cancelled': '已取消',
-    'btn.guide': '📖 使用指南',
-    'btn.run': '▶ 运行流水线',
-    'btn.cancel': '✕ 取消',
-    'btn.openOutputs': '📁 打开输出目录',
-    'btn.copy': '📋 复制到剪贴板',
-    'btn.close': '关闭',
-    'btn.refreshResults': '🔁 刷新',
-    'btn.exportCsv': '⬇️ 导出CSV',
-    'btn.exportExcel': '📊 导出Excel',
-    'btn.exportMethods': '📝 导出方法段落',
     'tour.btnTitle': '开始引导游览',
     'tour.skip': '跳过',
     'tour.next': '下一步 →',
@@ -425,26 +586,41 @@ const LANGS = {
     'coexpr.th.red': '红色通道（数量）',
     'coexpr.th.green': '绿色通道（数量）',
     'btn.browse': '浏览',
-    'btn.savePreset': '💾 保存配置',
-    'btn.loadPreset': '📂 加载配置',
-    'btn.autoPick': '🎯 自动选取图谱层',
-    'btn.refreshPreview': '🖼️ 刷新预览',
+    'btn.savePreset': '<i data-lucide="save" class="btn-icon"></i> 保存配置',
+    'btn.loadPreset': '<i data-lucide="folder-open" class="btn-icon"></i> 加载配置',
+    'btn.autoPick': '<i data-lucide="crosshair" class="btn-icon"></i> 自动选取图谱层',
+    'btn.refreshPreview': '<i data-lucide="image" class="btn-icon"></i> 刷新预览',
     'btn.extractSlice': '✓ 确认选层并继续',
-    'btn.aiAlign': '🤖 AI地标配准',
-    'btn.landmarkView': '🗺️ 查看地标图',
-    'btn.startManual': '📌 进入手动模式',
-    'btn.applyManual': '✕ 应用手动地标',
-    'btn.clearManual': '🗑 清除手动点',
-    'btn.undo': '↗ 撤销',
-    'btn.scalebar': '↔ 比例尺',
-    'btn.clearAnnotations': '🗑 清除全部',
-    'btn.exportFigure': '↙ 导出图片',
-    'btn.refreshQc': '🔁 刷新',
-    'btn.regenDemo': '⚙️ 重新生成演示图',
-    'ch.red': '🔴 红通道',
-    'ch.green': '🟢 绿通道',
-    'ch.farred': '🟠 远红通道',
-    'ch.all': '▶ 全部通道',
+    'btn.aiAlign': '<i data-lucide="bot" class="btn-icon"></i> AI地标配准',
+    'btn.landmarkView': '<i data-lucide="map" class="btn-icon"></i> 查看地标图',
+    'btn.startManual': '<i data-lucide="pin" class="btn-icon"></i> 进入手动模式',
+    'btn.applyManual': '<i data-lucide="check" class="btn-icon"></i> 应用手动地标',
+    'btn.clearManual': '<i data-lucide="trash-2" class="btn-icon"></i> 清除手动点',
+    'btn.undo': '<i data-lucide="undo-2" class="btn-icon"></i> 撤销',
+    'btn.scalebar': '<i data-lucide="ruler" class="btn-icon"></i> 比例尺',
+    'btn.clearAnnotations': '<i data-lucide="trash-2" class="btn-icon"></i> 清除全部',
+    'btn.exportFigure': '<i data-lucide="download" class="btn-icon"></i> 导出图片',
+    'btn.detectPreview': '<i data-lucide="scan" class="btn-icon"></i> 检测细胞',
+    'btn.detectParams': '<i data-lucide="settings" class="btn-icon"></i> 检测参数',
+    'detect.model': '模型',
+    'detect.diameter': '直径 (µm)',
+    'detect.flowThreshold': '流量阈值',
+    'detect.cellprobThreshold': '细胞概率',
+    'detect.minSize': '最小面积 (px)',
+    'detect.gpu': 'GPU',
+    'detect.running': '正在检测细胞…',
+    'detect.done': '检测到 {count} 个细胞（{detector}）',
+    'detect.error': '检测失败：{err}',
+    'detect.noSlice': '请先选择真实切片',
+    'detect.noRuntime': 'Cellpose 未安装——请安装 cellpose 以启用检测',
+    'btn.refreshQc': '<i data-lucide="refresh-cw" class="btn-icon"></i> 刷新',
+    'btn.regenDemo': '<i data-lucide="settings" class="btn-icon"></i> 重新生成演示图',
+    'btn.oneClickStart': '启动一键工作流',
+    'hint.oneClickFlow': '流程：自动选取图谱 → 自动配准 → 手动审查 / 液化校正 → 导出。',
+    'ch.red': '<span class="channel-dot channel-dot-red"></span> 红通道',
+    'ch.green': '<span class="channel-dot channel-dot-green"></span> 绿通道',
+    'ch.farred': '<span class="channel-dot channel-dot-farred"></span> 远红通道',
+    'ch.all': '<i data-lucide="layers" class="btn-icon"></i> 全部通道',
     'chname.red': '红通道',
     'chname.green': '绿通道',
     'chname.farred': '远红通道',
@@ -460,6 +636,15 @@ const LANGS = {
     'label.outputDir': '输出文件夹',
     'label.atlasPath': '图谱标注文件 (annotation_25.nii.gz)',
     'label.structPath': '脑区映射文件 (CSV/JSON)',
+    'label.workflowMode': '流程模式',
+    'label.sourceFile': '源 TIFF 文件',
+    'label.regScope': '配准范围',
+    'opt.modeOneClick': '一键模式（推荐）',
+    'opt.modePro': '专业模式',
+    'opt.scopeSingle': '单层配准（单切片）',
+    'opt.scopeWhole': '全脑配准（完整流程）',
+    'hint.scopeSingle': '单层模式下，3D TIFF 将提供 Z 层选择。',
+    'hint.scopeWhole': '3D 体数据将逐层配准并自动定位 AP 位置。',
     'label.realSlicePath': '真实切片（预览/配准）',
     'label.atlasLabelPath': '图谱标签层（由自动选取生成）',
     'label.pixelSizeUm': '像素尺寸 (µm/像素)',
@@ -481,6 +666,32 @@ const LANGS = {
     'hint.maxPoints': '点数越少 → 越快但精度较低',
     'hint.minDistance': '检测地标之间的像素距离',
     'hint.ransacResidual': '值越大 → 匹配容忍度越高',
+    'hint.scopeSingle': '单层模式将为3D TIFF提供Z层选择。',
+    'hint.scopeWhole': '全脑模式自动将所有Z切片配准到Allen Atlas。',
+    'label.hemisphere': '半球方向',
+    'opt.hemiAuto': '自动检测（推荐）',
+    'opt.hemiFull': '全脑（双半球）',
+    'opt.hemiLeft': '左半球',
+    'opt.hemiRightFlipped': '右半球（翻转，外侧在左）',
+    'hint.hemiAuto': '自动检测会尝试所有朝向并选择最佳匹配。',
+    'hint.hemiFull': '作为完整冠状切面配准，包含双侧半球。',
+    'hint.hemiLeft': '仅左半球——内侧面在图像右侧。',
+    'hint.hemiRightFlipped': '右半球，翻转使外侧皮质在图像左侧。',
+    'label.atlasVersion': '图谱版本',
+    'opt.atlasCcfv3': 'CCFv3 (Allen 2017)',
+    'opt.atlasCcfv3bbp': 'CCFv3-BBP (扩展版)',
+    'hint.atlasCcfv3': '标准Allen小鼠脑图谱CCFv3，25µm分辨率',
+    'hint.atlasCcfv3bbp': 'Blue Brain Project扩展图谱：补全嗅球、小脑、延髓注释，含734脑平均Nissl模板',
+    'label.regMode': '配准模式',
+    'opt.regCrossModal': '跨模态配准（默认）',
+    'opt.regNissl': 'Nissl模板配准（单模态）',
+    'hint.regCrossModal': '荧光边缘 vs 图谱注释边缘匹配',
+    'hint.regNissl': '荧光图像 vs 平均Nissl模板匹配，配准质量更高（需要CCFv3-BBP图谱）',
+    'label.targetRegion': '目标脑区',
+    'hint.targetRegion': '选择目标脑区以限制AP搜索范围（如ChAT看STN + CP）',
+    'hint.targetRegionSelected': 'AP搜索范围限制为切片 {start}–{end}（{startMm} 至 {endMm} mm）',
+    'hint.targetRegionNone': '未选择脑区——将搜索全部AP范围',
+    'hint.channelGuide': '多通道数据：请加载reporter通道（C0）用于配准。配准完成后，在步骤4中分别处理各通道。',
     'label.confidenceThreshold': '置信度阈值',
     'hint.confidenceThreshold': '按最低置信度过滤检测结果（0 = 保留全部，1 = 最严格）。',
     'opt.coronal': '冠状面（默认）',
@@ -498,8 +709,8 @@ const LANGS = {
     'opt.heightLock': '锁定高度',
     'opt.affine': '仿射变换（快速，适合小变形）',
     'opt.nonlinear': '非线性（较慢，适合大变形）',
-    'adv.options': '高级选项 ▶',
-    'adv.params': '高级参数 ▶',
+    'adv.options': '高级选项',
+    'adv.params': '高级参数',
     'required': '必填',
     'progress.slicesLabel': '已配准切片',
     'progress.waiting': '等待开始...',
@@ -511,13 +722,31 @@ const LANGS = {
     'progress.done': '完成。',
     'progress.cancelled': '已取消。',
     'progress.startFailed': '启动失败。',
+    'progress.starting': '正在启动...',
+    'progress.submitting': '正在提交...',
+    'progress.processing': '处理中...',
+    'toast.folderNotFile': '请选择 .tif 文件，而非文件夹。',
+    'toast.pixelSizeMismatch': '警告：文件名提示像素尺寸约为 {hint}\u00b5m，但当前值为 {current}\u00b5m，请确认。',
+    'progress.autopickFailed': '自动选取失败',
+    'progress.extractingZ': '正在提取选定的Z层...',
+    'progress.usingSlice': '正在使用提取的切片：{path}',
     'log.title': '实时日志 ▶',
     'log.ready': '[就绪] 前端已初始化',
     'quality.title': '配准质量',
     'quality.before': '配准前',
     'quality.after': '配准后',
+    'quality.excellent': '优秀',
+    'quality.good': '良好',
+    'quality.fair': '一般',
+    'quality.poor': '较差',
+    'quality.tip.excellent': '配准质量优秀，可以直接进行细胞计数。',
+    'quality.tip.good': '配准良好，少量手动校正可能有帮助。',
+    'quality.tip.fair': '配准一般，建议添加手动地标进行校正。',
+    'quality.tip.poor': '配准较差，请添加手动地标改善配准。',
     'quality.noImprove': '对齐未改善，请尝试其他模式。',
     'results.title': '脑区细胞计数',
+    'results.expandDepth': '展开到层级：',
+    'results.expandAll': '全部',
     'results.total': '共 {n} 个脑区',
     'results.filtered': '显示 {found} / {total} 个脑区',
     'results.expandHint': '展开后查看和搜索',
@@ -596,6 +825,20 @@ const LANGS = {
     'outputs.title': '输出文件',
     'outputs.hint': '点击PNG预览 · 点击CSV/JSON查看内容',
     'outputs.empty': '暂无输出文件',
+    'wb3d.status.title': '3D配准状态',
+    'wb3d.status.notice': '全脑自动真值来自3D流水线。其他2D工具仅作为预览和手动修正辅助。',
+    'wb3d.status.idle': '等待全脑3D运行',
+    'wb3d.status.stage': '阶段 {current}/{total}',
+    'wb3d.status.running': '运行中',
+    'wb3d.status.done': '完成',
+    'wb3d.status.pending': '等待中',
+    'wb3d.status.failed': '失败',
+    'wb3d.qc.title': '3D QC摘要',
+    'wb3d.qc.loading': '正在加载体素配准QC...',
+    'wb3d.qc.empty': '当3D流水线写入 volume_registration_qc.csv 后，这里会显示体素级QC摘要。',
+    'wb3d.slice.title': '切片检查器',
+    'wb3d.slice.hint': '这些叠加图来自最终的3D真值体。下面的2D工具仅作为辅助。',
+    'wb3d.slice.empty': '尚无导出的3D切片叠加图，请先运行全脑3D流水线。',
     'qc.hint': '点击图片可放大。运行流水线后生成。',
     'qc.empty': '暂无QC图片，请先在”配准工作流”标签页运行流水线。',
     'qc.annotatedSliceTitle': '图谱配准 — 脑区标注示例',
@@ -608,14 +851,15 @@ const LANGS = {
     'qc.zContinuityWarn': '检测到 {n} 个AP异常 — 请检查标红切片的配准结果',
     'qc.panelTitle': '全脑配准总览',
     'qc.panelHint': '多切片图谱配准面板 — 点击查看大图',
+    'tab.manualTiff.title': '手动TIFF检查',
     'tab.qc.title': '批量QC审查',
     'tab.results.title': '统计结果',
     'ph.outputDir': '（默认：outputs/）',
     'ph.atlasLabelPath': '（由自动选取自动填充）',
-    'ph.regionSearch': '🔍 搜索脑区名称...',
+    'ph.regionSearch': '搜索脑区名称...',
     'preview.placeholder': '点击“刷新预览”后，预览将显示在此处',
     'align.placeholder': '运行AI配准后，对比图将显示在此处',
-    'manual.title': '✏️ 手动地标校正',
+    'manual.title': '<i data-lucide="pen-tool" class="icon-inline"></i> 手动地标校正',
     'manual.desc': '在真实切片和图谱切片上点击对应位置，添加校正地标',
     'manual.realSide': '真实切片 → 点击标记位置',
     'manual.atlasSide': '图谱切片 → 点击对应位置',
@@ -635,15 +879,19 @@ const LANGS = {
     'lightbox.overlay': '叠加预览',
     'lightbox.compare': '配准前后对比',
     'lightbox.landmark': '地标图（{n} 个点）',
-    'guide.title': '📖 使用指南',
+    'guide.title': '<i data-lucide="book-open" class="icon-inline"></i> 使用指南',
     'guide.step1': '<strong>第1步 → 配置路径：</strong>点击“浏览”选择TIFF文件夹、图谱标注文件和脑区CSV。',
     'guide.step2': '<strong>第2步 → 预览图谱：</strong>设置切片方向（通常选冠状面）、像素尺寸，点击“自动选取图谱层”，再点击“刷新预览”。',
     'guide.step3': '<strong>第3步 → AI配准：</strong>选择配准模式（仿射或非线性），点击“AI地标配准”，查看质量面板SSIM是否改善。',
     'guide.step4': '<strong>第4步 → 运行流水线：</strong>选择荧光通道，点击“运行流水线”，完成后切换到“统计结果”标签查看脑区细胞计数。',
     'guide.step5': '<strong>导出：</strong>在结果标签点击“导出CSV”获取数据，点击“导出方法段落”获得可直接粘贴到论文的方法描述。',
-    'guide.tip': '💡 提示：所有运行参数自动保存到 outputs/run_params_YYYYMMDD_HHMMSS.json，便于复现。',
+    'guide.tip': '<i data-lucide="lightbulb" class="icon-inline"></i> 提示：所有运行参数自动保存到 outputs/run_params_YYYYMMDD_HHMMSS.json，便于复现。',
     'guide.ok': '明白了 → 开始使用',
-    'methods.title': '📝 方法段落',
+    'guide.workflowHtml': '<ol><li><strong>步骤1 → 配置路径：</strong>点击"浏览"选择TIFF文件夹、Atlas注释文件和脑区CSV。</li><li><strong>步骤2 → 预览Atlas：</strong>设置切面方向、像素大小，点击"自动选择Atlas切片"，然后"刷新预览"。</li><li><strong>步骤3 → AI配准：</strong>选择仿射或非线性模式，点击"AI地标配准"。</li><li><strong>步骤4 → 运行流程：</strong>选择荧光通道，点击"运行流程"。</li><li><strong>导出：</strong>在结果标签中，"导出CSV"获取数据，"导出方法文本"用于论文。</li></ol><p class="guide-tip">提示：所有参数自动保存到outputs/用于复现。</p>',
+    'guide.manualCheckHtml': '<ol><li><strong>加载TIFF：</strong>浏览并选择源TIFF文件，逐层查看。</li><li><strong>导航Z层：</strong>使用鼠标滚轮或滑块在Z层间滚动。</li><li><strong>手动计数：</strong>左键添加计数点，右键删除。每个Z层分别跟踪。</li><li><strong>导出：</strong>点击"导出"将手动计数数据保存为CSV。</li></ol><p class="guide-tip">提示：使用此标签验证细胞检测结果与手动计数的一致性。</p>',
+    'guide.batchQcHtml': '<ol><li><strong>概览面板：</strong>显示12切片演示面板——快速检查全脑配准质量。</li><li><strong>统计栏：</strong>显示配准成功率和平均质量分数。绿色=好，黄色=一般，红色=差。</li><li><strong>切片图库：</strong>点击任意切片可在灯箱中查看详细的原图vs Atlas对比。</li><li><strong>重新生成：</strong>重新运行配准后，点击"重新生成"刷新演示图。</li></ol>',
+    'guide.resultsHtml': '<ol><li><strong>细胞计数表：</strong>显示各脑区的细胞计数、百分比和层级结构。使用深度过滤展开/折叠。</li><li><strong>图表：</strong>柱状图+饼图显示细胞在各脑区的分布。</li><li><strong>导出CSV：</strong>下载完整的分层细胞计数表。</li><li><strong>方法文本：</strong>生成描述分析流程的段落，用于论文方法部分。</li></ol><p class="guide-tip">提示：切换"显示层级"查看父区域汇总计数。</p>',
+    'methods.title': '<i data-lucide="file-text" class="icon-inline"></i> 方法段落',
     'methods.desc': '以下文本根据最近一次运行参数自动生成，粘贴到方法部分前请自行修改。',
     'methods.loading': '加载中...',
     'text.dialog': '请输入标注文字：',
@@ -661,7 +909,7 @@ const LANGS = {
     'toast.previewUpdated': '预览已更新',
     'toast.autoPickNeedPath': '请先设置真实切片路径和图谱路径',
     'toast.autoPickWaiting': '正在自动选取最佳图谱层...',
-    'toast.autoPickFailed': '自动选取失败',
+    'toast.autoPickFailed': '自动选取失败。请查看进度对话框了解详情。',
     'toast.autoPickSuccess': '自动选取完成：平面={plane}，Z={z}，评分={score}',
     'toast.aspectWarning': '宽高比不匹配：真实={ra}，图谱={aa}。请检查像素尺寸或翻转设置。',
     'toast.zDetected': '检测到3D数据：{z}层，{h}×{w} px',
@@ -676,6 +924,7 @@ const LANGS = {
     'toast.landmarkApplyFailed': '地标对齐失败：{err}',
     'toast.landmarkSuccess': '已应用 {n} 对地标',
     'toast.alignUnexpected': '对齐时发生意外错误',
+    'toast.alignFailedManualHint': '\u81ea\u52a8\u914d\u51c6\u672a\u80fd\u627e\u5230\u8db3\u591f\u7684\u7279\u5f81\u70b9\u3002\u8bf7\u5728\u4e0b\u65b9\u624b\u52a8\u6dfb\u52a0\u6821\u6b63\u70b9\u3002',
     'toast.runFailed': '流水线失败：{err}',
     'toast.runStarted': '流水线已启动：{channels}',
     'toast.runComplete': '流水线已完成',
@@ -683,6 +932,78 @@ const LANGS = {
     'toast.cancelNone': '当前没有运行中的流水线',
     'toast.outputsPath': '输出目录：{path}',
     'toast.qcLoadFailed': 'QC图片加载失败',
+    'toast.chooseSourceFirst': '请先选择源TIFF文件。',
+    'toast.autoPickPreviewFailed': '自动选取失败，无法生成预览。',
+    'toast.oneClickDone': '配准完成！检查结果后，点击"运行流水线"开始细胞计数。',
+    'toast.3dDetected': '检测到3D数据。Z层选择器已显示在开始按钮下方。',
+    'toast.regenStarted': '正在重新生成演示图，15秒后刷新...',
+    'toast.regenFailed': '重新生成失败：{err}',
+    'toast.regenError': '重新生成出错：{err}',
+    'toast.pixelSizeDetected': '已从TIFF自动检测像素尺寸：{size} µm/px',
+    'warn.pixelSizeNotDetected': '未从图像元数据中检测到像素尺寸。配准质量取决于此值——请核实或手动输入。',
+    'toast.atlasPathNotSet': '未设置Atlas标注路径。请检查 /api/info 默认值。',
+    'toast.setRealSliceFirst': '请先设置切片图像路径。',
+    'toast.autoLearnDone': '自动学习完成，参数已更新。',
+    'toast.autoLearnStarted': '自动学习已在后台启动。',
+    'toast.devError': '开发错误：{msg}',
+    'toast.uncaughtError': '未捕获异常：{msg}',
+    'toast.promiseReject': 'Promise拒绝：{msg}',
+    'hint.zChoose': '请选择Z层。点击"提取此切片"立即继续，或再次点击开始使用所选Z层。',
+
+    'manualCount.title': '手动TIFF检查',
+    'manualCount.desc': '直接打开源TIFF进行人眼检查和手动计数，可用鼠标滚轮切换Z层。',
+    'manualCount.source': '手动检查源TIFF',
+    'manualCount.zoom': '缩放',
+    'manualCount.palette': '显示',
+    'manualCount.palette.gray': '灰度',
+    'manualCount.palette.green': '绿色',
+    'manualCount.palette.magenta': '洋红',
+    'manualCount.palette.amber': '琥珀',
+    'manualCount.palette.turbo': 'Turbo 伪彩',
+    'manualCount.load': '加载TIFF',
+    'manualCount.export': '导出计数CSV',
+    'manualCount.undo': '撤销上一个点',
+    'manualCount.clearSlice': '清空当前Z层',
+    'manualCount.clearAll': '清空全部点',
+    'manualCount.z': 'Z',
+    'manualCount.sliceCount': '当前Z层',
+    'manualCount.totalCount': '总数',
+    'manualCount.placeholder': '加载TIFF后即可开始手动检查。',
+    'manualCount.help': '左键添加计数点，右键删除最近的点，鼠标滚轮切换Z层。',
+    'manualCount.ready': '已加载 {name}。可滚轮切换Z层，左键添加计数点。',
+    'manualCount.needPath': '请先选择一个TIFF源文件',
+    'manualCount.loadFail': '加载TIFF失败：{err}',
+    'manualCount.noPoints': '当前没有可导出的手动计数点',
+    'manualCount.exported': '手动计数CSV已导出',
+    'manualCount.pathChanged': '已切换TIFF源文件，之前的手动计数点已清空。',
+    'manualCount.sliceCleared': '已清空当前Z层的计数点',
+    'manualCount.allCleared': '已清空全部手动计数点',
+    'btn.editMasks': '编辑掩码',
+    'maskEditor.title': '掩码编辑器',
+    'maskEditor.brushSize': '画笔大小',
+    'maskEditor.opacity': '掩码透明度',
+    'maskEditor.cells': '细胞',
+    'maskEditor.save': '保存到训练集',
+    'nav.training': '模型训练',
+    'training.title': 'Cellpose 模型训练',
+    'training.datasetTitle': '训练数据集',
+    'training.datasetDesc': '从掩码编辑器保存的标注图像',
+    'training.images': '图像',
+    'training.cells': '细胞',
+    'training.avgPerImage': '平均/图',
+    'training.readiness': '状态',
+    'training.refresh': '刷新',
+    'training.configTitle': '训练配置',
+    'training.configDesc': '选择基础模型并开始训练',
+    'training.baseModel': '基础模型',
+    'training.modelName': '模型名称',
+    'training.epochs': '训练轮数',
+    'training.gpu': '使用GPU',
+    'training.start': '开始训练',
+    'training.cancel': '取消训练',
+    'training.progressTitle': '训练进度',
+    'training.resultTitle': '训练完成',
+    'training.apply': '应用模型',
     'toast.runDetailsFailed': '打开运行详情失败。',
     'outputs.previewDesc': '所选输出文件的文本预览。',
   },
@@ -703,7 +1024,7 @@ function t(key, vars) {
 
 function applyLang(lang) {
   currentLang = lang || 'en';
-  localStorage.setItem('idlebrain.lang', currentLang);
+  localStorage.setItem('brainfast.lang', currentLang);
   document.querySelectorAll('[data-i18n]').forEach(function(el) {
     const key = el.dataset.i18n;
     const val = t(key);
@@ -723,6 +1044,8 @@ function applyLang(lang) {
   document.querySelectorAll('.lang-btn[data-lang]').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.lang === currentLang);
   });
+  // Re-initialize Lucide icons after i18n innerHTML updates
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // Language toggle buttons
@@ -761,6 +1084,14 @@ const compareRows   = document.getElementById('compareRows');
 const historyList   = document.getElementById('historyList');
 const versionText   = document.getElementById('versionText');
 const sliceProgress = document.getElementById('sliceProgress');
+const wholeBrainStageList = document.getElementById('wholeBrainStageList');
+const wholeBrainStageMeta = document.getElementById('wholeBrainStageMeta');
+const volumeQcSummaryEl = document.getElementById('volumeQcSummary');
+const volumeQcSourceEl = document.getElementById('volumeQcSource');
+const sliceInspectorGrid = document.getElementById('sliceInspectorGrid');
+const sliceInspectorEmpty = document.getElementById('sliceInspectorEmpty');
+const sliceInspectorCount = document.getElementById('sliceInspectorCount');
+const qcAllCount = document.getElementById('qcAllCount');
 const validateStatus = document.getElementById('validateStatus');
 const workflowModeEl = document.getElementById('workflowMode');
 const oneClickSourcePathEl = document.getElementById('oneClickSourcePath');
@@ -796,7 +1127,7 @@ const state = {
 };
 
 const overlayJobState = {
-  jobId: localStorage.getItem('idlebrain.overlayJobId') || '',
+  jobId: localStorage.getItem('brainfast.overlayJobId') || '',
 };
 
 state.frontendErrors = loadFrontendErrors();
@@ -820,7 +1151,7 @@ function buildOverlayJobId() {
 function getOverlayJobId() {
   if (!overlayJobState.jobId) {
     overlayJobState.jobId = buildOverlayJobId();
-    localStorage.setItem('idlebrain.overlayJobId', overlayJobState.jobId);
+    localStorage.setItem('brainfast.overlayJobId', overlayJobState.jobId);
   }
   return overlayJobState.jobId;
 }
@@ -844,7 +1175,7 @@ function syncOverlayJobId(resp) {
   const jobId = String(resp?.jobId || '').trim();
   if (!jobId) return;
   overlayJobState.jobId = jobId;
-  localStorage.setItem('idlebrain.overlayJobId', jobId);
+  localStorage.setItem('brainfast.overlayJobId', jobId);
 }
 
 function withOverlayJobQuery(path, extra = {}) {
@@ -989,13 +1320,64 @@ function showToast(msg, type = 'info', duration = 4500) {
     return;
   }
   const container = document.getElementById('toastContainer');
+  // Deduplicate: skip if an identical message is already showing
+  const existing = Array.from(container.children);
+  if (existing.some(el => el.querySelector('.toast-msg')?.textContent === msg)) return;
+  // Cap at 3 visible toasts — remove oldest non-error first, then oldest error
+  while (container.children.length >= 3) {
+    const kids = Array.from(container.children);
+    const victim = kids.find(el => !el.classList.contains('toast-error')) || kids[0];
+    victim.remove();
+  }
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-    const icons = { success: 'OK', warning: 'WARN', error: 'ERR', info: 'i' };
-    toast.innerHTML = `<span class="toast-icon">${icons[type] || 'i'}</span><span class="toast-msg">${msg}</span>`;
+  const icons = { success: 'OK', warning: 'WARN', error: 'ERR', info: 'i' };
+  const escapedMsg = msg.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  toast.innerHTML = `<span class="toast-icon">${icons[type] || 'i'}</span><span class="toast-msg">${escapedMsg}</span>`;
+  const cb = document.createElement('button');
+  cb.className = 'toast-close';
+  cb.innerHTML = '&times;';
+  cb.onclick = () => toast.remove();
+  toast.appendChild(cb);
   container.appendChild(toast);
-  setTimeout(() => { toast.classList.add('fade-out'); setTimeout(() => toast.remove(), 380); }, duration);
+  // All toasts auto-dismiss — errors get extra time
+  const effectiveDuration = type === 'error' ? Math.max(duration, 10000) : duration;
+  setTimeout(() => { toast.classList.add('fade-out'); setTimeout(() => toast.remove(), 380); }, effectiveDuration);
 }
+
+// ================================================================
+// STEP CARD COLLAPSE / EXPAND
+// ================================================================
+function updateWorkflowStepIndicator(activeStep) {
+  const indicator = document.getElementById('workflowStepIndicator');
+  if (!indicator) return;
+  indicator.classList.remove('hidden');
+  indicator.querySelectorAll('.wsi-step').forEach(el => {
+    const step = Number(el.dataset.step);
+    el.classList.toggle('active', step === activeStep);
+    el.classList.toggle('done', step < activeStep);
+  });
+}
+
+function collapseAllStepsExcept(keepId) {
+  const apply = () => {
+    document.querySelectorAll('.step-card').forEach(card => {
+      if (card.id === keepId) {
+        card.classList.remove('collapsed');
+      } else {
+        card.classList.add('collapsed');
+      }
+    });
+  };
+  // Apply immediately and again after a frame to survive any pending DOM updates.
+  apply();
+  requestAnimationFrame(apply);
+}
+document.querySelectorAll('.step-card .step-header').forEach(header => {
+  header.addEventListener('click', () => {
+    header.closest('.step-card').classList.toggle('collapsed');
+  });
+});
 
 // ================================================================
 // LIGHTBOX
@@ -1016,7 +1398,21 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbo
 // ================================================================
 // GUIDE MODAL
 // ================================================================
-document.getElementById('guideBtn').onclick        = () => document.getElementById('guideModal').classList.remove('hidden');
+document.getElementById('guideBtn').onclick = () => {
+  const activeTab = document.querySelector('.sidebar .active')?.textContent?.trim();
+  const guideContent = document.getElementById('guideContent');
+  if (guideContent) {
+    const guideMap = {
+      [t('nav.workflow')]: 'guide.workflowHtml',
+      [t('nav.manualTiff')]: 'guide.manualCheckHtml',
+      [t('nav.qc')]: 'guide.batchQcHtml',
+      [t('nav.results')]: 'guide.resultsHtml',
+    };
+    const key = guideMap[activeTab] || 'guide.workflowHtml';
+    guideContent.innerHTML = t(key);
+  }
+  document.getElementById('guideModal').classList.remove('hidden');
+};
 document.getElementById('guideModalClose').onclick = () => document.getElementById('guideModal').classList.add('hidden');
 document.getElementById('guideModalOk').onclick    = () => document.getElementById('guideModal').classList.add('hidden');
 
@@ -1029,7 +1425,7 @@ document.querySelectorAll('.nav-btn[data-tab]').forEach(btn => {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
-    if (btn.dataset.tab === 'results') refreshOutputs();
+    if (btn.dataset.tab === 'results') refreshOutputsAndFiles();
     if (btn.dataset.tab === 'qc')      refreshQcAll();
     if (btn.dataset.tab === 'projects') { loadProjects(); refreshBatchQueue(); }
   };
@@ -1062,10 +1458,35 @@ document.querySelectorAll('.btn-browse').forEach(btn => {
 function applyWorkflowMode(mode) {
   const m = (mode || 'oneclick').toLowerCase();
   document.body.classList.toggle('mode-oneclick', m === 'oneclick');
+  // In One-Click mode, collapse Steps 2-4 so the user sees only Step 1 initially.
+  // Steps expand automatically as the workflow progresses.
+  if (m === 'oneclick') {
+    collapseAllStepsExcept('step1');
+  } else {
+    // Manual mode: expand all steps
+    document.querySelectorAll('.step-card').forEach(c => c.classList.remove('collapsed'));
+  }
 }
 
 if (workflowModeEl) {
-  workflowModeEl.onchange = () => applyWorkflowMode(workflowModeEl.value);
+  workflowModeEl.onchange = () => {
+    applyWorkflowMode(workflowModeEl.value);
+    // Sync source path between One-Click and Pro modes (#2)
+    const oneClick = document.getElementById('oneClickSourcePath');
+    const proInput = document.getElementById('inputDir');
+    if (oneClick && proInput) {
+      if (workflowModeEl.value === 'oneclick' && proInput.value) {
+        // Switching TO oneclick: bring Pro path into OneClick
+        oneClick.value = proInput.value;
+        oneClick.dispatchEvent(new Event('change', { bubbles: true }));
+      } else if (workflowModeEl.value === 'pro' && oneClick.value) {
+        // Switching TO pro: bring OneClick path into Pro
+        proInput.value = oneClick.value;
+      }
+    }
+  };
+  // Apply on page load
+  applyWorkflowMode(workflowModeEl.value);
 }
 
 // ================================================================
@@ -1135,7 +1556,7 @@ function log(msg) {
     origConsoleError.apply(console, args);
     const msg = args.map(safeStr).join(' ');
     log(`❌ [FE ERROR] ${msg}`);
-    showToast('Dev Error: ' + msg.substring(0, 70), 'error');
+    showToast(t('toast.devError', { msg: msg.substring(0, 70) }), 'error');
   };
   console.warn = function(...args) {
     origConsoleWarn.apply(console, args);
@@ -1145,12 +1566,12 @@ function log(msg) {
   window.addEventListener('error', e => {
     const msg = `${e.message} at ${e.filename}:${e.lineno}`;
     log(`❌ [UNCAUGHT] ${msg}`);
-    showToast('Uncaught: ' + e.message.substring(0, 50), 'error');
+    showToast(t('toast.uncaughtError', { msg: e.message.substring(0, 50) }), 'error');
   });
   window.addEventListener('unhandledrejection', e => {
     const msg = safeStr(e.reason);
     log(`❌ [PROMISE REJECT] ${msg}`);
-    showToast('Promise Reject: ' + msg.substring(0, 60), 'error');
+    showToast(t('toast.promiseReject', { msg: msg.substring(0, 60) }), 'error');
   });
 })();
 
@@ -1196,18 +1617,19 @@ async function validatePaths(showMsg = true) {
 // ================================================================
 const PRESET_KEYS = ['inputDir','outputDir','atlasPath','structPath','realSlicePath','atlasLabelPath',
   'pixelSizeUm','rotateAtlas','flipAtlas','slicingPlane','majorTopK','fitMode',
-  'overlayMode','alignMode','maxPoints','minDistance','ransacResidual'];
+  'overlayMode','alignMode','maxPoints','minDistance','ransacResidual',
+  'oneClickHemisphere','oneClickAtlasVersion','oneClickRegMode','oneClickScope'];
 
 function savePreset() {
   const preset = {};
   PRESET_KEYS.forEach(k => { const el = document.getElementById(k); if (el) preset[k] = el.value; });
   preset.channel = state.channel;
   preset.runAll  = state.runAll;
-  localStorage.setItem('idlebrain.preset', JSON.stringify(preset));
+  localStorage.setItem('brainfast.preset', JSON.stringify(preset));
   showToast(t('toast.presetSaved'), 'success', 2500);
 }
 function loadPreset(silent = false) {
-  const raw = localStorage.getItem('idlebrain.preset');
+  const raw = localStorage.getItem('brainfast.preset');
   if (!raw) { if (!silent) showToast(t('toast.noPreset'), 'warning'); return false; }
   const p = JSON.parse(raw);
   PRESET_KEYS.forEach(k => { const el = document.getElementById(k); if (el && p[k] !== undefined) el.value = p[k]; });
@@ -1269,11 +1691,11 @@ async function refreshOverlayPreview() {
     fitMode, alpha, mode, edgeSmoothIter: mode === 'fill' ? 2 : 1,
   };
   
-  let respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', payload, '🖼️ Generating Preview...');
+  let respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', payload, 'Generating Preview...');
   if (!respJson) {
     if (mode !== 'contour') {
       mode = 'contour'; modeEl.value = 'contour';
-      respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', { ...payload, mode: 'contour' }, '🖼️ Generating Preview (Fallback)...');
+      respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', { ...payload, mode: 'contour' }, 'Generating Preview (Fallback)...');
       if (respJson && respJson.ok) { showToast(t('toast.fillModeFallback'), 'warning'); }
       else { showToast(t('toast.previewFailed'), 'error'); return; }
     } else { showToast(t('toast.previewFailed'), 'error'); return; }
@@ -1297,6 +1719,161 @@ async function refreshOverlayPreview() {
 document.getElementById('refreshPreviewBtn').onclick = refreshOverlayPreview;
 
 // ================================================================
+// DETECT PREVIEW (single-slice cell detection)
+// ================================================================
+let _detectOverlayVisible = true;
+
+async function runDetectPreview() {
+  const slicePath = document.getElementById('realSlicePath').value;
+  if (!slicePath) { showToast(t('detect.noSlice'), 'warning'); return; }
+
+  const resultDiv = document.getElementById('detectPreviewResult');
+  const summary   = document.getElementById('detectResultSummary');
+  const details   = document.getElementById('detectResultDetails');
+  const btn       = document.getElementById('detectPreviewBtn');
+
+  // Show running state
+  resultDiv.classList.remove('hidden');
+  details.classList.add('hidden');
+  summary.textContent = t('detect.running');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/detect/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slicePath,
+        jobId: getOverlayJobId(),
+        params: {
+          model: document.getElementById('detectModelSelect').value,
+          diameter_um: parseFloat(document.getElementById('detectDiameterUm').value) || 12.0,
+          flow_threshold: parseFloat(document.getElementById('detectFlowThreshold').value),
+          cellprob_threshold: parseFloat(document.getElementById('detectCellprobThreshold').value),
+          min_size_px: parseInt(document.getElementById('detectMinSizePx').value, 10) || 8,
+          gpu: document.getElementById('detectGpuToggle').checked,
+        },
+      }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      const errMsg = data.runtimeAvailable === false
+        ? t('detect.noRuntime')
+        : t('detect.error', { err: data.error || 'unknown' });
+      summary.textContent = errMsg;
+      showToast(errMsg, 'error', 5000);
+      return;
+    }
+
+    // Success — show results
+    summary.textContent = t('detect.done', { count: data.cellCount, detector: data.detector });
+    showToast(t('detect.done', { count: data.cellCount, detector: data.detector }), 'success', 3000);
+
+    // Show overlay image and CSV link
+    if (data.overlayUrl) {
+      const overlayImg = document.getElementById('detectOverlayImg');
+      overlayImg.src = data.overlayUrl + '&ts=' + Date.now();
+      overlayImg.onclick = () => openLightbox(overlayImg.src, t('detect.done', { count: data.cellCount, detector: data.detector }));
+      _detectOverlayVisible = true;
+    }
+    if (data.csvUrl) {
+      document.getElementById('detectCsvLink').href = data.csvUrl;
+    }
+    details.classList.remove('hidden');
+
+  } catch (err) {
+    summary.textContent = t('detect.error', { err: err.message });
+    showToast(t('detect.error', { err: err.message }), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// --- Detection parameter panel logic ---
+async function loadCellposeModels() {
+  try {
+    const res = await fetch('/api/cellpose/models');
+    const data = await res.json();
+    if (!data.ok) return;
+
+    const select = document.getElementById('detectModelSelect');
+    select.innerHTML = '';
+    for (const m of data.models) {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.type === 'custom' ? `${m.name} (custom)` : m.name;
+      select.appendChild(opt);
+    }
+  } catch (err) {
+    console.warn('Failed to load Cellpose models:', err);
+  }
+}
+
+// Slider value displays
+document.getElementById('detectFlowThreshold').oninput = function() {
+  document.getElementById('detectFlowThresholdVal').textContent = this.value;
+};
+document.getElementById('detectCellprobThreshold').oninput = function() {
+  document.getElementById('detectCellprobThresholdVal').textContent = this.value;
+};
+
+// Load models when panel is first opened
+document.getElementById('detectParamsPanel').addEventListener('toggle', function() {
+  if (this.open) loadCellposeModels();
+});
+
+document.getElementById('detectPreviewBtn').onclick = runDetectPreview;
+document.getElementById('detectResultClose').onclick = () => {
+  document.getElementById('detectPreviewResult').classList.add('hidden');
+};
+document.getElementById('detectToggleOverlay').onclick = () => {
+  const img = document.getElementById('detectOverlayImg');
+  _detectOverlayVisible = !_detectOverlayVisible;
+  img.style.display = _detectOverlayVisible ? '' : 'none';
+};
+
+document.getElementById('editMasksBtn').onclick = async function() {
+  var slicePath = document.getElementById('realSlicePath').value;
+  if (!slicePath) { showToast('No slice loaded', 'warning'); return; }
+
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = 'Loading...';
+
+  try {
+    var res = await fetch('/api/detect/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slicePath: slicePath,
+        jobId: getOverlayJobId(),
+        returnMasks: true,
+        params: {
+          model: document.getElementById('detectModelSelect').value,
+          diameter_um: parseFloat(document.getElementById('detectDiameterUm').value) || 12.0,
+          flow_threshold: parseFloat(document.getElementById('detectFlowThreshold').value),
+          cellprob_threshold: parseFloat(document.getElementById('detectCellprobThreshold').value),
+          min_size_px: parseInt(document.getElementById('detectMinSizePx').value, 10) || 8,
+          gpu: document.getElementById('detectGpuToggle').checked,
+        },
+      }),
+    });
+    var data = await res.json();
+    if (!data.ok) {
+      showToast('Detection failed: ' + (data.error || 'unknown'), 'error');
+      return;
+    }
+    MaskEditor.open(slicePath, getOverlayJobId());
+  } catch (err) {
+    showToast('Failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Edit Masks';
+  }
+};
+
+// ================================================================
 // AUTOPICK ASYNC PROGRESS HELPERS
 // ================================================================
 let _autopickAbortFlag = false;
@@ -1314,7 +1891,7 @@ function _showAutopickModal() {
   document.getElementById('autopickBarFill').style.width = '0%';
   document.getElementById('autopickBarFill').style.background = 'var(--accent,#4c72f5)';
   document.getElementById('autopickPct').textContent = '0%';
-  document.getElementById('autopickProgressMsg').textContent = 'Starting...';
+  document.getElementById('autopickProgressMsg').textContent = t('progress.starting');
   document.getElementById('autopickStepText').textContent = '';
   document.getElementById('autopickErrorDetail').classList.add('hidden');
   document.getElementById('autopickModalActions').style.display = 'flex';
@@ -1362,7 +1939,7 @@ function _showAutopickError(errMsg) {
   const fillEl = document.getElementById('autopickBarFill');
   if (fillEl) fillEl.style.background = '#f87171';
   const msgEl = document.getElementById('autopickProgressMsg');
-  if (msgEl) msgEl.textContent = 'Auto-pick failed';
+  if (msgEl) msgEl.textContent = t('progress.autopickFailed');
   const detailEl = document.getElementById('autopickErrorDetail');
   if (detailEl) {
     detailEl.textContent = errMsg || 'Unknown error';
@@ -1372,6 +1949,8 @@ function _showAutopickError(errMsg) {
   if (actions) actions.style.display = 'none';
   const footer = document.getElementById('autopickModalFooter');
   if (footer) { footer.classList.remove('hidden'); footer.style.display = 'flex'; }
+  // Auto-close after 5 seconds so the user isn't stuck
+  _scheduleCloseModal(5000);
 }
 
 document.getElementById('autopickModalCancel').onclick = async () => {
@@ -1464,8 +2043,8 @@ async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
   document.getElementById('autopickModalActions').style.display = 'none';
   // Update modal title
   const h2 = document.querySelector('#autopickModal h2') || document.querySelector('#autopickModal .modal-title');
-  if (h2) h2.textContent = modalTitle || '🧠 Processing...';
-  _updateAutopickProgress(3, 'Submitting...', '');
+  if (h2) h2.textContent = modalTitle || `\uD83E\uDDE0 ${t('progress.processing')}`;
+  _updateAutopickProgress(3, t('progress.submitting'), '');
 
   let startRes;
   try {
@@ -1484,7 +2063,7 @@ async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
   }
   // Legacy sync response
   if (!startRes.token) {
-    _updateAutopickProgress(100, 'Done!', '');
+    _updateAutopickProgress(100, t('progress.done'), '');
     _scheduleCloseModal(600);
     return startRes;
   }
@@ -1579,7 +2158,7 @@ function showAlignQuality(beforeEdge, afterEdge, improved) {
     <span class="verdict-improve ${impCls}">${impSign}${impPct}%</span>
   `;
   const toastType = improved ? (level === 'poor' || level === 'fair' ? 'warning' : 'success') : 'error';
-  showToast(`SSIM ${b.toFixed(4)} ↗?${a.toFixed(4)} (${impSign}${impPct}%) →?${t(`quality.${level}`)}`, toastType, 6000);
+  showToast(`SSIM ${b.toFixed(4)} \u2192 ${a.toFixed(4)} (${impSign}${impPct}%) \u2014 ${t(`quality.${level}`)}`, toastType, 6000);
 }
 
 // ================================================================
@@ -1590,6 +2169,8 @@ document.getElementById('aiAlignBtn').onclick = async () => {
   const atlasPath = document.getElementById('atlasLabelPath').value;
   if (!realPath || !atlasPath) { showToast(t('toast.landmarkNeedPath'), 'warning'); return; }
   const alignMode = document.getElementById('alignMode').value;
+  const atlasVersion = document.getElementById('oneClickAtlasVersion')?.value || 'ccfv3';
+  const registrationMode = document.getElementById('oneClickRegMode')?.value || 'cross_modal';
   showToast(t('toast.landmarkExtracting'), 'info', 15000);
   try {
     const lm = await fetch('/api/align/landmarks', {
@@ -1600,6 +2181,8 @@ document.getElementById('aiAlignBtn').onclick = async () => {
         maxPoints:      Number(document.getElementById('maxPoints').value || 30),
         minDistance:    Number(document.getElementById('minDistance').value || 12),
         ransacResidual: Number(document.getElementById('ransacResidual').value || 8),
+        atlasVersion,
+        registrationMode,
       }),
     }).then(r => r.json());
     if (!lm.ok) { showToast(t('toast.landmarkApplyFailed', { err: lm.error || '?' }), 'error'); return; }
@@ -1608,7 +2191,7 @@ document.getElementById('aiAlignBtn').onclick = async () => {
     const ep = alignMode === 'nonlinear' ? '/api/align/nonlinear' : '/api/align/apply';
     const ap = await fetch(ep, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId: getOverlayJobId(), realPath, atlasLabelPath: atlasPath }),
+      body: JSON.stringify({ jobId: getOverlayJobId(), realPath, atlasLabelPath: atlasPath, atlasVersion, registrationMode, hemisphere: document.getElementById('oneClickHemisphere')?.value || 'auto' }),
     }).then(r => r.json());
     if (!ap.ok) { showToast(t('toast.landmarkApplyFailed', { err: ap.error || '?' }), 'error'); return; }
     syncOverlayJobId(ap);
@@ -1620,7 +2203,7 @@ document.getElementById('aiAlignBtn').onclick = async () => {
     compareImg.classList.remove('hidden');
     document.getElementById('alignPreviewPlaceholder').classList.add('hidden');
     compareImg.onclick = () => openLightbox(compareImg.src, t('lightbox.compare'));
-    log(`AI ${alignMode} | pairs=${lm.landmark_pairs} | SSIM ${Number(ap.beforeEdgeScore).toFixed(4)} ↗?${Number(ap.afterEdgeScore).toFixed(4)}`);
+    log(`AI ${alignMode} | pairs=${lm.landmark_pairs} | SSIM ${Number(ap.beforeEdgeScore).toFixed(4)} \u2192 ${Number(ap.afterEdgeScore).toFixed(4)}`);
   } catch { showToast(t('toast.alignUnexpected'), 'error'); }
 };
 
@@ -1782,9 +2365,6 @@ document.getElementById('runBtn').onclick = async () => {
 };
 
 // ================================================================
-// POLL LOGS
-// ================================================================
-// ================================================================
 // UNIFIED POLL (/api/poll — replaces pollLogsUntilDone + _pollSliceProgress + refreshErrorLog)
 // ================================================================
 let _uniPollTimer = null;
@@ -1889,12 +2469,216 @@ document.getElementById('openOutputsBtn').onclick = async () => {
 };
 
 // ================================================================
+// 3D WHOLE-BRAIN QC SURFACES
+// ================================================================
+const WHOLE_BRAIN_STAGE_NAMES = [
+  'Volume Build',
+  'Template Prep',
+  'ANTS Registration',
+  'Laplacian Refinement',
+  'Truth Export',
+  'Quantification',
+];
+
+let latestWholeBrainStage = null;
+
+function renderWholeBrain3dStage(stage) {
+  latestWholeBrainStage = stage || null;
+  if (!wholeBrainStageList) return;
+
+  const activeName = String(stage?.stageName || '').trim();
+  const activeIndex = Number(stage?.stageIndex || 0);
+  const stageCount = Number(stage?.stageCount || WHOLE_BRAIN_STAGE_NAMES.length);
+  const activePercent = Number(stage?.percent || 0);
+  const hasActiveStage = !!activeName;
+
+  if (wholeBrainStageMeta) {
+    if (!hasActiveStage) {
+      wholeBrainStageMeta.textContent = t('wb3d.status.idle');
+    } else {
+      wholeBrainStageMeta.textContent = t('wb3d.status.stage', {
+        current: activeIndex || 1,
+        total: stageCount || WHOLE_BRAIN_STAGE_NAMES.length,
+      });
+    }
+  }
+
+  wholeBrainStageList.innerHTML = '';
+  WHOLE_BRAIN_STAGE_NAMES.forEach((name, idx) => {
+    const isActive = activeName === name;
+    const isDone = hasActiveStage && (idx + 1 < activeIndex || (isActive && activePercent >= 100));
+    const isFuture = hasActiveStage && !isActive && !isDone && idx + 1 > activeIndex;
+    const pct = isDone ? 100 : (isActive ? Math.max(0, Math.min(100, activePercent)) : 0);
+    const row = document.createElement('div');
+    row.className = `stage-row${isActive ? ' active' : ''}${isDone ? ' done' : ''}${isFuture ? ' future' : ''}${stage?.error && isActive ? ' error' : ''}`;
+    row.innerHTML = `
+      <div class="stage-head">
+        <div class="stage-title">
+          <span class="stage-index">${idx + 1}</span>
+          <div>
+            <div class="stage-name"></div>
+            <div class="stage-sub"></div>
+          </div>
+        </div>
+        <span class="stage-status"></span>
+      </div>
+      <div class="stage-bar"><div></div></div>
+    `;
+    row.querySelector('.stage-name').textContent = name;
+    row.querySelector('.stage-status').textContent = isActive
+      ? (stage?.error ? t('wb3d.status.failed') : (pct >= 100 ? t('wb3d.status.done') : t('wb3d.status.running')))
+      : (isDone ? t('wb3d.status.done') : t('wb3d.status.pending'));
+    const stageSub = row.querySelector('.stage-sub');
+    const artifactText = stage?.artifacts && typeof stage.artifacts === 'object'
+      ? Object.entries(stage.artifacts)
+          .filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '')
+          .map(([key, value]) => `${key}: ${value}`)
+          .join(' · ')
+      : '';
+    if (isActive && (stage?.message || artifactText)) {
+      stageSub.textContent = [stage.message, artifactText].filter(Boolean).join(' · ');
+    } else if (isDone) {
+      stageSub.textContent = t('wb3d.status.done');
+    } else {
+      stageSub.textContent = '';
+    }
+    row.querySelector('.stage-bar > div').style.width = `${pct}%`;
+    wholeBrainStageList.appendChild(row);
+  });
+}
+
+function _parseSimpleCsvRows(text) {
+  const lines = String(text || '').trim().split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(part => part.trim());
+  const rows = [];
+  for (const line of lines.slice(1)) {
+    const cols = line.split(',').map(part => part.trim());
+    if (headers.length <= 1) {
+      rows.push({ key: headers[0] || 'value', value: cols[0] || '' });
+      continue;
+    }
+    const key = cols[0] || headers[0] || 'metric';
+    const value = cols.slice(1).join(', ').trim() || cols[0] || '';
+    rows.push({ key, value });
+  }
+  return rows;
+}
+
+function renderVolumeQcSummary(text) {
+  if (!volumeQcSummaryEl) return;
+  volumeQcSummaryEl.innerHTML = '';
+  const rows = _parseSimpleCsvRows(text);
+  if (volumeQcSourceEl) {
+    volumeQcSourceEl.textContent = rows.length ? 'volume_registration_qc.csv' : '';
+  }
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'volume-qc-empty';
+    empty.textContent = t('wb3d.qc.empty');
+    volumeQcSummaryEl.appendChild(empty);
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'volume-qc-list';
+  rows.slice(0, 12).forEach(row => {
+    const item = document.createElement('div');
+    item.className = 'volume-qc-item';
+    const key = document.createElement('span');
+    key.className = 'volume-qc-key';
+    key.textContent = row.key;
+    const value = document.createElement('strong');
+    value.className = 'volume-qc-val';
+    value.textContent = row.value;
+    item.appendChild(key);
+    item.appendChild(value);
+    list.appendChild(item);
+  });
+  volumeQcSummaryEl.appendChild(list);
+}
+
+let _volumeRegStatsAvailable = null; // null = unknown, true/false = cached
+async function refreshVolumeQcSummary() {
+  if (!volumeQcSummaryEl) return;
+  // Skip if we already know the endpoint doesn't exist (avoids 404 spam)
+  if (_volumeRegStatsAvailable === false) { renderVolumeQcSummary(''); return; }
+  if (volumeQcSourceEl) {
+    volumeQcSourceEl.textContent = t('wb3d.qc.loading');
+  }
+  try {
+    const res = await fetch('/api/outputs/volume-reg-stats');
+    if (!res.ok) {
+      if (res.status === 404) _volumeRegStatsAvailable = false;
+      renderVolumeQcSummary('');
+      return;
+    }
+    _volumeRegStatsAvailable = true;
+    renderVolumeQcSummary(await res.text());
+  } catch {
+    renderVolumeQcSummary('');
+  }
+}
+
+function _renderSliceInspectorGrid(payload) {
+  if (!sliceInspectorGrid || !sliceInspectorEmpty || !sliceInspectorCount) return;
+  const regList = payload?.regList || null;
+  const items = regList?.ok && Array.isArray(regList.files) && regList.files.length > 0
+    ? regList.files.map(name => ({
+        name,
+        source: '3d',
+      }))
+    : [];
+
+  sliceInspectorGrid.innerHTML = '';
+  if (!items.length) {
+    sliceInspectorEmpty.classList.remove('hidden');
+    sliceInspectorCount.textContent = '';
+    if (qcAllCount) qcAllCount.textContent = '';
+    return;
+  }
+
+  sliceInspectorEmpty.classList.add('hidden');
+  sliceInspectorCount.textContent = `${items.length}`;
+  if (qcAllCount) qcAllCount.textContent = `${items.length} slices`;
+  items.forEach(entry => {
+    const wrap = document.createElement('div');
+    wrap.className = 'qc-thumb';
+    const img = document.createElement('img');
+    const is3d = entry.source === '3d';
+    img.src = is3d ? `/api/outputs/reg-slice/${entry.name}?${Date.now()}` : `/api/outputs/qc-file/${entry.name}?${Date.now()}`;
+    img.alt = entry.name;
+    img.onerror = () => wrap.remove();
+    const label = document.createElement('div');
+    label.className = 'qc-thumb-label';
+    label.textContent = is3d
+      ? entry.name.replace('slice_', '').replace('_overlay.png', '')
+      : entry.name.replace('overlay_', '').replace('.png', '');
+    wrap.appendChild(img);
+    wrap.appendChild(label);
+    wrap.onclick = () => {
+      openLightbox(img.src, entry.name);
+    };
+    sliceInspectorGrid.appendChild(wrap);
+  });
+}
+
+async function refreshSliceInspector() {
+  if (!sliceInspectorGrid || !sliceInspectorEmpty || !sliceInspectorCount) return;
+  try {
+    const regList = await fetch('/api/outputs/reg-slice-list').then(r => r.json());
+    _renderSliceInspectorGrid({ regList });
+  } catch {
+    _renderSliceInspectorGrid({});
+  }
+}
+
+// ================================================================
 // BATCH QC ALL
 // ================================================================
 async function refreshQcAll() {
-  const grid = document.getElementById('qcAllGrid');
-  const empty = document.getElementById('qcEmpty');
-  const count = document.getElementById('qcAllCount');
+  renderWholeBrain3dStage(latestWholeBrainStage);
+  await Promise.all([refreshVolumeQcSummary(), refreshSliceInspector()]);
 
   // Load annotated slice (region labels)
   try {
@@ -1941,10 +2725,11 @@ async function refreshQcAll() {
               `<span>Coverage: <strong>${escapeHtml(formatPercent(stats.atlas_coverage))}</strong></span>`,
             ].join('<span style="color:#444">  |  </span>');
           } else {
+            const scoreColor = stats.mean_score > 0.7 ? '#5c9' : stats.mean_score > 0.4 ? '#fc5' : '#f55';
             statsBar.innerHTML = [
               `<span>✅ <strong>${stats.ok_count}/${stats.total}</strong> slices registered</span>`,
-              `<span>Score mean: <strong>${stats.mean_score}</strong></span>`,
-              `<span>Range: ${stats.min_score} – ${stats.max_score}</span>`,
+              `<span>Score mean: <strong style="color:${scoreColor}">${stats.mean_score.toFixed(3)}</strong></span>`,
+              `<span>Range: ${stats.min_score.toFixed(3)} – ${stats.max_score.toFixed(3)}</span>`,
             ].join('<span style="color:#444">  |  </span>');
           }
         }
@@ -2116,14 +2901,14 @@ async function regenDemoVisuals() {
     const r = await fetch(withActiveJobQuery('/api/outputs/refresh-demo'), { method: 'POST' });
     const j = await r.json();
     if (j.ok) {
-      showToast('Demo visuals regeneration started. Refreshing in 15s...', 'info');
+      showToast(t('toast.regenStarted'), 'info');
       setTimeout(() => { refreshQcAll(); if (btn) { btn.disabled = false; btn.textContent = t('btn.regenDemo'); } }, 15000);
     } else {
-      showToast('Regen failed: ' + (j.error || 'unknown'), 'warning');
+      showToast(t('toast.regenFailed', { err: j.error || 'unknown' }), 'warning');
       if (btn) { btn.disabled = false; btn.textContent = t('btn.regenDemo'); }
     }
   } catch (e) {
-    showToast('Regen error: ' + e, 'warning');
+    showToast(t('toast.regenError', { err: String(e) }), 'warning');
     if (btn) { btn.disabled = false; btn.textContent = t('btn.regenDemo'); }
   }
 }
@@ -2325,12 +3110,70 @@ function renderRegionChart(summary) {
   });
 }
 
+// Tree collapse state: tracks which region_ids are collapsed
+const _treeCollapsed = new Set();
+let _treeMaxDepth = 2; // default expand depth
+
+function _sortTreeDFS(data) {
+  // Build children map keyed by parent_structure_id
+  const childrenOf = new Map();
+  data.forEach(d => {
+    const pid = String(d.parent_structure_id || '0');
+    if (!childrenOf.has(pid)) childrenOf.set(pid, []);
+    childrenOf.get(pid).push(d);
+  });
+  // Sort children by graph_order or region_id
+  for (const [, kids] of childrenOf) {
+    kids.sort((a, b) => (Number(a.graph_order || 0) - Number(b.graph_order || 0)) || (Number(a.region_id) - Number(b.region_id)));
+  }
+  // DFS from roots (entries whose parent is not in the dataset)
+  const allIds = new Set(data.map(d => String(d.region_id)));
+  const ordered = [];
+  const visited = new Set();
+  function dfs(id) {
+    const kids = childrenOf.get(id) || [];
+    kids.forEach(k => {
+      const rid = String(k.region_id);
+      if (visited.has(rid)) return;
+      visited.add(rid);
+      ordered.push(k);
+      dfs(rid);
+    });
+  }
+  // Find roots
+  const roots = data.filter(d => !allIds.has(String(d.parent_structure_id || '0')));
+  roots.sort((a, b) => (Number(a.graph_order || 0) - Number(b.graph_order || 0)) || (Number(a.region_id) - Number(b.region_id)));
+  roots.forEach(r => { const rid = String(r.region_id); if (!visited.has(rid)) { visited.add(rid); ordered.push(r); dfs(rid); } });
+  // Append any orphans not reached by DFS
+  data.forEach(d => { if (!visited.has(String(d.region_id))) ordered.push(d); });
+  return ordered;
+}
+
+function _hasChildren(regionId, data, idx) {
+  const depth = parseInt(data[idx].depth || 0);
+  for (let i = idx + 1; i < data.length; i++) {
+    const d = parseInt(data[i].depth || 0);
+    if (d <= depth) break;
+    if (String(data[i].parent_structure_id) === String(regionId)) return true;
+  }
+  return false;
+}
+
+
 function renderResultsTable(data) {
   resultRows.innerHTML = '';
   const keyword = (document.getElementById('regionSearch')?.value || '').toLowerCase();
   const filtered = keyword ? data.filter(d => (d.region_name || d.region || '').toLowerCase().includes(keyword) || (d.acronym || '').toLowerCase().includes(keyword)) : data;
   const rootCount = data.find(d => safeDepth(d.depth) === 0);
   const total = rootCount ? Number(rootCount.count||0) : Math.max(...data.map(d=>Number(d.count||0)));
+
+  // Sort into tree order for hierarchy mode
+  const treeMode = state.useHierarchy && !keyword;
+  const ordered = treeMode ? _sortTreeDFS(filtered) : filtered;
+
+  // Show/hide depth controls
+  const depthControls = document.getElementById('treeDepthControls');
+  if (depthControls) depthControls.classList.toggle('hidden', !treeMode);
 
   // Morphology: check if CSV has these columns
   const hasMorph = data.length > 0 && (data[0].mean_elongation !== undefined || data[0].mean_area_px !== undefined);
@@ -2340,20 +3183,28 @@ function renderResultsTable(data) {
   const showMorph = hasMorph && morphToggle && morphToggle.checked;
   document.querySelectorAll('.morph-col').forEach(el => el.style.display = showMorph ? '' : 'none');
 
-  filtered.forEach(d => {
-    const depth = safeDepth(d.depth);
-    const indent = state.useHierarchy && !keyword ? '&nbsp;'.repeat(depth * 3) : '';
-    const name = d.region_name || d.region || '-';
-    const acronym = d.acronym ? `<span style="color:#888;font-size:0.85em"> (${d.acronym})</span>` : '';
+  // Build ancestor-collapsed lookup for click-based collapse
+  const collapsedAncestor = new Set();
+  ordered.forEach((d, i) => {
+    const depth = Math.max(0, parseInt(d.depth || 0));
+    const rid = String(d.region_id || i);
+    const name = escapeHtml(d.region_name || d.region || '-');
+    const acronym = d.acronym ? `<span style="color:#888;font-size:0.85em"> (${escapeHtml(d.acronym)})</span>` : '';
     const count = Number(d.count || 0);
-    const countStr = count > 0 ? count.toLocaleString() : '<span style="color:#555">—</span>';
+    const countStr = count > 0 ? count.toLocaleString() : '<span style="color:#555">\u2014</span>';
     const pct = total > 0 && count > 0 ? (count/total*100).toFixed(1)+'%' : '';
-    // Mini inline bar (only show for depth 2-4)
     const barWidth = total > 0 && count > 0 ? Math.max(2, count/total*120).toFixed(0) : 0;
     const barColor = depth <= 2 ? '#5c9' : depth === 3 ? '#59c' : '#888';
     const bar = (depth >= 2 && depth <= 5 && count > 0)
       ? `<div style="display:inline-block;width:${barWidth}px;height:8px;background:${barColor};border-radius:2px;vertical-align:middle;opacity:0.75"></div>`
       : '';
+
+    const hasKids = treeMode && _hasChildren(rid, ordered, i);
+    const isCollapsed = _treeCollapsed.has(rid);
+    const indent = treeMode ? '\u00A0'.repeat(Math.min(depth, 10) * 3) : '';
+    const toggle = treeMode && hasKids
+      ? `<span class="tree-toggle${isCollapsed ? ' collapsed' : ''}" data-rid="${rid}">\u25BC</span>`
+      : (treeMode ? '<span style="display:inline-block;width:16px"></span>' : '');
     const ciLow = d.ci_low != null ? Number(d.ci_low).toFixed(0) : null;
     const ciHigh = d.ci_high != null ? Number(d.ci_high).toFixed(0) : null;
     const ciStr = ciLow != null && ciHigh != null
@@ -2362,11 +3213,39 @@ function renderResultsTable(data) {
       ? `<td class="morph-col" style="text-align:right;color:#888;font-size:0.85em">${d.mean_elongation != null ? Number(d.mean_elongation).toFixed(2) : '—'}</td><td class="morph-col" style="text-align:right;color:#888;font-size:0.85em">${d.mean_area_px != null ? Number(d.mean_area_px).toFixed(0) : '—'}</td><td class="morph-col" style="text-align:right;color:#888;font-size:0.85em">${d.mean_mean_intensity != null ? Number(d.mean_mean_intensity).toFixed(0) : '—'}</td>`
       : '<td class="morph-col" style="display:none"></td><td class="morph-col" style="display:none"></td><td class="morph-col" style="display:none"></td>';
     const tr = document.createElement('tr');
-    if (state.useHierarchy && depth <= 2 && !keyword) tr.style.fontWeight = 'bold';
+    tr.dataset.depth = depth;
+    tr.dataset.rid = rid;
+    if (treeMode && depth <= 2) tr.style.fontWeight = 'bold';
     if (depth === 0) tr.style.cssText = 'font-weight:bold;background:rgba(255,255,255,0.04)';
-    tr.innerHTML = `<td>${indent}${name}${acronym}</td><td style="text-align:right">${countStr}</td><td class="ci-col" style="text-align:right">${ciStr}</td><td style="color:#888;font-size:0.85em">${pct}</td><td>${bar}</td>${morphCols}`;
+
+    // Determine visibility: hidden if depth exceeds max OR any ancestor is collapsed
+    let hidden = false;
+    if (treeMode && depth > 0) {
+      // Check if parent is in collapsedAncestor set
+      const pid = String(d.parent_structure_id || '');
+      if (collapsedAncestor.has(pid) || depth > _treeMaxDepth) hidden = true;
+    }
+    if (hidden) tr.classList.add('tree-hidden');
+    // Track collapsed ancestors for descendants
+    if (isCollapsed || hidden) collapsedAncestor.add(rid);
+
+    tr.innerHTML = `<td>${indent}${toggle}${name}${acronym}</td><td style="text-align:right">${countStr}</td><td class="ci-col" style="text-align:right">${ciStr}</td><td style="color:#888;font-size:0.85em">${pct}</td><td>${bar}</td>${morphCols}`;
     resultRows.appendChild(tr);
   });
+
+  // Attach click handlers for tree toggles
+  if (treeMode) {
+    resultRows.querySelectorAll('.tree-toggle').forEach(el => {
+      el.onclick = (e) => {
+        e.stopPropagation();
+        const rid = el.dataset.rid;
+        if (_treeCollapsed.has(rid)) _treeCollapsed.delete(rid);
+        else _treeCollapsed.add(rid);
+        renderResultsTable(data);
+      };
+    });
+  }
+
   const meta = document.getElementById('resultsMeta');
   const baseMeta = keyword
     ? t('results.filtered', { found: filtered.length, total: data.length })
@@ -2376,6 +3255,17 @@ function renderResultsTable(data) {
 }
 
 document.getElementById('regionSearch').addEventListener('input', () => renderResultsTable(state.allResults));
+
+// Depth-level buttons for tree expand
+document.querySelectorAll('.depth-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _treeMaxDepth = parseInt(btn.dataset.depth || 99);
+    _treeCollapsed.clear();
+    document.querySelectorAll('.depth-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderResultsTable(state.allResults);
+  });
+});
 document.getElementById('morphToggle')?.addEventListener('change', () => renderResultsTable(state.allResults));
 document.getElementById('refreshBtn').onclick = refreshOutputs;
 document.getElementById('exportBtn').onclick      = () => window.open(withActiveJobQuery('/api/outputs/leaf'), '_blank');
@@ -2725,8 +3615,48 @@ function _updateSliceProgressBar(done, total) {
 // Start unified background poll at idle rate (30s); switches to 500ms during active run
 _startUnifiedPoll(false);
 
+// Sync quick pixel-size input (Step 1) ↔ main pixel-size input (Step 2)
+const _oneClickPixelSize = document.getElementById('oneClickPixelSize');
+const _mainPixelSize = document.getElementById('pixelSizeUm');
+if (_oneClickPixelSize && _mainPixelSize) {
+  _oneClickPixelSize.oninput = () => { _mainPixelSize.value = _oneClickPixelSize.value; };
+  _mainPixelSize.oninput = () => { _oneClickPixelSize.value = _mainPixelSize.value; };
+}
+
+// ================================================================
+// FORM PERSISTENCE — save key fields to localStorage on change
+// ================================================================
+const _PERSIST_FIELDS = [
+  'oneClickSourcePath', 'oneClickPixelSize', 'oneClickScope', 'oneClickHemisphere',
+  'pixelSizeUm', 'alignMode', 'slicingPlane',
+];
+function _saveFormField(id) {
+  const el = document.getElementById(id);
+  if (el) localStorage.setItem(`brainfast.field.${id}`, el.value);
+}
+function _restoreFormFields() {
+  for (const id of _PERSIST_FIELDS) {
+    const saved = localStorage.getItem(`brainfast.field.${id}`);
+    if (saved !== null) {
+      const el = document.getElementById(id);
+      if (el) { el.value = saved; }
+    }
+  }
+}
+// Attach change/input listeners for auto-save
+for (const id of _PERSIST_FIELDS) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('change', () => _saveFormField(id));
+    el.addEventListener('input', () => _saveFormField(id));
+  }
+}
+
 // ================================================================
 async function init() {
+  // Restore persisted form values before applying defaults
+  _restoreFormFields();
+
   // Apply saved or default language
   applyLang(currentLang);
   applyWorkflowMode(workflowModeEl?.value || 'oneclick');
@@ -2744,7 +3674,7 @@ async function init() {
   } catch {}
 
   // Auto-load last preset silently
-  if (localStorage.getItem('idlebrain.preset')) {
+  if (localStorage.getItem('brainfast.preset')) {
     if (loadPreset(true)) showToast(t('toast.autoLoadPreset'), 'info', 3000);
   }
 }
@@ -2785,20 +3715,62 @@ async function checkSliceIs3D(path) {
       zValDisplay.textContent = midZ;
       zMaxDisplay.textContent = zMax;
       zExtractStatus.textContent = '3D TIFF detected. Choose a Z layer, then click "Extract This Slice" or click Start again.';
-      revealZSlicer();
       showToast(t('toast.zDetected', { z: res.z_count, h: res.shape[1] || '?', w: res.shape[2] || '?' }), 'info', 5000);
+      // Auto-switch to whole-brain mode for 3D stacks
+      const scopeEl = document.getElementById('oneClickScope');
+      if (scopeEl && scopeEl.value !== 'whole') {
+        scopeEl.value = 'whole';
+        scopeEl.dispatchEvent(new Event('change'));
+      }
+      // Only show Z-slicer for single-slice mode; whole-brain processes all slices automatically
+      if (scopeEl?.value === 'single') {
+        revealZSlicer();
+      } else {
+        zSlicerBox.classList.add('hidden');
+      }
     } else {
       zSlicerBox.classList.add('hidden');
       zExtractStatus.textContent = '';
+      // Auto-switch to single mode for 2D images
+      const scopeEl = document.getElementById('oneClickScope');
+      if (scopeEl && scopeEl.value !== 'single') {
+        scopeEl.value = 'single';
+        scopeEl.dispatchEvent(new Event('change'));
+      }
     }
     
+    const pixelWarnEl = document.getElementById('pixelSizeWarning');
     if (res.pixel_size_um) {
       const psEl = document.getElementById('pixelSizeUm');
       if (psEl && !psEl.dataset.userModified) {
         psEl.value = res.pixel_size_um;
         psEl.dataset.autoDetected = '1';
-        showToast('Pixel size auto-detected from TIFF: ' + res.pixel_size_um + ' µm/px', 'info', 4000);
+        showToast(t('toast.pixelSizeDetected', { size: res.pixel_size_um }), 'info', 4000);
       }
+      if (pixelWarnEl) pixelWarnEl.classList.add('hidden');
+    } else {
+      // Pixel size not detected — show prominent warning + quick input in Step 1
+      if (pixelWarnEl) pixelWarnEl.classList.remove('hidden');
+      const quickRow = document.getElementById('oneClickPixelSizeRow');
+      if (quickRow) quickRow.classList.remove('hidden');
+      showToast(t('warn.pixelSizeNotDetected'), 'warning', 8000);
+    }
+
+    // Show thumbnail preview
+    const previewBox = document.getElementById('oneClickPreviewBox');
+    const previewImg = document.getElementById('oneClickPreviewImg');
+    const previewInfo = document.getElementById('oneClickPreviewInfo');
+    if (previewBox && previewImg) {
+      try {
+        const z = res.is3d ? Math.floor((res.z_count || 0) / 2) : 0;
+        previewImg.src = `/api/slice/thumbnail?path=${encodeURIComponent(path)}&z=${z}&size=360`;
+        previewImg.onload = () => { previewBox.classList.remove('hidden'); };
+        previewImg.onerror = () => { previewBox.classList.add('hidden'); };
+        if (previewInfo) {
+          const dims = res.is3d ? `${res.z_count} slices, ${res.shape[1] || '?'}×${res.shape[2] || '?'} px` : `${res.shape[0] || '?'}×${res.shape[1] || '?'} px`;
+          previewInfo.textContent = dims + (res.pixel_size_um ? `, ${res.pixel_size_um} µm/px` : '');
+        }
+      } catch { /* thumbnail is optional */ }
     }
   } catch (err) {
     console.error('checkSliceIs3D failed:', err);
@@ -2806,13 +3778,24 @@ async function checkSliceIs3D(path) {
 }
 
 document.getElementById('realSlicePath').addEventListener('change', e => {
-  checkSliceIs3D(e.target.value);
+  const path = String(e.target.value || '').trim();
+  seedManualCountSourceFromWorkflow(path);
+  checkSliceIs3D(path);
 });
 
 if (oneClickSourcePathEl2) {
+  // Restore saved source path on load
+  const savedSource = localStorage.getItem('brainfast.sourcePath');
+  if (savedSource && !oneClickSourcePathEl2.value) {
+    oneClickSourcePathEl2.value = savedSource;
+    document.getElementById('realSlicePath').value = savedSource;
+    checkSliceIs3D(savedSource);
+  }
   oneClickSourcePathEl2.addEventListener('change', e => {
     const path = String(e.target.value || '').trim();
+    localStorage.setItem('brainfast.sourcePath', path);
     document.getElementById('realSlicePath').value = path;
+    seedManualCountSourceFromWorkflow(path);
     if (oneClickStartBtn) oneClickStartBtn.dataset.zConfirmed = '0';
     if (path) checkSliceIs3D(path);
   });
@@ -2823,13 +3806,18 @@ function syncZ(val) {
   zSliderEl.value   = z;
   zNumInputEl.value = z;
   zValDisplay.textContent = z;
+  // Update thumbnail preview when Z changes
+  const previewImg = document.getElementById('oneClickPreviewImg');
+  if (previewImg && zSlicerPath) {
+    previewImg.src = `/api/slice/thumbnail?path=${encodeURIComponent(zSlicerPath)}&z=${z}&size=360`;
+  }
 }
 zSliderEl.oninput   = () => syncZ(zSliderEl.value);
 zNumInputEl.oninput = () => syncZ(zNumInputEl.value);
 
 zExtractBtn.onclick = async () => {
   const z = Number(zSliderEl.value);
-  zExtractStatus.textContent = 'Extracting selected Z slice...';
+  zExtractStatus.textContent = t('progress.extractingZ');
   try {
     const res = await fetch('/api/slice/extract-z', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2837,7 +3825,7 @@ zExtractBtn.onclick = async () => {
     }).then(r => r.json());
     if (!res.ok) { showToast(t('toast.zExtractFail', { err: res.error }), 'error'); return; }
     document.getElementById('realSlicePath').value = res.path;
-    zExtractStatus.textContent = `Using extracted slice: ${res.path}`;
+    zExtractStatus.textContent = t('progress.usingSlice', { path: res.path });
     showToast(t('toast.zExtracted', { z, path: res.path }), 'success', 4000);
 
     // Hide Z-slicer immediately so subsequent operations treat the new file as a standard 2D slice
@@ -2857,6 +3845,370 @@ zExtractBtn.onclick = async () => {
     showToast(t('toast.zExtractFail', { err: '?' }), 'error'); 
   }
 };
+
+
+// ================================================================
+// MANUAL COUNT VIEWER
+// ================================================================
+const manualCountSourcePathEl = document.getElementById('manualCountSourcePath');
+const manualCountLoadBtn = document.getElementById('manualCountLoadBtn');
+const manualCountExportBtn = document.getElementById('manualCountExportBtn');
+const manualCountUndoBtn = document.getElementById('manualCountUndoBtn');
+const manualCountClearSliceBtn = document.getElementById('manualCountClearSliceBtn');
+const manualCountClearAllBtn = document.getElementById('manualCountClearAllBtn');
+const manualCountViewport = document.getElementById('manualCountViewport');
+const manualCountStage = document.getElementById('manualCountStage');
+const manualCountPlaceholder = document.getElementById('manualCountPlaceholder');
+const manualCountImg = document.getElementById('manualCountImg');
+const manualCountCanvas = document.getElementById('manualCountCanvas');
+const manualCountCtx = manualCountCanvas?.getContext('2d');
+const manualCountZoomEl = document.getElementById('manualCountZoom');
+const manualCountZoomValueEl = document.getElementById('manualCountZoomValue');
+const manualCountPaletteEl = document.getElementById('manualCountPalette');
+const manualCountZTextEl = document.getElementById('manualCountZText');
+const manualCountSliceCountEl = document.getElementById('manualCountSliceCount');
+const manualCountTotalCountEl = document.getElementById('manualCountTotalCount');
+const manualCountStatusEl = document.getElementById('manualCountStatus');
+
+const manualCountState = {
+  path: '',
+  points: [],
+  z: 0,
+  zMax: 0,
+  is3d: false,
+  loaded: false,
+  loading: false,
+  naturalWidth: 0,
+  naturalHeight: 0,
+  zoom: Number(manualCountZoomEl?.value || 1),
+  palette: String(manualCountPaletteEl?.value || 'green'),
+  renderSeq: 0,
+  nextPointId: 1,
+};
+
+function manualCountBaseName(path) {
+  const parts = String(path || '').split(/[\/\\]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : String(path || '');
+}
+
+function manualCountCurrentPoints() {
+  return manualCountState.points
+    .filter(point => point.z === manualCountState.z)
+    .sort((a, b) => a.id - b.id);
+}
+
+function updateManualCountSummary() {
+  if (manualCountZTextEl) {
+    manualCountZTextEl.textContent = `${manualCountState.z} / ${manualCountState.zMax}`;
+  }
+  if (manualCountSliceCountEl) {
+    manualCountSliceCountEl.textContent = String(manualCountCurrentPoints().length);
+  }
+  if (manualCountTotalCountEl) {
+    manualCountTotalCountEl.textContent = String(manualCountState.points.length);
+  }
+}
+
+function setManualCountStatus(message) {
+  if (manualCountStatusEl) {
+    manualCountStatusEl.textContent = message || t('manualCount.placeholder');
+  }
+}
+
+function applyManualCountZoom(zoomValue) {
+  const zoom = Math.min(2.5, Math.max(0.25, Number(zoomValue) || 1));
+  manualCountState.zoom = zoom;
+  if (manualCountZoomEl) manualCountZoomEl.value = zoom.toFixed(2);
+  if (manualCountZoomValueEl) manualCountZoomValueEl.textContent = `${zoom.toFixed(2)}?`;
+  if (!manualCountState.loaded) return;
+  const width = Math.max(1, Math.round(manualCountState.naturalWidth * zoom));
+  const height = Math.max(1, Math.round(manualCountState.naturalHeight * zoom));
+  manualCountStage.style.width = `${width}px`;
+  manualCountStage.style.height = `${height}px`;
+  manualCountImg.style.width = `${width}px`;
+  manualCountImg.style.height = `${height}px`;
+  manualCountCanvas.style.width = `${width}px`;
+  manualCountCanvas.style.height = `${height}px`;
+  redrawManualCountCanvas();
+}
+
+function manualCountCanvasCoords(evt) {
+  const rect = manualCountCanvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  const x = ((evt.clientX - rect.left) / rect.width) * manualCountState.naturalWidth;
+  const y = ((evt.clientY - rect.top) / rect.height) * manualCountState.naturalHeight;
+  return {
+    x: Math.max(0, Math.min(manualCountState.naturalWidth, x)),
+    y: Math.max(0, Math.min(manualCountState.naturalHeight, y)),
+  };
+}
+
+function redrawManualCountCanvas() {
+  if (!manualCountCtx || !manualCountState.loaded) return;
+  manualCountCtx.clearRect(0, 0, manualCountCanvas.width, manualCountCanvas.height);
+  const points = manualCountCurrentPoints();
+  if (!points.length) return;
+  manualCountCtx.save();
+  manualCountCtx.lineWidth = 3;
+  manualCountCtx.font = '24px "Segoe UI", sans-serif';
+  manualCountCtx.textBaseline = 'middle';
+  manualCountCtx.textAlign = 'left';
+  points.forEach((point, index) => {
+    manualCountCtx.beginPath();
+    manualCountCtx.fillStyle = 'rgba(255, 91, 91, 0.92)';
+    manualCountCtx.strokeStyle = 'rgba(255, 255, 255, 0.98)';
+    manualCountCtx.arc(point.x, point.y, 12, 0, Math.PI * 2);
+    manualCountCtx.fill();
+    manualCountCtx.stroke();
+
+    const label = String(index + 1);
+    manualCountCtx.lineWidth = 5;
+    manualCountCtx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+    manualCountCtx.strokeText(label, point.x + 18, point.y);
+    manualCountCtx.fillStyle = 'rgba(255, 255, 255, 0.98)';
+    manualCountCtx.fillText(label, point.x + 18, point.y);
+    manualCountCtx.lineWidth = 3;
+  });
+  manualCountCtx.restore();
+}
+
+function csvEscape(value) {
+  const raw = String(value ?? '');
+  if (!/[",\n]/.test(raw)) return raw;
+  return `"${raw.replace(/"/g, '""')}"`;
+}
+
+function seedManualCountSourceFromWorkflow(path) {
+  const nextPath = String(path || '').trim();
+  if (!nextPath || !manualCountSourcePathEl) return;
+  const currentValue = String(manualCountSourcePathEl.value || '').trim();
+  if (!currentValue || currentValue === manualCountState.path) {
+    manualCountSourcePathEl.value = nextPath;
+  }
+}
+
+async function renderManualCountSlice() {
+  if (!manualCountState.path) return;
+  const seq = ++manualCountState.renderSeq;
+  const params = new URLSearchParams({
+    path: manualCountState.path,
+    kind: 'real',
+    z: String(manualCountState.z),
+    palette: manualCountState.palette,
+  });
+  const previewUrl = `/api/align/manual-image?${params.toString()}`;
+  manualCountState.loading = true;
+  try {
+    const probe = new Image();
+    await new Promise((resolve, reject) => {
+      probe.onload = resolve;
+      probe.onerror = () => reject(new Error('image decode failed'));
+      probe.src = previewUrl;
+    });
+    if (seq !== manualCountState.renderSeq) return;
+    manualCountImg.src = probe.src;
+    manualCountState.naturalWidth = probe.naturalWidth || probe.width || 1;
+    manualCountState.naturalHeight = probe.naturalHeight || probe.height || 1;
+    manualCountCanvas.width = manualCountState.naturalWidth;
+    manualCountCanvas.height = manualCountState.naturalHeight;
+    manualCountPlaceholder.classList.add('hidden');
+    manualCountStage.classList.remove('hidden');
+    applyManualCountZoom(manualCountState.zoom);
+    updateManualCountSummary();
+    redrawManualCountCanvas();
+    setManualCountStatus(t('manualCount.ready', { name: manualCountBaseName(manualCountState.path) }));
+  } finally {
+    if (seq === manualCountState.renderSeq) {
+      manualCountState.loading = false;
+    }
+  }
+}
+
+async function loadManualCountStack({ preserveZ = false } = {}) {
+  const path = String(manualCountSourcePathEl?.value || '').trim();
+  if (!path) {
+    setManualCountStatus(t('manualCount.needPath'));
+    showToast(t('manualCount.needPath'), 'warning');
+    return;
+  }
+
+  manualCountLoadBtn.disabled = true;
+  try {
+    const info = await fetch(`/api/slice/info?path=${encodeURIComponent(path)}`).then(r => r.json());
+    if (!info.ok) throw new Error(info.error || 'unknown error');
+
+    const pathChanged = manualCountState.path && manualCountState.path !== path;
+    manualCountState.path = path;
+    manualCountState.is3d = Boolean(info.is3d);
+    manualCountState.zMax = Math.max(0, Number(info.z_count || 1) - 1);
+    manualCountState.z = preserveZ ? Math.min(manualCountState.z, manualCountState.zMax) : 0;
+    manualCountState.loaded = true;
+
+    if (pathChanged) {
+      manualCountState.points = [];
+      manualCountState.nextPointId = 1;
+      showToast(t('manualCount.pathChanged'), 'info', 3500);
+    }
+
+    updateManualCountSummary();
+    await renderManualCountSlice();
+    manualCountViewport.focus();
+  } catch (err) {
+    console.error('loadManualCountStack failed:', err);
+    const msg = t('manualCount.loadFail', { err: err?.message || '?' });
+    setManualCountStatus(msg);
+    showToast(msg, 'error', 5000);
+  } finally {
+    manualCountLoadBtn.disabled = false;
+  }
+}
+
+manualCountLoadBtn.onclick = () => loadManualCountStack();
+
+if (manualCountSourcePathEl) {
+  manualCountSourcePathEl.addEventListener('change', () => {
+    const nextPath = String(manualCountSourcePathEl.value || '').trim();
+    if (!nextPath) return;
+    if (manualCountState.loaded && manualCountState.path && manualCountState.path !== nextPath) {
+      setManualCountStatus(t('manualCount.pathChanged'));
+    }
+  });
+}
+
+if (manualCountZoomEl) {
+  manualCountZoomEl.addEventListener('input', () => applyManualCountZoom(manualCountZoomEl.value));
+}
+
+if (manualCountPaletteEl) {
+  manualCountPaletteEl.addEventListener('change', async () => {
+    manualCountState.palette = String(manualCountPaletteEl.value || 'green');
+    if (!manualCountState.loaded) return;
+    try {
+      await renderManualCountSlice();
+    } catch (err) {
+      const msg = t('manualCount.loadFail', { err: err?.message || '?' });
+      setManualCountStatus(msg);
+      showToast(msg, 'error', 5000);
+    }
+  });
+}
+
+manualCountViewport.addEventListener('wheel', async evt => {
+  if (!manualCountState.loaded || manualCountState.zMax <= 0) return;
+  evt.preventDefault();
+  if (manualCountState.loading) return;
+  const direction = evt.deltaY > 0 ? 1 : -1;
+  const nextZ = Math.max(0, Math.min(manualCountState.zMax, manualCountState.z + direction));
+  if (nextZ === manualCountState.z) return;
+  manualCountState.z = nextZ;
+  updateManualCountSummary();
+  try {
+    await renderManualCountSlice();
+  } catch (err) {
+    const msg = t('manualCount.loadFail', { err: err?.message || '?' });
+    setManualCountStatus(msg);
+    showToast(msg, 'error', 5000);
+  }
+}, { passive: false });
+
+manualCountCanvas.addEventListener('click', evt => {
+  if (!manualCountState.loaded || evt.button !== 0) return;
+  const coords = manualCountCanvasCoords(evt);
+  if (!coords) return;
+  manualCountState.points.push({
+    id: manualCountState.nextPointId++,
+    z: manualCountState.z,
+    x: Number(coords.x.toFixed(2)),
+    y: Number(coords.y.toFixed(2)),
+  });
+  updateManualCountSummary();
+  redrawManualCountCanvas();
+});
+
+manualCountCanvas.addEventListener('contextmenu', evt => {
+  evt.preventDefault();
+  if (!manualCountState.loaded) return;
+  const coords = manualCountCanvasCoords(evt);
+  if (!coords) return;
+  const currentPoints = manualCountCurrentPoints();
+  if (!currentPoints.length) return;
+  const nearest = currentPoints.reduce((best, point) => {
+    const dist2 = ((point.x - coords.x) ** 2) + ((point.y - coords.y) ** 2);
+    return !best || dist2 < best.dist2 ? { point, dist2 } : best;
+  }, null);
+  const removeThreshold = Math.max(12, 48 / Math.max(manualCountState.zoom, 0.25));
+  if (!nearest || nearest.dist2 > removeThreshold ** 2) return;
+  manualCountState.points = manualCountState.points.filter(point => point.id !== nearest.point.id);
+  updateManualCountSummary();
+  redrawManualCountCanvas();
+});
+
+manualCountUndoBtn.onclick = () => {
+  if (!manualCountState.points.length) return;
+  manualCountState.points.pop();
+  updateManualCountSummary();
+  redrawManualCountCanvas();
+};
+
+manualCountClearSliceBtn.onclick = () => {
+  if (!manualCountState.points.length) return;
+  const before = manualCountState.points.length;
+  manualCountState.points = manualCountState.points.filter(point => point.z !== manualCountState.z);
+  if (manualCountState.points.length !== before) {
+    updateManualCountSummary();
+    redrawManualCountCanvas();
+    showToast(t('manualCount.sliceCleared'), 'info', 2500);
+    setManualCountStatus(t('manualCount.sliceCleared'));
+  }
+};
+
+manualCountClearAllBtn.onclick = () => {
+  if (!manualCountState.points.length) return;
+  manualCountState.points = [];
+  manualCountState.nextPointId = 1;
+  updateManualCountSummary();
+  redrawManualCountCanvas();
+  showToast(t('manualCount.allCleared'), 'info', 2500);
+  setManualCountStatus(t('manualCount.allCleared'));
+};
+
+manualCountExportBtn.onclick = () => {
+  if (!manualCountState.points.length) {
+    showToast(t('manualCount.noPoints'), 'warning');
+    return;
+  }
+  const ordered = manualCountState.points.slice().sort((a, b) => a.z - b.z || a.id - b.id);
+  const sliceCounters = new Map();
+  const lines = ['source_path,z,x,y,point_index,slice_point_index'];
+  ordered.forEach((point, index) => {
+    const slicePointIndex = (sliceCounters.get(point.z) || 0) + 1;
+    sliceCounters.set(point.z, slicePointIndex);
+    lines.push([
+      csvEscape(manualCountState.path),
+      point.z,
+      point.x.toFixed(2),
+      point.y.toFixed(2),
+      index + 1,
+      slicePointIndex,
+    ].join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const stem = manualCountBaseName(manualCountState.path).replace(/\.[^.]+$/, '') || 'manual_count';
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${stem}_manual_counts.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+  setManualCountStatus(t('manualCount.exported'));
+  showToast(t('manualCount.exported'), 'success', 3000);
+};
+
+updateManualCountSummary();
+applyManualCountZoom(manualCountState.zoom);
+setManualCountStatus(t('manualCount.placeholder'));
 
 // ================================================================
 // CANVAS DRAWING EDITOR
@@ -3006,7 +4358,7 @@ async function ensureAutoPickedAtlasSlice(realPath) {
   const slicingPlane = document.getElementById('slicingPlane').value || 'coronal';
   const pixelSizeUm = Number(document.getElementById('pixelSizeUm').value || 0.65);
   if (!annotationPath) {
-    if (!atlasLabelEl.value) showToast('Atlas annotation path not set. Check /api/info defaults.', 'error', 6000);
+    if (!atlasLabelEl.value) showToast(t('toast.atlasPathNotSet'), 'error', 6000);
     return !!atlasLabelEl.value;
   }
 
@@ -3016,6 +4368,9 @@ async function ensureAutoPickedAtlasSlice(realPath) {
   const k = buildAutoPickKey(realPath, annotationPath, slicingPlane, pixelSizeUm);
   if (autoPickCacheKey === k && atlasLabelEl.value) return true;
 
+  const atlasVersion = document.getElementById('oneClickAtlasVersion')?.value || 'ccfv3';
+  const registrationMode = document.getElementById('oneClickRegMode')?.value || 'cross_modal';
+  const targetAp = getTargetApRange();
   const r = await _runAutopickAsync({
     jobId: getOverlayJobId(),
     realPath,
@@ -3025,11 +4380,15 @@ async function ensureAutoPickedAtlasSlice(realPath) {
     pixelSizeUm,
     slicingPlane,
     roiMode: 'auto',
+    atlasVersion,
+    registrationMode,
+    apRangeStart: targetAp?.start ?? null,
+    apRangeEnd: targetAp?.end ?? null,
   });
 
   if (!r) {
     if (!atlasLabelEl.value) {
-      showToast('Auto-pick failed, cannot generate preview.', 'error', 5000);
+      showToast(t('toast.autoPickPreviewFailed'), 'error', 5000);
     }
     return !!atlasLabelEl.value;
   }
@@ -3056,8 +4415,12 @@ async function loadPreviewIntoCanvas(ts) {
         resolve(false);
         return;
       }
-      drawCanvas.width  = img.naturalWidth;
-      drawCanvas.height = img.naturalHeight;
+      // Constrain canvas to max display size (480px height) to prevent
+      // the overlay from blocking downstream UI elements (Step 4 button).
+      const MAX_DISPLAY_H = 480;
+      const scale = Math.min(1, MAX_DISPLAY_H / img.naturalHeight);
+      drawCanvas.width  = Math.round(img.naturalWidth * scale);
+      drawCanvas.height = Math.round(img.naturalHeight * scale);
       previewImgEl.src  = src;
       previewImgEl.classList.remove('hidden');
       previewImgEl.style.display = 'block';
@@ -3164,7 +4527,7 @@ async function applyLiquifyDrag(x1, y1, x2, y2) {
 
   const payload = buildOverlayRequestPayload();
   if (!payload.realPath) {
-    showToast('Please set Real Slice path first.', 'warning');
+    showToast(t('toast.setRealSliceFirst'), 'warning');
     return;
   }
   payload.x1 = Number(x1);
@@ -3212,7 +4575,7 @@ async function pollCalibrationLearnStatus() {
       calibLearnPollTimer = null;
     }
     if (s.ok === true) {
-      showToast('Auto-learning finished. Tuned params updated.', 'success', 5000);
+      showToast(t('toast.autoLearnDone'), 'success', 5000);
     } else {
       showToast(`Auto-learning failed: ${s.error || '?'}`, 'warning', 7000);
     }
@@ -3327,7 +4690,7 @@ document.getElementById('exportCanvasBtn').onclick = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `idlebrain_figure_${Date.now()}.png`;
+    a.download = `brainfast_figure_${Date.now()}.png`;
     a.click();
     URL.revokeObjectURL(url);
   }, 'image/png');
@@ -3337,7 +4700,7 @@ if (saveCalibLearnBtn) {
   saveCalibLearnBtn.onclick = async () => {
     const payload = buildOverlayRequestPayload();
     if (!payload.realPath) {
-      showToast('Please set Real Slice path first.', 'warning');
+      showToast(t('toast.setRealSliceFirst'), 'warning');
       return;
     }
     payload.autoLearn = autoLearnToggle ? !!autoLearnToggle.checked : true;
@@ -3363,7 +4726,7 @@ if (saveCalibLearnBtn) {
         showToast(`Sample library pruned: removed ${pruned}, kept ${kept}/${maxN}.`, 'info', 5000);
       }
       if (res.learningStarted) {
-        showToast('Auto-learning started in background.', 'info', 3000);
+        showToast(t('toast.autoLearnStarted'), 'info', 3000);
         if (calibLearnPollTimer) clearInterval(calibLearnPollTimer);
         calibLearnPollTimer = setInterval(pollCalibrationLearnStatus, 5000);
       }
@@ -3400,11 +4763,11 @@ async function refreshOverlayPreviewWithCanvas() {
       fitMode, alpha, mode, edgeSmoothIter: mode === 'fill' ? 2 : 1,
     };
     
-    let respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', payload, '🖼️ Generating Preview...');
+    let respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', payload, 'Generating Preview...');
     if (!respJson) {
       if (mode !== 'contour') {
         mode = 'contour'; modeEl.value = 'contour';
-        respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', { ...payload, mode: 'contour' }, '🖼️ Generating Preview (Fallback)...');
+        respJson = await _runWithProgress('/api/overlay/preview', '/api/overlay/preview/status', { ...payload, mode: 'contour' }, 'Generating Preview (Fallback)...');
         if (respJson && respJson.ok) { showToast(t('toast.fillModeFallback'), 'warning'); }
         else { showToast(t('toast.previewFailed'), 'error'); return; }
       } else { showToast(t('toast.previewFailed'), 'error'); return; }
@@ -3441,8 +4804,27 @@ async function runOneClickWorkflow() {
   const source = String(oneClickSourcePathEl?.value || '').trim();
   const scope = String(oneClickScopeEl?.value || 'single');
   if (!source) {
-    showToast('Please choose source TIFF first.', 'warning');
+    showToast(t('toast.chooseSourceFirst'), 'warning');
     return;
+  }
+
+  // Validate: reject folder paths (no .tif extension)
+  const srcLower = source.toLowerCase().replace(/\\/g, '/');
+  if (srcLower.endsWith('/') || srcLower.endsWith('\\') ||
+      (!srcLower.endsWith('.tif') && !srcLower.endsWith('.tiff') && !srcLower.endsWith('.nii.gz'))) {
+    showToast(t('toast.folderNotFile'), 'warning');
+    return;
+  }
+
+  // Auto-detect pixel size from filename (e.g. "z5um" → 5)
+  const pxMatch = source.match(/[_\-]z?(\d+(?:\.\d+)?)um/i);
+  if (pxMatch) {
+    const hintPx = parseFloat(pxMatch[1]);
+    const currentPxEl = document.getElementById('oneClickPixelSize');
+    const currentPx = parseFloat(currentPxEl?.value || '0');
+    if (currentPx > 0 && hintPx > 0 && (currentPx / hintPx > 2 || hintPx / currentPx > 2)) {
+      showToast(t('toast.pixelSizeMismatch', { hint: hintPx, current: currentPx }), 'warning', 8000);
+    }
   }
 
   document.getElementById('realSlicePath').value = source;
@@ -3453,12 +4835,15 @@ async function runOneClickWorkflow() {
   const zVisible = !!(zSlicerBox && !zSlicerBox.classList.contains('hidden'));
   if (scope === 'single' && zVisible && oneClickStartBtn?.dataset?.zConfirmed !== '1') {
     if (oneClickStartBtn) oneClickStartBtn.dataset.zConfirmed = '1';
-    zExtractStatus.textContent = 'Choose a Z layer below. Click "Extract This Slice" to continue immediately, or click Start again to use the selected Z.';
+    zExtractStatus.textContent = t('hint.zChoose');
     revealZSlicer();
-    showToast('3D detected. The Z selector is now shown below the Start button.', 'info', 6000);
+    showToast(t('toast.3dDetected'), 'info', 6000);
     return;
   }
   if (oneClickStartBtn) oneClickStartBtn.dataset.zConfirmed = '0';
+
+  // Show workflow step indicator — starting Step 1 (config)
+  updateWorkflowStepIndicator(1);
 
   try {
     const info = await fetch('/api/info').then(r => r.json());
@@ -3484,29 +4869,310 @@ async function runOneClickWorkflow() {
     if (alignEl) alignEl.value = 'nonlinear';
   }
 
+  // Apply hemisphere selection to flip atlas control.
+  const hemiEl = document.getElementById('oneClickHemisphere');
+  if (hemiEl && hemiEl.value !== 'auto') {
+    const flipEl = document.getElementById('flipAtlas');
+    if (flipEl) {
+      const hemiMap = { 'full': 'none', 'left': 'none', 'right_flipped': 'h' };
+      flipEl.value = hemiMap[hemiEl.value] || 'none';
+    }
+  }
+
+  // Step 2: Auto-pick atlas slice
+  updateWorkflowStepIndicator(2);
   const okAuto = await ensureAutoPickedAtlasSlice(source);
   if (!okAuto) {
-    showToast('Auto-pick failed. See the progress dialog for details.', 'error', 5000);
+    showToast(t('toast.autoPickFailed'), 'error', 5000);
     return;
   }
-  await refreshOverlayPreviewWithCanvas();
+  try { await refreshOverlayPreviewWithCanvas(); } catch (e) { console.warn('Pre-align preview skipped:', e); }
 
-  // Execute AI registration once.
+  // Step 3: AI registration
+  updateWorkflowStepIndicator(3);
   const aiAlignHandler = document.getElementById('aiAlignBtn')?.onclick;
+  let aiAlignOk = true;
   if (typeof aiAlignHandler === 'function') {
-    await aiAlignHandler();
+    try {
+      await aiAlignHandler();
+    } catch {
+      aiAlignOk = false;
+    }
+    // Check if the alignment produced a visible result image
+    const compareImg = document.getElementById('alignPreviewImg');
+    if (!compareImg?.src || compareImg.classList.contains('hidden')) {
+      aiAlignOk = false;
+    }
   }
 
-  // Enter manual review stage.
+  if (!aiAlignOk) {
+    // Refresh overlay preview so user sees the current state even if alignment failed.
+    try { await refreshOverlayPreviewWithCanvas(); } catch (e) { console.warn('Post-fail preview skipped:', e); }
+    // Collapse all steps except Step 3 so manual correction is the focus.
+    collapseAllStepsExcept('step3');
+    // Scroll to manual landmark section and activate it
+    const manualSection = document.getElementById('manualLandmarkSection');
+    if (manualSection) {
+      manualSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      manualSection.style.outline = '2px solid #f59e0b';
+      setTimeout(() => { manualSection.style.outline = ''; }, 5000);
+    }
+    if (manualModeBtn && !manualState.active) {
+      manualModeBtn.click();
+    }
+    loadManualImages();
+    showToast(t('toast.alignFailedManualHint'), 'warning', 8000);
+    return;
+  }
+
+  // Refresh overlay preview with post-alignment result before entering manual review.
+  try { await refreshOverlayPreviewWithCanvas(); } catch (e) { console.warn('Post-align preview skipped:', e); }
+
+  // Mark Step 3 done and advance to Step 4
+  updateWorkflowStepIndicator(4);
+
+  // Expand both Step 3 (manual review available) and Step 4 (run pipeline)
+  document.querySelectorAll('.step-card').forEach(card => {
+    if (card.id === 'step3' || card.id === 'step4') {
+      card.classList.remove('collapsed');
+    } else {
+      card.classList.add('collapsed');
+    }
+  });
+
+  // Activate manual mode so user can review/correct if needed
   if (manualModeBtn && !manualState.active) {
     manualModeBtn.click();
   }
-  showToast('One-click registration done. Entered manual review stage.', 'success', 5000);
+  loadManualImages();
+
+  // Scroll to Step 4 (Run Pipeline) so user sees the action button
+  const step4Card = document.getElementById('step4');
+  if (step4Card) {
+    step4Card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  showToast(t('toast.oneClickDone'), 'success', 5000);
 }
 
 if (oneClickStartBtn) {
   oneClickStartBtn.onclick = runOneClickWorkflow;
 }
+
+if (oneClickScopeEl) {
+  oneClickScopeEl.onchange = () => {
+    const hint = document.getElementById('oneClickScopeHint');
+    if (hint) {
+      hint.textContent = oneClickScopeEl.value === 'whole'
+        ? t('hint.scopeWhole')
+        : t('hint.scopeSingle');
+    }
+    // Toggle z-slicer visibility: show for single-slice when 3D stack is loaded
+    if (zSlicerBox) {
+      const has3D = zSlider && parseInt(zSlider.max, 10) > 0;
+      if (oneClickScopeEl.value === 'single' && has3D) {
+        revealZSlicer();
+      } else {
+        zSlicerBox.classList.add('hidden');
+      }
+    }
+  };
+}
+
+// Auto-persist One-Click settings to localStorage on change
+function _autoSaveOneClickSettings() {
+  const settings = {};
+  ['oneClickHemisphere', 'oneClickAtlasVersion', 'oneClickRegMode', 'oneClickScope'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) settings[id] = el.value;
+  });
+  // Also save target region selections (just IDs)
+  settings._targetRegionIds = _targetRegionState.selected.map(r => r.id);
+  localStorage.setItem('brainfast.oneclick', JSON.stringify(settings));
+}
+
+const oneClickHemiEl = document.getElementById('oneClickHemisphere');
+if (oneClickHemiEl) {
+  const hemiHintKeys = { 'auto': 'hint.hemiAuto', 'full': 'hint.hemiFull', 'left': 'hint.hemiLeft', 'right_flipped': 'hint.hemiRightFlipped' };
+  oneClickHemiEl.onchange = () => {
+    const hint = document.getElementById('oneClickHemiHint');
+    if (hint) hint.textContent = t(hemiHintKeys[oneClickHemiEl.value] || 'hint.hemiAuto');
+    _autoSaveOneClickSettings();
+  };
+}
+
+const oneClickAtlasVersionEl = document.getElementById('oneClickAtlasVersion');
+if (oneClickAtlasVersionEl) {
+  const atlasHintKeys = { 'ccfv3': 'hint.atlasCcfv3', 'ccfv3bbp': 'hint.atlasCcfv3bbp' };
+  oneClickAtlasVersionEl.onchange = () => {
+    const hint = document.getElementById('atlasVersionHint');
+    if (hint) hint.textContent = t(atlasHintKeys[oneClickAtlasVersionEl.value] || 'hint.atlasCcfv3');
+    // Auto-enable Nissl mode when CCFv3-BBP is selected
+    const regModeEl = document.getElementById('oneClickRegMode');
+    if (oneClickAtlasVersionEl.value === 'ccfv3bbp' && regModeEl) {
+      regModeEl.value = 'nissl_template';
+      regModeEl.dispatchEvent(new Event('change'));
+    }
+    _autoSaveOneClickSettings();
+  };
+}
+
+const oneClickRegModeEl = document.getElementById('oneClickRegMode');
+if (oneClickRegModeEl) {
+  const regHintKeys = { 'cross_modal': 'hint.regCrossModal', 'nissl_template': 'hint.regNissl' };
+  oneClickRegModeEl.onchange = () => {
+    const hint = document.getElementById('regModeHint');
+    if (hint) hint.textContent = t(regHintKeys[oneClickRegModeEl.value] || 'hint.regCrossModal');
+    // Warn if Nissl selected without CCFv3-BBP atlas
+    const atlasVerEl = document.getElementById('oneClickAtlasVersion');
+    if (oneClickRegModeEl.value === 'nissl_template' && atlasVerEl && atlasVerEl.value !== 'ccfv3bbp') {
+      showToast(t('hint.regNissl'), 'warning', 5000);
+    }
+    _autoSaveOneClickSettings();
+  };
+}
+
+// Also auto-save when scope changes
+if (oneClickScopeEl) {
+  const _origScopeChange = oneClickScopeEl.onchange;
+  oneClickScopeEl.onchange = () => { if (_origScopeChange) _origScopeChange(); _autoSaveOneClickSettings(); };
+}
+
+// --- Target Brain Region Selector with multi-select tags ---
+const _targetRegionState = { allRegions: [], selected: [], apRange: null };
+
+(async function initTargetRegionSelector() {
+  const searchEl = document.getElementById('targetRegionSearch');
+  const selectEl = document.getElementById('targetRegionSelect');
+  const clearBtn = document.getElementById('targetRegionClearBtn');
+  const tagsEl = document.getElementById('targetRegionTags');
+  const hintEl = document.getElementById('targetRegionHint');
+  if (!searchEl || !selectEl) return;
+
+  // Fetch region list
+  try {
+    const res = await fetch('/api/atlas/region-ap-ranges').then(r => r.json());
+    if (res.ok) _targetRegionState.allRegions = res.regions;
+  } catch (e) { console.warn('Failed to load region AP ranges:', e); }
+
+  function renderTags() {
+    tagsEl.innerHTML = '';
+    _targetRegionState.selected.forEach(r => {
+      const tag = document.createElement('span');
+      tag.style.cssText = 'display:inline-flex;align-items:center;gap:3px;background:#2a4a6a;color:#cde;padding:2px 8px;border-radius:12px;font-size:0.82em;';
+      tag.innerHTML = `${escapeHtml(r.acronym)} <span style="cursor:pointer;font-weight:bold;margin-left:2px;" title="Remove">&times;</span>`;
+      tag.querySelector('span').onclick = () => { removeRegion(r.id); };
+      tagsEl.appendChild(tag);
+    });
+    updateApRange();
+  }
+
+  function updateApRange() {
+    const sel = _targetRegionState.selected;
+    if (sel.length === 0) {
+      _targetRegionState.apRange = null;
+      if (hintEl) hintEl.textContent = t('hint.targetRegionNone');
+      return;
+    }
+    const apStart = Math.min(...sel.map(r => r.ap_start));
+    const apEnd = Math.max(...sel.map(r => r.ap_end));
+    _targetRegionState.apRange = { start: apStart, end: apEnd };
+    if (hintEl) hintEl.textContent = t('hint.targetRegionSelected', {
+      start: apStart, end: apEnd,
+      startMm: sel.reduce((m, r) => Math.min(m, r.ap_start_mm), 99).toFixed(1),
+      endMm: sel.reduce((m, r) => Math.max(m, r.ap_end_mm), -99).toFixed(1),
+    });
+  }
+
+  function addRegion(region) {
+    if (_targetRegionState.selected.find(r => r.id === region.id)) return;
+    _targetRegionState.selected.push(region);
+    searchEl.value = '';
+    selectEl.style.display = 'none';
+    renderTags();
+    _autoSaveOneClickSettings();
+  }
+
+  function removeRegion(id) {
+    _targetRegionState.selected = _targetRegionState.selected.filter(r => r.id !== id);
+    renderTags();
+    _autoSaveOneClickSettings();
+  }
+
+  searchEl.oninput = () => {
+    const q = searchEl.value.trim().toLowerCase();
+    if (q.length < 1) { selectEl.style.display = 'none'; return; }
+    const filtered = _targetRegionState.allRegions
+      .filter(r => r.acronym.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
+    // Sort: exact acronym > prefix acronym > prefix name > substring
+    filtered.sort((a, b) => {
+      const aAcr = a.acronym.toLowerCase(), bAcr = b.acronym.toLowerCase();
+      const aExact = aAcr === q ? 0 : 1, bExact = bAcr === q ? 0 : 1;
+      if (aExact !== bExact) return aExact - bExact;
+      const aPrefix = aAcr.startsWith(q) ? 0 : 1, bPrefix = bAcr.startsWith(q) ? 0 : 1;
+      if (aPrefix !== bPrefix) return aPrefix - bPrefix;
+      const aNPrefix = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+      const bNPrefix = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+      if (aNPrefix !== bNPrefix) return aNPrefix - bNPrefix;
+      return a.depth - b.depth;
+    });
+    const matches = filtered.slice(0, 30);
+    selectEl.innerHTML = '';
+    matches.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      const indent = '\u00A0'.repeat(Math.max(0, (r.depth - 2) * 2));
+      opt.textContent = `${indent}${r.acronym} — ${r.name} (AP ${r.ap_start}–${r.ap_end})`;
+      selectEl.appendChild(opt);
+    });
+    selectEl.style.display = matches.length > 0 ? '' : 'none';
+  };
+
+  selectEl.onchange = () => {
+    const id = Number(selectEl.value);
+    const region = _targetRegionState.allRegions.find(r => r.id === id);
+    if (region) addRegion(region);
+  };
+
+  // Also handle Enter key to select first match
+  searchEl.onkeydown = (e) => {
+    if (e.key === 'Enter' && selectEl.options.length > 0) {
+      e.preventDefault();
+      const id = Number(selectEl.options[0].value);
+      const region = _targetRegionState.allRegions.find(r => r.id === id);
+      if (region) addRegion(region);
+    }
+  };
+
+  if (clearBtn) clearBtn.onclick = () => {
+    _targetRegionState.selected = [];
+    searchEl.value = '';
+    selectEl.style.display = 'none';
+    renderTags();
+    _autoSaveOneClickSettings();
+  };
+
+  // Restore saved One-Click settings (hemisphere, atlas version, reg mode, target regions)
+  try {
+    const saved = JSON.parse(localStorage.getItem('brainfast.oneclick') || 'null');
+    if (saved) {
+      ['oneClickHemisphere', 'oneClickAtlasVersion', 'oneClickRegMode', 'oneClickScope'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && saved[id]) { el.value = saved[id]; el.dispatchEvent(new Event('change')); }
+      });
+      // Restore target regions by ID
+      if (saved._targetRegionIds && saved._targetRegionIds.length && _targetRegionState.allRegions.length) {
+        saved._targetRegionIds.forEach(id => {
+          const region = _targetRegionState.allRegions.find(r => r.id === id);
+          if (region) addRegion(region);
+        });
+      }
+    }
+  } catch (e) { console.warn('Failed to restore One-Click settings:', e); }
+})();
+
+// Expose target region AP range for autopick
+function getTargetApRange() { return _targetRegionState.apRange; }
 
 if (quickExportBtn) {
   quickExportBtn.onclick = async () => {
@@ -3551,16 +5217,42 @@ const manualAtlasImg    = document.getElementById('manualAtlasImg');
 const mrcCtx = manualRealCanvas.getContext('2d');
 const macCtx = manualAtlasCanvas.getContext('2d');
 
-function loadManualImages() {
+async function loadManualImages() {
   const rPath = document.getElementById('realSlicePath').value;
   const aPath = document.getElementById('atlasLabelPath').value;
   if (!rPath || !aPath) return;
-  // For real slice use the full normalized preview; for atlas the label overlay
+  // Ensure atlas-layer PNG exists (one-click workflow may not have generated it yet)
+  const jobId = getOverlayJobId();
+  const atlasUrl = withOverlayJobQuery('/api/outputs/atlas-layer', { ts: Date.now() });
+  const checkRes = await fetch(atlasUrl, { method: 'HEAD' }).catch(() => null);
+  if (!checkRes || !checkRes.ok) {
+    // Trigger atlas-layer render on the fly
+    try {
+      await fetch('/api/overlay/atlas-layer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId,
+          labelPath: aPath,
+          realPath: rPath,
+          structureCsv: document.getElementById('structPath')?.value || '',
+          pixelSizeUm: parseFloat(document.getElementById('pixelSizeUm')?.value) || 5,
+          fitMode: document.getElementById('fitMode')?.value || 'cover',
+        }),
+      });
+    } catch (e) { console.warn('atlas-layer render failed:', e); }
+  }
+  // Real slice: combined overlay preview; Atlas: atlas-only label layer
   manualRealImg.src = withOverlayJobQuery('/api/outputs/overlay-preview', { ts: Date.now() });
-  manualAtlasImg.src = withOverlayJobQuery('/api/outputs/overlay-preview', { ts: Date.now() });
+  manualAtlasImg.src = withOverlayJobQuery('/api/outputs/atlas-layer', { ts: Date.now() });
   manualRealImg.onload = () => {
     manualRealCanvas.width  = manualRealImg.naturalWidth;
     manualRealCanvas.height = manualRealImg.naturalHeight;
+    redrawManual();
+  };
+  manualAtlasImg.onload = () => {
+    manualAtlasCanvas.width  = manualAtlasImg.naturalWidth;
+    manualAtlasCanvas.height = manualAtlasImg.naturalHeight;
     redrawManual();
   };
 }
@@ -3680,16 +5372,17 @@ async function refreshFileList() {
     if (!res.ok || res.files.length === 0) { grid.innerHTML = ''; empty.classList.remove('hidden'); return; }
     empty.classList.add('hidden');
     grid.innerHTML = '';
-    const ICONS = { '.png': '🖼', '.tif': '🔬', '.tiff': '🔬', '.csv': '📊', '.json': '📋', '.txt': '📄' };
+    const ICONS = { '.png': 'image', '.tif': 'microscope', '.tiff': 'microscope', '.csv': 'table', '.json': 'braces', '.txt': 'file-text' };
     res.files.forEach(f => {
       const card = document.createElement('div');
       card.className = 'output-file-card';
-      const icon = ICONS[f.ext] || '📁';
+      const iconName = ICONS[f.ext] || 'folder';
       const sizeStr = f.size > 1024*1024 ? `${(f.size/1024/1024).toFixed(1)} MB` : `${(f.size/1024).toFixed(0)} KB`;
-      card.innerHTML = `<span class="file-icon">${icon}</span><span class="file-name" title="${f.name}">${f.name}</span><span class="file-size">${sizeStr}</span>`;
+      card.innerHTML = `<span class="file-icon"><i data-lucide="${iconName}"></i></span><span class="file-name" title="${f.name}">${f.name}</span><span class="file-size">${sizeStr}</span>`;
       card.onclick = () => handleOutputFileClick(f);
       grid.appendChild(card);
     });
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   } catch {}
 }
 
@@ -4077,6 +5770,188 @@ document.getElementById('refreshProjectsBtn')?.addEventListener('click', () => {
 
 document.getElementById('pixelSizeUm')?.addEventListener('input', function() {
   this.dataset.userModified = '1';
+  const warn = document.getElementById('pixelSizeWarning');
+  if (warn) warn.classList.add('hidden');
+});
+
+// ===================== Training Tab Logic =====================
+
+async function loadTrainingSet() {
+  try {
+    var res = await fetch('/api/cellpose/training-set');
+    var data = await res.json();
+    if (!data.ok) return;
+
+    document.getElementById('tsImageCount').textContent = data.stats.totalImages;
+    document.getElementById('tsCellCount').textContent = data.stats.totalCells;
+    document.getElementById('tsAvgCells').textContent = data.stats.avgCellsPerImage;
+    document.getElementById('tsReadiness').textContent = data.ready ? 'Ready' : 'Need more';
+    document.getElementById('tsReadiness').style.color = data.ready ? '#81C784' : '#e94560';
+
+    var listEl = document.getElementById('trainingSetList');
+    listEl.innerHTML = '';
+    for (var i = 0; i < data.samples.length; i++) {
+      var s = data.samples[i];
+      var card = document.createElement('div');
+      card.className = 'training-sample-card';
+      card.innerHTML = '<span class="ts-name">' + s.name + '</span>' +
+        '<span class="ts-cells">' + s.cellCount + ' cells</span>' +
+        '<button class="ts-delete" data-name="' + s.name + '" title="Remove">&times;</button>';
+      listEl.appendChild(card);
+    }
+
+    // Bind delete buttons
+    listEl.querySelectorAll('.ts-delete').forEach(function(btn) {
+      btn.onclick = async function() {
+        var name = this.getAttribute('data-name');
+        if (!confirm('Remove ' + name + ' from training set?')) return;
+        await fetch('/api/cellpose/training-set/' + encodeURIComponent(name), { method: 'DELETE' });
+        loadTrainingSet();
+      };
+    });
+  } catch (err) {
+    console.error('Failed to load training set:', err);
+  }
+}
+
+var _trainPollTimer = null;
+
+async function startTraining() {
+  var modelName = document.getElementById('trainModelName').value.trim();
+  var baseModel = document.getElementById('trainBaseModel').value;
+  var epochs = parseInt(document.getElementById('trainEpochs').value, 10) || 100;
+  var gpu = document.getElementById('trainGpu').checked;
+
+  if (!modelName) {
+    modelName = 'brainfast_' + Date.now();
+    document.getElementById('trainModelName').value = modelName;
+  }
+
+  try {
+    var res = await fetch('/api/cellpose/train', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseModel: baseModel, modelName: modelName, epochs: epochs, gpu: gpu }),
+    });
+    var data = await res.json();
+    if (!data.ok) {
+      showToast('Training failed: ' + data.error, 'error');
+      return;
+    }
+
+    showToast('Training started: ' + modelName, 'success');
+    document.getElementById('startTrainingBtn').disabled = true;
+    document.getElementById('cancelTrainingBtn').style.display = '';
+    document.getElementById('trainingProgressCard').style.display = '';
+    document.getElementById('trainingResultCard').style.display = 'none';
+
+    // Start polling
+    _trainPollTimer = setInterval(pollTrainingStatus, 2000);
+    pollTrainingStatus();
+  } catch (err) {
+    showToast('Training error: ' + err.message, 'error');
+  }
+}
+
+async function pollTrainingStatus() {
+  try {
+    var res = await fetch('/api/cellpose/train-status');
+    var data = await res.json();
+    if (!data.ok) return;
+
+    var pct = data.totalEpochs > 0 ? Math.round(data.epoch / data.totalEpochs * 100) : 0;
+    document.getElementById('trainProgressBar').style.width = pct + '%';
+    document.getElementById('trainEpochText').textContent = 'Epoch ' + data.epoch + ' / ' + data.totalEpochs;
+    document.getElementById('trainLossText').textContent = 'Loss: ' + (data.trainLoss != null ? data.trainLoss.toFixed(4) : '--');
+    document.getElementById('trainEtaText').textContent = 'ETA: ' + (data.estimatedTimeRemaining || '--');
+
+    if (data.status === 'completed') {
+      clearInterval(_trainPollTimer);
+      _trainPollTimer = null;
+      document.getElementById('startTrainingBtn').disabled = false;
+      document.getElementById('cancelTrainingBtn').style.display = 'none';
+      document.getElementById('trainingResultCard').style.display = '';
+
+      var summary = 'Model: <strong>' + data.modelName + '</strong><br>';
+      summary += 'Final train loss: ' + (data.trainLoss != null ? data.trainLoss.toFixed(4) : '--') + '<br>';
+      summary += 'Final test loss: ' + (data.testLoss != null ? data.testLoss.toFixed(4) : '--') + '<br>';
+      summary += 'Model path: ' + data.modelPath;
+      document.getElementById('trainResultSummary').innerHTML = summary;
+
+      showToast('Training completed: ' + data.modelName, 'success', 5000);
+
+      // Refresh model list in detection panel
+      if (typeof loadCellposeModels === 'function') loadCellposeModels();
+    } else if (data.status === 'failed') {
+      clearInterval(_trainPollTimer);
+      _trainPollTimer = null;
+      document.getElementById('startTrainingBtn').disabled = false;
+      document.getElementById('cancelTrainingBtn').style.display = 'none';
+
+      var msgEl = document.getElementById('trainStatusMsg');
+      msgEl.className = 'training-status-msg error';
+      msgEl.textContent = 'Training failed: ' + data.error;
+
+      showToast('Training failed: ' + data.error, 'error');
+    } else if (data.status === 'cancelled') {
+      clearInterval(_trainPollTimer);
+      _trainPollTimer = null;
+      document.getElementById('startTrainingBtn').disabled = false;
+      document.getElementById('cancelTrainingBtn').style.display = 'none';
+
+      var msgEl2 = document.getElementById('trainStatusMsg');
+      msgEl2.className = 'training-status-msg';
+      msgEl2.textContent = 'Training cancelled.';
+    }
+  } catch (err) {
+    console.error('Training poll error:', err);
+  }
+}
+
+async function cancelTraining() {
+  await fetch('/api/cellpose/train-cancel', { method: 'POST' });
+  showToast('Training cancelled', 'warning');
+}
+
+async function applyTrainedModel() {
+  try {
+    var res = await fetch('/api/cellpose/train-status');
+    var data = await res.json();
+    if (!data.modelName) {
+      showToast('No model to apply', 'warning');
+      return;
+    }
+
+    var res2 = await fetch('/api/cellpose/apply-model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modelName: data.modelName }),
+    });
+    var result = await res2.json();
+    if (result.ok) {
+      showToast('Model applied: ' + result.appliedModel, 'success', 4000);
+      if (typeof loadCellposeModels === 'function') loadCellposeModels();
+    } else {
+      showToast('Failed to apply model: ' + result.error, 'error');
+    }
+  } catch (err) {
+    showToast('Apply model error: ' + err.message, 'error');
+  }
+}
+
+// Bind training tab events
+document.getElementById('refreshTrainingSetBtn').addEventListener('click', loadTrainingSet);
+document.getElementById('startTrainingBtn').addEventListener('click', startTraining);
+document.getElementById('cancelTrainingBtn').addEventListener('click', cancelTraining);
+document.getElementById('applyModelBtn').addEventListener('click', applyTrainedModel);
+
+// Auto-load training set when tab is shown
+document.querySelectorAll('.nav-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    if (btn.getAttribute('data-tab') === 'training') {
+      loadTrainingSet();
+    }
+  });
 });
 
 // ================================================================

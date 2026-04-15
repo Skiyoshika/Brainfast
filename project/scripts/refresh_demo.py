@@ -21,10 +21,17 @@ import numpy as np
 import tifffile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scripts.paths import bootstrap_sys_path
+from scripts.paths import bootstrap_sys_path, ensure_runtime_cache_dirs
 
 PROJECT_ROOT = bootstrap_sys_path()
+ensure_runtime_cache_dirs(PROJECT_ROOT)
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
+RAW_DIR: Path | None = None
+
+try:
+    from scripts.asset_bootstrap import default_structure_source
+except Exception:
+    from asset_bootstrap import default_structure_source
 
 
 def _make_cell_chart():
@@ -139,7 +146,7 @@ def _make_best_slice(idx: int):
     reg_dir = OUTPUT_DIR / "registered_slices"
     ov_path = reg_dir / f"slice_{idx:04d}_overlay.png"
     lbl_path = reg_dir / f"slice_{idx:04d}_registered_label.tif"
-    raw_files = sorted((PROJECT_ROOT / "data" / "35_C0_demo").glob("*.tif"))
+    raw_files = sorted(RAW_DIR.glob("*.tif")) if RAW_DIR and RAW_DIR.exists() else []
     if not ov_path.exists():
         print(f"  [skip] slice_{idx:04d}_overlay.png not found.")
         return
@@ -214,7 +221,29 @@ def main():
         help="Slice index for best-slice image (default: auto-pick)",
     )
     ap.add_argument("--panel-n", type=int, default=12)
+    ap.add_argument(
+        "--outputs-dir",
+        type=str,
+        default="",
+        help="Output directory to refresh. Defaults to project outputs/.",
+    )
+    ap.add_argument(
+        "--raw-dir",
+        type=str,
+        default="",
+        help="Source raw TIFF directory for comparison/demo images.",
+    )
     args = ap.parse_args()
+
+    global OUTPUT_DIR, RAW_DIR
+    if args.outputs_dir:
+        OUTPUT_DIR = Path(args.outputs_dir).expanduser()
+        if not OUTPUT_DIR.is_absolute():
+            OUTPUT_DIR = (PROJECT_ROOT / OUTPUT_DIR).resolve()
+    if args.raw_dir:
+        RAW_DIR = Path(args.raw_dir).expanduser()
+        if not RAW_DIR.is_absolute():
+            RAW_DIR = (PROJECT_ROOT / RAW_DIR).resolve()
 
     reg_overlays = sorted((OUTPUT_DIR / "registered_slices").glob("slice_*_overlay.png"))
     total = len(reg_overlays)
@@ -233,7 +262,7 @@ def main():
         n_slices=args.panel_n,
         cols=4,
         thumb_size=380,
-        slice_dir=PROJECT_ROOT / "data" / "35_C0_demo",
+        slice_dir=RAW_DIR,
     )
     print(f"  demo_panel.jpg  ({args.panel_n} slices)")
 
@@ -258,12 +287,10 @@ def main():
     reg_dir = OUTPUT_DIR / "registered_slices"
     best_ov = reg_overlays[best_idx]
     best_lbl = reg_dir / best_ov.name.replace("_overlay.png", "_registered_label.tif")
-    raw_files = sorted((PROJECT_ROOT / "data" / "35_C0_demo").glob("*.tif"))
+    raw_files = sorted(RAW_DIR.glob("*.tif")) if RAW_DIR and RAW_DIR.exists() else []
     best_raw = raw_files[min(best_idx, len(raw_files) - 1)] if raw_files else None
-    structure_csv = PROJECT_ROOT / "configs" / "allen_mouse_structure_graph.csv"
-    if not structure_csv.exists():
-        structure_csv = PROJECT_ROOT / "outputs" / "registration" / "structure_tree.csv"
-    if best_lbl.exists() and structure_csv.exists():
+    structure_csv = default_structure_source(PROJECT_ROOT)
+    if best_lbl.exists() and structure_csv is not None and structure_csv.exists():
         from make_demo_panel import make_annotated_slice
 
         ann_out = OUTPUT_DIR / "demo_annotated_slice.jpg"

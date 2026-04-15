@@ -11,7 +11,13 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [2/3] Checking runtime...
+echo [2/4] Ensuring atlas assets...
+python ..\download_atlas.py --ensure
+if errorlevel 1 (
+  echo [WARN] Atlas bootstrap did not finish cleanly. Runtime check will report any missing assets.
+)
+
+echo [3/4] Checking runtime...
 python ..\scripts\check_env.py --config ..\configs\run_config.template.json
 if errorlevel 1 (
   echo [ERROR] Runtime check failed.
@@ -19,7 +25,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [3/3] Starting Brainfast desktop launcher...
+echo [4/4] Starting Brainfast desktop launcher...
 start "" pythonw desktop_app.py
 if errorlevel 1 (
   echo [WARN] pythonw launch failed, falling back to python.

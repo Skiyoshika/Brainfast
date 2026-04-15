@@ -5,7 +5,6 @@ from pathlib import Path
 import nibabel as nib
 import numpy as np
 from PIL import Image
-
 from scripts.make_registration_overview import make_registration_overview
 
 

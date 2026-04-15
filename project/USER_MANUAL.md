@@ -1,6 +1,6 @@
-﻿# IdleBrain (MVP) 用户使用说明书
+﻿# Brainfast (MVP) 用户使用说明书
 
-欢迎使用 IdleBrain 脑图谱细胞计数工具！这是一份专为初学者编写的指南，帮助您从零开始，轻松完成小鼠脑切片的细胞检测与图谱对齐。
+欢迎使用 Brainfast 脑图谱细胞计数工具！这是一份专为初学者编写的指南，帮助您从零开始，轻松完成小鼠脑切片的细胞检测与图谱对齐。
 
 ---
 
@@ -25,12 +25,12 @@
 您可以选择以下两种方式之一启动工具：
 
 **方式一：使用桌面快捷方式（推荐）**
-双击运行 `frontend/dist/IdleBrainUI.exe`。
+双击运行 `frontend/dist/BrainfastUI.exe`。
 
 **方式二：使用命令行（开发者模式）**
 打开终端（终端或命令提示符），输入以下命令：
 ```bash
-cd D:\IdleBrain\project\frontend
+cd D:\Brainfast\project\frontend
 python server.py
 ```
 然后，在浏览器中打开：`http://127.0.0.1:8787`

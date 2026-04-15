@@ -1,13 +1,40 @@
+"""Overlay rendering and label warping for Brainfast 2D atlas registration.
+
+Methods map for thesis/manuscript readers:
+
+1. Tissue detection and coarse shape estimation:
+   `_detect_tissue`, `_atlas_bbox`, and `_align_shape_physical` estimate the
+   dominant tissue mask and align atlas/real-slice physical scale.
+2. Coarse-to-fine label warping:
+   `_similarity_warp`, `_optimize_warp`, `_tissue_guided_warp`,
+   `_refine_warp_*`, `_silhouette_conform_warp`, and `_contour_conform_warp`
+   generate candidate deformations and select the best-fitting label warp.
+3. Label topology cleanup:
+   `_cleanup_label_topology`, `_smooth_label_edges`,
+   `_gaussian_vote_boundary_smooth`, and related helpers remove small islands,
+   fill small voids, and smooth label boundaries after warping.
+4. Quantitative QC and output rendering:
+   `_alignment_quality`, `_coverage_stats`, `draw_region_labels`, and
+   `render_overlay` compute registration diagnostics and produce the final
+   overlay/registered-label outputs consumed by the UI and the counting
+   pipeline.
+
+The public entry point used by the frontend and the 2D pipeline is
+`render_overlay()`.
+"""
+
 from __future__ import annotations
 
 import time
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 from scipy.interpolate import Rbf
 from scipy.ndimage import distance_transform_edt, gaussian_filter, laplace, map_coordinates
 from scripts.image_utils import alpha_blend
 from scripts.image_utils import norm_u8_robust as _norm_u8_robust
+from scripts.logging_setup import get_logger
 from scripts.overlay_assets import colorize_label, load_structure_tree
 from scripts.overlay_postprocess import finalize_registered_label
 from scripts.slice_select import select_label_slice_2d, select_real_slice_2d
@@ -19,6 +46,15 @@ from skimage.segmentation import find_boundaries
 from skimage.transform import SimilarityTransform, rescale, resize, rotate
 from skimage.transform import warp as skwarp
 from tifffile import imread, imwrite
+
+log = get_logger(__name__)
+
+
+def _save_true_png(path: Path, image: np.ndarray) -> None:
+    arr = np.asarray(image)
+    if arr.dtype != np.uint8:
+        arr = np.clip(arr, 0, 255).astype(np.uint8)
+    Image.fromarray(arr).save(str(path), format="PNG")
 
 
 def _load_structure_tree() -> dict:
@@ -390,6 +426,118 @@ def _load_nissl_slice(atlas_z: int) -> np.ndarray | None:
     else:
         slc = np.zeros_like(slc)
     return slc
+
+
+# ── Nissl template volume cache (for nissl_template registration mode) ───────
+
+_NISSL_TEMPLATE_VOL_CACHE: dict[str, np.ndarray] = {}
+
+
+def _load_nissl_template_volume(nissl_volume_path: str) -> np.ndarray:
+    """Load and cache a 3D Nissl template volume (.nrrd or .nii.gz).
+
+    The volume is expected to be in CCFv3 space with axis order (AP, DV, ML).
+    Cached after first load since the volume is ~1GB.
+    """
+    if nissl_volume_path in _NISSL_TEMPLATE_VOL_CACHE:
+        return _NISSL_TEMPLATE_VOL_CACHE[nissl_volume_path]
+
+    p = Path(nissl_volume_path)
+    suffix = "".join(p.suffixes).lower()
+    log.info("Loading Nissl template volume: %s (%.1f MB)", p.name, p.stat().st_size / 1e6)
+
+    if suffix in (".nrrd",):
+        import nrrd
+
+        data, _ = nrrd.read(str(p))
+    elif suffix in (".nii.gz", ".nii"):
+        import nibabel as nib
+
+        nii = nib.load(str(p))
+        data = np.asarray(nii.dataobj)
+    else:
+        raise ValueError(f"Unsupported Nissl template format: {suffix}. Expected .nrrd or .nii.gz")
+
+    vol = data.astype(np.float32)
+    _NISSL_TEMPLATE_VOL_CACHE[nissl_volume_path] = vol
+    log.info(
+        "Nissl template volume loaded: shape=%s, dtype=%s",
+        vol.shape,
+        vol.dtype,
+    )
+    return vol
+
+
+def load_nissl_template_slice(
+    nissl_volume_path: str | Path,
+    z_index: int,
+) -> np.ndarray:
+    """Load a single coronal slice from a 3D Nissl template volume.
+
+    Parameters
+    ----------
+    nissl_volume_path : str or Path
+        Path to a 3D Nissl volume file (.nrrd or .nii.gz).
+        The CCFv3 734-brain averaged Nissl at 25um is the expected input.
+    z_index : int
+        AP (anterior-posterior) slice index into the volume.
+
+    Returns
+    -------
+    np.ndarray
+        uint8 normalized 2D coronal slice (DV x ML), suitable for
+        near-single-modality feature matching against fluorescence images.
+    """
+    vol_path = str(Path(nissl_volume_path).resolve())
+    vol = _load_nissl_template_volume(vol_path)
+    az = int(np.clip(z_index, 0, vol.shape[0] - 1))
+    slc = vol[az].astype(np.float32)
+    # Robust percentile normalization to uint8
+    lo, hi = float(np.percentile(slc, 1)), float(np.percentile(slc, 99))
+    if hi > lo:
+        slc = np.clip((slc - lo) / (hi - lo), 0.0, 1.0)
+    else:
+        slc = np.zeros_like(slc)
+    return (slc * 255.0).astype(np.uint8)
+
+
+def _place_nissl_template_in_image_space(
+    nissl_u8: np.ndarray,
+    total_scale: float,
+    angle_rad: float,
+    dx: float,
+    dy: float,
+    out_shape: tuple[int, int],
+    hemisphere: str = "full",
+) -> np.ndarray:
+    """Place a Nissl template slice into real-image coordinates.
+
+    Applies the same affine transform (scale, rotation, translation) that was
+    computed for the annotation label, so the Nissl template is pixel-aligned
+    with the warped label. Hemisphere cropping mirrors the label hemisphere logic.
+
+    Returns float32 [0,1] placed image.
+    """
+    gray = nissl_u8.astype(np.float32) / 255.0
+    vw = gray.shape[1]
+    if hemisphere in ("right", "right_flipped"):
+        gray = gray[:, vw // 2 :]
+    elif hemisphere == "left":
+        gray = gray[:, : vw // 2]
+    if hemisphere == "right_flipped":
+        gray = np.fliplr(gray)
+
+    fwd = SimilarityTransform(scale=total_scale, rotation=angle_rad, translation=(dx, dy))
+    placed = skwarp(
+        gray,
+        fwd.inverse,
+        output_shape=out_shape,
+        order=1,
+        preserve_range=True,
+        mode="constant",
+        cval=0.0,
+    ).astype(np.float32)
+    return placed
 
 
 def _load_placed_allen_ref(
@@ -1480,6 +1628,14 @@ def _refine_warp_ants_candidate(
         return label, {"ok": False, "reason": "ants_disabled"}
 
     try:
+        # Patch matplotlib compatibility for ANTsPy (matplotlib >=3.10)
+        try:
+            import matplotlib._docstring as _mpl_ds
+
+            if not hasattr(_mpl_ds, "dedent_interpd"):
+                _mpl_ds.dedent_interpd = lambda func: func
+        except Exception:
+            pass
         import ants  # type: ignore
     except Exception as e:
         return label, {"ok": False, "reason": f"ants_unavailable: {e}"}
@@ -3275,7 +3431,21 @@ def render_overlay(
     warp_params: dict | None = None,
     prewarped_label: bool = False,
     display_gamma: float = 1.0,
+    registration_mode: str = "cross_modal",
+    nissl_template_path: str | Path | None = None,
 ):
+    """Render atlas overlay on a real brain slice.
+
+    Parameters
+    ----------
+    registration_mode : str
+        "cross_modal" (default) — current behavior: match fluorescence vs annotation edges.
+        "nissl_template" — use Nissl template as matching reference for near-single-modality
+        registration. Requires *nissl_template_path* and *label_z_index*.
+    nissl_template_path : str or Path or None
+        Path to a 3D Nissl template volume (.nrrd or .nii.gz). Required when
+        registration_mode="nissl_template". The CCFv3 25um averaged Nissl is expected.
+    """
     render_t0 = time.perf_counter()
     timings_ms: dict[str, float | dict[str, float]] = {}
 
@@ -3311,14 +3481,24 @@ def render_overlay(
     if bool(prewarped_label):
         # Manual-calibration path: label is already in real-image coordinates.
         if label.shape != real.shape:
-            label = resize(
-                label.astype(np.float32),
-                real.shape,
-                order=0,
-                preserve_range=True,
-                anti_aliasing=False,
-            ).astype(np.int32)
-        tm = _detect_tissue(real).get("mask", None)
+            # Use scipy.ndimage.zoom (order=0) instead of skimage.resize to
+            # preserve int32 region IDs exactly (float32 truncates IDs > ~16M).
+            from scipy.ndimage import zoom as _zoom_label
+
+            _zf = (real.shape[0] / label.shape[0], real.shape[1] / label.shape[1])
+            label = _zoom_label(label.astype(np.int32), _zf, order=0).astype(np.int32)
+            # Crop/pad to exact target shape (zoom may differ by ±1 pixel)
+            if label.shape != real.shape:
+                _tmp = np.zeros(real.shape, dtype=np.int32)
+                _h = min(label.shape[0], real.shape[0])
+                _w = min(label.shape[1], real.shape[1])
+                _tmp[:_h, :_w] = label[:_h, :_w]
+                label = _tmp
+        _td = _detect_tissue(real)
+        tm = _td.get("mask", None)
+        # Zero out labels outside tissue so atlas never overflows the brain.
+        if tm is not None and tm.shape == label.shape:
+            label = label * tm.astype(np.int32)
         warp_meta = {
             "method": "manual_prewarped_label",
             "is_half_brain": None,
@@ -3378,6 +3558,80 @@ def render_overlay(
                         "time_ms": float((time.perf_counter() - t0_sitk) * 1000),
                     }
             warp_meta["sitk_refine"] = _sitk_meta
+
+        # ── Nissl template registration mode ────────────────────────────────────
+        # When registration_mode="nissl_template", use the Nissl template slice
+        # as the matching reference for near-single-modality nonlinear registration.
+        # The linear placement (above) gives a coarse alignment; we then refine
+        # using intensity-based registration between Nissl template and fluorescence,
+        # which share similar grayscale tissue appearance (near-single-modality).
+        if (
+            registration_mode == "nissl_template"
+            and nissl_template_path is not None
+            and label_z_index is not None
+        ):
+            t0_nissl = time.perf_counter()
+            _nissl_meta: dict = {"applied": False}
+            try:
+                nissl_u8 = load_nissl_template_slice(nissl_template_path, int(label_z_index))
+                _total_scale = float(warp_meta.get("total_scale", 1.0))
+                _angle_rad = float(np.deg2rad(warp_meta.get("angle_deg", 0.0)))
+                _tx, _ty = warp_meta.get("translation", [0.0, 0.0])
+                _hemi = str(warp_meta.get("hemisphere_chosen", "full"))
+                placed_nissl = _place_nissl_template_in_image_space(
+                    nissl_u8,
+                    total_scale=_total_scale,
+                    angle_rad=_angle_rad,
+                    dx=float(_tx),
+                    dy=float(_ty),
+                    out_shape=(real.shape[0], real.shape[1]),
+                    hemisphere=_hemi,
+                )
+                if placed_nissl is not None and placed_nissl.max() > 0.01:
+                    real_u8_for_nissl = _norm_u8_robust(real)
+                    # Use SITK B-spline registration: Nissl (moving) → fluorescence (fixed)
+                    _nissl_flow = _sitk_nonlinear_register(
+                        placed_ref=placed_nissl,
+                        real_u8=real_u8_for_nissl,
+                        tissue_mask=warp_meta.get("tissue_mask"),
+                        max_dim=int(_warp_param(warp_params, "nissl_sitk_max_dim", 512)),
+                        mi_bins=int(_warp_param(warp_params, "nissl_sitk_mi_bins", 32)),
+                        max_iter=int(_warp_param(warp_params, "nissl_sitk_max_iter", 100)),
+                        mesh_size=int(_warp_param(warp_params, "nissl_sitk_mesh_size", 8)),
+                        max_disp_frac=float(
+                            _warp_param(warp_params, "nissl_sitk_max_disp_frac", 0.15)
+                        ),
+                    )
+                    if _nissl_flow is not None:
+                        label = _warp_label_with_flow(label, _nissl_flow[0], _nissl_flow[1])
+                        _nissl_meta = {
+                            "applied": True,
+                            "mode": "nissl_template",
+                            "nissl_volume": str(nissl_template_path),
+                            "z_index": int(label_z_index),
+                            "time_ms": float((time.perf_counter() - t0_nissl) * 1000),
+                        }
+                        log.info(
+                            "Nissl template registration applied: z=%d, time=%.0fms",
+                            int(label_z_index),
+                            _nissl_meta["time_ms"],
+                        )
+                    else:
+                        _nissl_meta["reason"] = "sitk_returned_no_flow"
+                        log.warning(
+                            "Nissl template registration: SITK returned no flow for z=%d",
+                            int(label_z_index),
+                        )
+                else:
+                    _nissl_meta["reason"] = "placed_nissl_too_dark"
+                    log.warning(
+                        "Nissl template registration: placed template too dark for z=%d",
+                        int(label_z_index),
+                    )
+            except Exception as exc:
+                _nissl_meta = {"applied": False, "reason": f"error: {exc}"}
+                log.warning("Nissl template registration failed: %s", exc)
+            warp_meta["nissl_template_refine"] = _nissl_meta
 
     timings_ms["registration"] = float((time.perf_counter() - t0) * 1000.0)
 
@@ -3504,7 +3758,7 @@ def render_overlay(
 
     t0 = time.perf_counter()
     out_png.parent.mkdir(parents=True, exist_ok=True)
-    imwrite(str(out_png), overlay)
+    _save_true_png(out_png, overlay)
 
     if warped_label_out is not None:
         warped_label_out.parent.mkdir(parents=True, exist_ok=True)

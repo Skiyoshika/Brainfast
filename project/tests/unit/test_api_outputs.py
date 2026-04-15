@@ -58,7 +58,7 @@ def _make_registration_run(root: Path, name: str) -> Path:
 def test_registration_runs_api_lists_registration_reports(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path)
 
-    run_dir = _make_registration_run(tmp_path, "demo_run")
+    _make_registration_run(tmp_path, "demo_run")
 
     with app.test_client() as client:
         resp = client.get("/api/outputs/registration-runs")

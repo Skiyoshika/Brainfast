@@ -5,9 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Brainfast — Brain Atlas Registration</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23181a1f'/%3E%3Cpath d='M22 14c-7 0-12 6-12 14 0 7 4 12 9 14 1 8 7 14 15 14 8 0 14-6 15-14 5-2 9-7 9-14 0-8-5-14-12-14-4 0-7 1-10 4-3-3-6-4-10-4Z' fill='%234c72f5'/%3E%3Cpath d='M32 18v28' stroke='%23181a1f' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <!-- Google Fonts: Fira Sans + Fira Code -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@0.453.0/dist/umd/lucide.min.js"></script>
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./mask-editor.css" />
 </head>
 <body>
+
+<a href="#tab-workflow" class="skip-link">Skip to main content</a>
 
 <!-- ===== TOAST notifications ===== -->
 <div id="toastContainer" class="toast-container"></div>
@@ -26,23 +35,23 @@
     <button class="modal-close-btn" id="guideModalClose" type="button" aria-label="Close guide">&times;</button>
     <h2 data-i18n="guide.title">📖 Getting Started Guide</h2>
     <ol>
-      <li data-i18n="guide.step1"><strong>Step 1 →?Configure Paths:</strong> Click "Browse" to select your TIFF folder, Atlas annotation file, and brain region CSV. Fields marked "Required" must be filled in.</li>
-      <li data-i18n="guide.step2"><strong>Step 2 →?Preview Atlas:</strong> Set the slicing plane (usually Coronal), pixel size (default 0.65 µm), click "Auto-pick Atlas Slice", then "Refresh Preview" to check the initial overlay.</li>
-      <li data-i18n="guide.step3"><strong>Step 3 →?AI Registration:</strong> Choose the mode (Affine for small deformation; Nonlinear for tears/large warping), then click "AI Landmark Registration". Check the quality panel to confirm SSIM improved.</li>
-      <li data-i18n="guide.step4"><strong>Step 4 →?Run Pipeline:</strong> Select the fluorescence channel, then click "Run Pipeline". After completion, switch to the "Results" tab to view per-region cell counts.</li>
+      <li data-i18n="guide.step1"><strong>Step 1 → Configure Paths:</strong> Click "Browse" to select your TIFF folder, Atlas annotation file, and brain region CSV. Fields marked "Required" must be filled in.</li>
+      <li data-i18n="guide.step2"><strong>Step 2 → Preview Atlas:</strong> Set the slicing plane (usually Coronal), pixel size (default 0.65 µm), click "Auto-pick Atlas Slice", then "Refresh Preview" to check the initial overlay.</li>
+      <li data-i18n="guide.step3"><strong>Step 3 → AI Registration:</strong> Choose the mode (Affine for small deformation; Nonlinear for tears/large warping), then click "AI Landmark Registration". Check the quality panel to confirm SSIM improved.</li>
+      <li data-i18n="guide.step4"><strong>Step 4 → Run Pipeline:</strong> Select the fluorescence channel, then click "Run Pipeline". After completion, switch to the "Results" tab to view per-region cell counts.</li>
       <li data-i18n="guide.step5"><strong>Export:</strong> In the Results tab, click "Export CSV" for data. Click "Export Methods Text" to get a pre-written Methods paragraph you can paste directly into your paper.</li>
     </ol>
     <p class="guide-tip" data-i18n="guide.tip">💡 Tip: All run parameters are automatically saved to outputs/run_params_YYYYMMDD_HHMMSS.json for reproducibility.</p>
     <div class="modal-footer">
-      <button class="btn-primary" id="guideModalOk" data-i18n="guide.ok">Got it →?Start Using</button>
+      <button class="btn-primary" id="guideModalOk" data-i18n="guide.ok">Got it → Start Using</button>
     </div>
   </div>
 </div>
 
 <!-- ===== Auto-pick Progress Modal ===== -->
 <div id="autopickModal" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:480px;">
-    <h2 style="margin-bottom:14px;font-size:16px;">🎯 Auto-picking Atlas Slice</h2>
+  <div class="modal-box modal-sm">
+    <h2 style="margin-bottom:14px;font-size:16px;"><i data-lucide="crosshair" class="icon-inline"></i> Auto-picking Atlas Slice</h2>
     <div id="autopickProgressMsg" style="font-size:13px;color:var(--text-muted);margin-bottom:10px;min-height:18px;">Initializing...</div>
     <div style="background:var(--border,#2a2d36);border-radius:6px;overflow:hidden;height:10px;">
       <div id="autopickBarFill" style="height:100%;width:0%;background:var(--accent,#4c72f5);transition:width 0.4s ease;border-radius:6px;"></div>
@@ -69,7 +78,7 @@
     <p id="methodsModalDesc" style="font-size:12.5px;color:var(--text-muted);margin-bottom:6px;" data-i18n="methods.desc">The following text is auto-generated from your most recent run parameters. Edit as needed before pasting into your Methods section.</p>
     <pre id="methodsText" class="methods-pre" data-i18n="methods.loading">Loading...</pre>
     <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;">
-      <button class="btn-secondary" id="methodsCopyBtn" data-i18n="btn.copy">📋 Copy to Clipboard</button>
+      <button class="btn-secondary" id="methodsCopyBtn" data-i18n="btn.copy"><i data-lucide="clipboard-copy" class="btn-icon"></i> Copy to Clipboard</button>
       <button class="btn-primary"   id="methodsModalClose2" data-i18n="btn.close">Close</button>
     </div>
   </div>
@@ -96,21 +105,29 @@
   <!-- ===== Sidebar ===== -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <span class="logo-icon">🧠</span>
+      <span class="logo-icon"><i data-lucide="brain"></i></span>
       <span class="logo-text">Brainfast</span>
     </div>
     <nav class="sidebar-nav">
       <button class="nav-btn active" data-tab="workflow">
-        <span class="nav-icon">⚙️</span>
+        <span class="nav-icon"><i data-lucide="settings"></i></span>
         <span data-i18n="nav.workflow">Registration Workflow</span>
       </button>
+      <button class="nav-btn" data-tab="manual-tiff">
+        <span class="nav-icon"><i data-lucide="microscope"></i></span>
+        <span data-i18n="nav.manualTiff">Manual TIFF Check</span>
+      </button>
       <button class="nav-btn" data-tab="qc">
-        <span class="nav-icon">🔍</span>
+        <span class="nav-icon"><i data-lucide="scan-eye"></i></span>
         <span data-i18n="nav.qc">Batch QC Review</span>
       </button>
       <button class="nav-btn" data-tab="results">
-        <span class="nav-icon">📊</span>
+        <span class="nav-icon"><i data-lucide="bar-chart-3"></i></span>
         <span data-i18n="nav.results">Results</span>
+      </button>
+      <button class="nav-btn" data-tab="training">
+        <span class="nav-icon"><i data-lucide="graduation-cap"></i></span>
+        <span data-i18n="nav.training">Model Training</span>
       </button>
       <button class="nav-btn" data-tab="projects">
         <span class="nav-icon">📁</span>
@@ -160,8 +177,17 @@
     <div class="tab-content active" id="tab-workflow">
       <header class="topbar">
         <h1 data-i18n="nav.workflow">Registration Workflow</h1>
+        <div id="workflowStepIndicator" class="workflow-step-indicator hidden">
+          <span class="wsi-step" data-step="1">1 Config</span>
+          <span class="wsi-arrow">→</span>
+          <span class="wsi-step" data-step="2">2 Atlas</span>
+          <span class="wsi-arrow">→</span>
+          <span class="wsi-step" data-step="3">3 Register</span>
+          <span class="wsi-arrow">→</span>
+          <span class="wsi-step" data-step="4">4 Pipeline</span>
+        </div>
         <div class="topbar-actions">
-          <button id="guideBtn" class="btn-ghost" data-i18n="btn.guide">📖 Guide</button>
+          <button id="guideBtn" class="btn-ghost" data-i18n="btn.guide"><i data-lucide="book-open" class="btn-icon"></i> Guide</button>
         </div>
       </header>
 
@@ -178,31 +204,80 @@
         <div class="workflow-mode-panel">
           <div class="grid-3">
             <label class="field-label">
-              <span>Workflow Mode / 流程模式</span>
+              <span data-i18n="label.workflowMode">Workflow Mode</span>
               <select id="workflowMode">
-                <option value="oneclick" selected>One-Click Mode (Recommended)</option>
-                <option value="pro">Professional Mode</option>
+                <option value="oneclick" selected data-i18n="opt.modeOneClick">One-Click Mode (Recommended)</option>
+                <option value="pro" data-i18n="opt.modePro">Professional Mode</option>
               </select>
             </label>
-            <label class="field-label">
-              <span>One-Click Source TIFF</span>
+            <label class="field-label" style="grid-column:1/-1">
+              <span data-i18n="label.sourceFile">One-Click Source TIFF</span>
               <div class="input-browse">
-                <input id="oneClickSourcePath" placeholder="D:\...\sample.tif" />
+                <input id="oneClickSourcePath" placeholder="Select or type path to .tif file..." />
                 <button class="btn-browse" data-target="oneClickSourcePath" data-type="file" data-filetypes="tif,tiff" data-i18n="btn.browse">Browse</button>
               </div>
+              <span class="field-hint" data-i18n="hint.channelGuide">For multi-channel data: load the reporter channel (C0) for registration. After registration, use Step 4 to process each channel separately.</span>
             </label>
             <label class="field-label">
-              <span>Registration Scope / 配准范围</span>
+              <span data-i18n="label.regScope">Registration Scope</span>
               <select id="oneClickScope">
-                <option value="single" selected>Single-layer Registration (single-slice)</option>
-                <option value="whole">Whole-brain Registration (full workflow)</option>
+                <option value="single" selected data-i18n="opt.scopeSingle">Single-layer Registration (single-slice)</option>
+                <option value="whole" data-i18n="opt.scopeWhole">Whole-brain Registration (full workflow)</option>
               </select>
-              <span class="field-hint">Single-layer mode will include Z-layer selection for 3D TIFF.</span>
+              <span class="field-hint" id="oneClickScopeHint" data-i18n="hint.scopeSingle">Single-layer mode will include Z-layer selection for 3D TIFF.</span>
+            </label>
+            <label class="field-label">
+              <span data-i18n="label.hemisphere">Hemisphere</span>
+              <select id="oneClickHemisphere">
+                <option value="auto" data-i18n="opt.hemiAuto">Auto-detect (recommended)</option>
+                <option value="full" data-i18n="opt.hemiFull">Full brain (both hemispheres)</option>
+                <option value="left" data-i18n="opt.hemiLeft">Left hemisphere</option>
+                <option value="right_flipped" data-i18n="opt.hemiRightFlipped">Right hemisphere (flipped, lateral=left)</option>
+              </select>
+              <span class="field-hint" id="oneClickHemiHint" data-i18n="hint.hemiAuto">Auto-detect tries all orientations and picks the best match.</span>
+            </label>
+            <label class="field-label">
+              <span data-i18n="label.atlasVersion">Atlas Version</span>
+              <select id="oneClickAtlasVersion">
+                <option value="ccfv3" data-i18n="opt.atlasCcfv3">CCFv3 (Allen 2017)</option>
+                <option value="ccfv3bbp" data-i18n="opt.atlasCcfv3bbp">CCFv3-BBP (Extended)</option>
+              </select>
+              <span class="field-hint" id="atlasVersionHint" data-i18n="hint.atlasCcfv3">Standard Allen Mouse Brain CCFv3, 25µm resolution</span>
+            </label>
+            <label class="field-label">
+              <span data-i18n="label.regMode">Registration Mode</span>
+              <select id="oneClickRegMode">
+                <option value="cross_modal" data-i18n="opt.regCrossModal">Cross-Modal (Default)</option>
+                <option value="nissl_template" data-i18n="opt.regNissl">Nissl Template (Single-Modal)</option>
+              </select>
+              <span class="field-hint" id="regModeHint" data-i18n="hint.regCrossModal">Matches fluorescence edges against atlas annotation edges</span>
+            </label>
+            <label class="field-label">
+              <span data-i18n="label.targetRegion">Target Brain Region</span>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input id="targetRegionSearch" type="text" class="form-control" style="flex:1;"
+                       placeholder="Search: STN, CP, Thalamus..." autocomplete="off" />
+                <button id="targetRegionClearBtn" type="button" class="btn-secondary" style="padding:4px 10px;font-size:0.85em;" title="Clear selection">✕</button>
+              </div>
+              <select id="targetRegionSelect" size="6" class="form-control" style="display:none;max-height:180px;overflow-y:auto;font-size:0.85em;"></select>
+              <input type="hidden" id="targetRegionId" value="" />
+              <span class="field-hint" id="targetRegionHint" data-i18n="hint.targetRegion">Select a target region to restrict AP search range (e.g., STN + CP for ChAT)</span>
+              <div id="targetRegionTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;"></div>
             </label>
           </div>
+          <div id="oneClickPixelSizeRow" class="hidden" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:8px 12px;margin-bottom:0.3rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="color:#f59e0b;font-weight:600;font-size:0.85em;" data-i18n="label.pixelSizeQuick">Pixel size not auto-detected:</span>
+            <input id="oneClickPixelSize" type="number" min="0.1" max="100" step="0.1" value="5" style="width:70px;padding:3px 6px;border-radius:4px;border:1px solid #555;background:#1a1a2e;color:#fff;" />
+            <span style="font-size:0.85em;color:#aaa;">µm/px</span>
+            <span class="field-hint" style="font-size:0.8em;color:#aaa;" data-i18n="hint.pixelSizeQuick">(Cleared tissue: ~5 µm, thin sections: ~0.65 µm)</span>
+          </div>
           <div class="actions-row">
-            <button id="oneClickStartBtn" class="btn-primary">Start One-Click Workflow</button>
-            <span class="field-hint">Flow: auto-pick atlas → auto registration → manual review / liquify → export.</span>
+            <button id="oneClickStartBtn" class="btn-primary" data-i18n="btn.oneClickStart">Start One-Click Workflow</button>
+            <span class="field-hint" data-i18n="hint.oneClickFlow">Flow: auto-pick atlas → auto registration → manual review / liquify → export.</span>
+          </div>
+          <div id="oneClickPreviewBox" class="hidden" style="margin-top:0.5rem;text-align:center;">
+            <img id="oneClickPreviewImg" style="max-height:180px;max-width:100%;border-radius:6px;border:1px solid #333;" alt="TIFF preview" />
+            <div id="oneClickPreviewInfo" class="field-hint" style="margin-top:0.3rem;"></div>
           </div>
           <div id="zSlicerBox" class="z-slicer-box hidden">
             <span class="z-slicer-label" id="zSlicerLabel">3D stack detected -> Z: <strong id="zValDisplay">0</strong> / <span id="zMaxDisplay">0</span></span>
@@ -223,6 +298,17 @@
               <button class="btn-browse" data-target="inputDir" data-type="folder" data-i18n="btn.browse">Browse</button>
             </div>
             <span id="inputDirError" class="field-error hidden"></span>
+          </label>
+          <label class="field-label">
+            <span data-i18n="label.configPath">Run Config JSON (optional, defaults to template)</span>
+            <div class="input-browse">
+              <input id="configPath" placeholder="(default: run_config.template.json)" />
+              <button class="btn-browse" data-target="configPath" data-type="file" data-filetypes="json" data-i18n="btn.browse">Browse</button>
+            </div>
+          </label>
+          <label class="field-label">
+            <span data-i18n="label.runName">Output Run Name <em style="font-weight:normal;color:#888">(defaults to input folder name)</em></span>
+            <input id="runName" placeholder="e.g. 35_C0_full" />
           </label>
           <label class="field-label">
             <span data-i18n="label.outputDir">Output Folder</span>
@@ -264,8 +350,8 @@
         </div>
 
         <div class="actions-row pro-only">
-          <button id="savePreset" class="btn-secondary" data-i18n="btn.savePreset">💾 Save Config</button>
-          <button id="loadPreset" class="btn-secondary" data-i18n="btn.loadPreset">📂 Load Config</button>
+          <button id="savePreset" class="btn-secondary" data-i18n="btn.savePreset"><i data-lucide="save" class="btn-icon"></i> Save Config</button>
+          <button id="loadPreset" class="btn-secondary" data-i18n="btn.loadPreset"><i data-lucide="folder-open" class="btn-icon"></i> Load Config</button>
           <span id="validateStatus" class="validate-status"></span>
         </div>
       </section>
@@ -286,6 +372,7 @@
             <input id="pixelSizeUm" type="number" min="0.1" max="10.0" step="0.05" value="0.65" />
             <span class="field-hint" data-i18n="hint.pixelSizeUm">Fluorescence microscopy: typically ~0.65 µm</span>
           </label>
+          <div id="pixelSizeWarning" class="pixel-size-warning hidden" data-i18n="warn.pixelSizeNotDetected">Pixel size not detected from image metadata. Registration quality depends on this value — please verify or enter manually.</div>
           <label class="field-label">
             <span data-i18n="label.slicingPlane">Slicing Plane</span>
             <select id="slicingPlane">
@@ -325,7 +412,7 @@
         </div>
 
         <details class="advanced-details">
-          <summary data-i18n="adv.options">Advanced Options ▶?/summary>
+          <summary data-i18n="adv.options">Advanced Options</summary>
           <div class="grid-3 advanced-grid">
             <label class="field-label">
               <span data-i18n="label.fitMode">Fit Mode</span>
@@ -348,8 +435,48 @@
         </details>
 
         <div class="actions-row">
-          <button id="autoPickBtn"       class="btn-secondary" data-i18n="btn.autoPick">🎯 Auto-pick Atlas Slice</button>
-          <button id="refreshPreviewBtn" class="btn-primary"   data-i18n="btn.refreshPreview">🖼️?Refresh Preview</button>
+          <button id="autoPickBtn"       class="btn-secondary" data-i18n="btn.autoPick"><i data-lucide="crosshair" class="btn-icon"></i> Auto-pick Atlas Slice</button>
+          <button id="refreshPreviewBtn" class="btn-primary"   data-i18n="btn.refreshPreview"><i data-lucide="image" class="btn-icon"></i> Refresh Preview</button>
+          <details id="detectParamsPanel" class="detect-params-panel">
+            <summary class="btn-secondary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+              <i data-lucide="settings" class="btn-icon"></i>
+              <span data-i18n="btn.detectParams">Detection Parameters</span>
+            </summary>
+            <div class="detect-params-grid">
+              <label class="field-label">
+                <span data-i18n="detect.model">Model</span>
+                <select id="detectModelSelect">
+                  <option value="cpsam">cpsam (Cellpose-SAM)</option>
+                  <option value="cyto3">cyto3</option>
+                  <option value="cyto2">cyto2</option>
+                  <option value="nuclei">nuclei</option>
+                </select>
+              </label>
+              <label class="field-label">
+                <span data-i18n="detect.diameter">Diameter (µm)</span>
+                <input id="detectDiameterUm" type="number" min="1" max="100" step="0.5" value="12.0" />
+              </label>
+              <label class="field-label">
+                <span data-i18n="detect.flowThreshold">Flow Threshold</span>
+                <input id="detectFlowThreshold" type="range" min="0" max="1" step="0.05" value="0.4" />
+                <span id="detectFlowThresholdVal" class="slider-val">0.4</span>
+              </label>
+              <label class="field-label">
+                <span data-i18n="detect.cellprobThreshold">Cell Probability</span>
+                <input id="detectCellprobThreshold" type="range" min="-6" max="6" step="0.5" value="0.0" />
+                <span id="detectCellprobThresholdVal" class="slider-val">0.0</span>
+              </label>
+              <label class="field-label">
+                <span data-i18n="detect.minSize">Min Size (px)</span>
+                <input id="detectMinSizePx" type="number" min="1" max="500" step="1" value="8" />
+              </label>
+              <label class="field-label" style="flex-direction:row;align-items:center;gap:8px;">
+                <input id="detectGpuToggle" type="checkbox" checked style="width:auto;" />
+                <span data-i18n="detect.gpu">GPU</span>
+              </label>
+            </div>
+          </details>
+          <button id="detectPreviewBtn" class="btn-secondary" data-i18n="btn.detectPreview"><i data-lucide="scan" class="btn-icon"></i> Detect Cells</button>
           <label class="field-label" style="min-width:180px;">
             <span>Export Format</span>
             <select id="quickExportFormat">
@@ -368,12 +495,12 @@
           <div class="draw-toolbar hidden" id="drawToolbar">
             <div class="toolbar-group">
               <span class="toolbar-label" data-i18n="toolbar.tools">Tools:</span>
-              <button class="tool-btn active" data-tool="select" title="Select / Pan">↙?/button>
-              <button class="tool-btn" data-tool="line"     title="Draw Line">╱?/button>
-              <button class="tool-btn" data-tool="arrow"    title="Draw Arrow">↗?/button>
-              <button class="tool-btn" data-tool="liquify"  title="Liquify Drag">Liquify</button>
-              <button class="tool-btn" data-tool="scalebar" title="Scale Bar" data-i18n="btn.scalebar">↔?Scale</button>
-              <button class="tool-btn" data-tool="text"     title="Add Text">T</button>
+              <button class="tool-btn active" data-tool="select" title="Select / Pan" aria-label="Select / Pan"><i data-lucide="mouse-pointer"></i></button>
+              <button class="tool-btn" data-tool="line"     title="Draw Line" aria-label="Draw Line"><i data-lucide="minus"></i></button>
+              <button class="tool-btn" data-tool="arrow"    title="Draw Arrow" aria-label="Draw Arrow"><i data-lucide="move-up-right"></i></button>
+              <button class="tool-btn" data-tool="liquify"  title="Liquify Drag" aria-label="Liquify Drag">Liquify</button>
+              <button class="tool-btn" data-tool="scalebar" title="Scale Bar" aria-label="Scale Bar" data-i18n="btn.scalebar"><i data-lucide="ruler"></i> Scale</button>
+              <button class="tool-btn" data-tool="text"     title="Add Text" aria-label="Add Text"><i data-lucide="type"></i></button>
             </div>
             <div class="toolbar-group">
               <label class="toolbar-label" style="display:flex;align-items:center;gap:6px;">
@@ -394,9 +521,9 @@
               </label>
             </div>
             <div class="toolbar-group">
-              <button id="undoAnnotationBtn"  class="btn-secondary" data-i18n="btn.undo">↗?Undo</button>
-              <button id="clearAnnotationsBtn" class="btn-secondary" data-i18n="btn.clearAnnotations">🗑 Clear All</button>
-              <button id="exportCanvasBtn"     class="btn-primary"   data-i18n="btn.exportFigure">↙?Export Figure</button>
+              <button id="undoAnnotationBtn"  class="btn-secondary" data-i18n="btn.undo"><i data-lucide="undo-2" class="btn-icon"></i> Undo</button>
+              <button id="clearAnnotationsBtn" class="btn-secondary" data-i18n="btn.clearAnnotations"><i data-lucide="trash-2" class="btn-icon"></i> Clear All</button>
+              <button id="exportCanvasBtn"     class="btn-primary"   data-i18n="btn.exportFigure"><i data-lucide="download" class="btn-icon"></i> Export Figure</button>
               <button id="saveCalibLearnBtn"   class="btn-secondary">Save Calibration + Learn</button>
               <label class="toolbar-label" style="display:flex;align-items:center;gap:6px;">
                 <input id="autoLearnToggle" type="checkbox" checked style="width:auto;" />
@@ -415,6 +542,22 @@
               <!-- Drawing canvas on top -->
               <canvas id="drawCanvas" class="draw-canvas"></canvas>
               <div id="regionHoverTooltip" class="region-hover-tooltip hidden"></div>
+            </div>
+          </div>
+          <!-- Detection preview result banner -->
+          <div id="detectPreviewResult" class="detect-preview-result hidden">
+            <div class="detect-result-header">
+              <span id="detectResultIcon" class="detect-result-icon">🔬</span>
+              <span id="detectResultSummary" class="detect-result-summary"></span>
+              <button id="detectResultClose" class="detect-result-close" title="Close">&times;</button>
+            </div>
+            <div id="detectResultDetails" class="detect-result-details hidden">
+              <img id="detectOverlayImg" class="detect-overlay-img" alt="detection overlay" />
+              <div class="detect-actions">
+                <a id="detectCsvLink" class="btn-secondary btn-sm" download="detect_preview.csv">⬇ Download CSV</a>
+                <button id="detectToggleOverlay" class="btn-secondary btn-sm">Toggle Overlay</button>
+                <button id="editMasksBtn" class="btn-primary btn-sm" data-i18n="btn.editMasks">Edit Masks</button>
+              </div>
             </div>
           </div>
         </div>
@@ -441,7 +584,7 @@
         </div>
 
         <details class="advanced-details">
-          <summary data-i18n="adv.params">Advanced Parameters ▶?/summary>
+          <summary data-i18n="adv.params">Advanced Parameters</summary>
           <div class="grid-3 advanced-grid">
             <label class="field-label">
               <span data-i18n="label.maxPoints">Max Landmark Points</span>
@@ -462,8 +605,8 @@
         </details>
 
         <div class="actions-row">
-          <button id="aiAlignBtn"      class="btn-primary"   data-i18n="btn.aiAlign">🤖 AI Landmark Registration</button>
-          <button id="landmarkViewBtn" class="btn-secondary" data-i18n="btn.landmarkView">🗺️?View Landmark Map</button>
+          <button id="aiAlignBtn"      class="btn-primary"   data-i18n="btn.aiAlign"><i data-lucide="bot" class="btn-icon"></i> AI Landmark Registration</button>
+          <button id="landmarkViewBtn" class="btn-secondary" data-i18n="btn.landmarkView"><i data-lucide="map" class="btn-icon"></i> View Landmark Map</button>
         </div>
 
         <!-- Alignment quality panel -->
@@ -472,12 +615,12 @@
           <div class="quality-row">
             <span class="quality-label" data-i18n="quality.before">Before</span>
             <div class="quality-bar-wrap"><div class="quality-bar" id="scoreBefore"></div></div>
-            <span class="quality-num" id="scoreBeforeNum">→?/span>
+            <span class="quality-num" id="scoreBeforeNum">—</span>
           </div>
           <div class="quality-row">
             <span class="quality-label" data-i18n="quality.after">After</span>
             <div class="quality-bar-wrap"><div class="quality-bar" id="scoreAfter"></div></div>
-            <span class="quality-num" id="scoreAfterNum">→?/span>
+            <span class="quality-num" id="scoreAfterNum">—</span>
           </div>
           <div class="quality-verdict" id="qualityVerdict"></div>
         </div>
@@ -491,27 +634,27 @@
         </div>
 
         <!-- Manual Landmark Correction Panel -->
-        <div class="manual-panel" id="manualPanel">
+        <div id="manualLandmarkSection" class="manual-panel">
           <div class="manual-panel-header">
-            <h3 data-i18n="manual.title">✏️ Manual Landmark Correction</h3>
+            <h3 data-i18n="manual.title"><i data-lucide="pen-tool" class="icon-inline"></i> Manual Landmark Correction</h3>
             <p class="step-desc" data-i18n="manual.desc">Click a point on the <strong>Real Slice</strong>, then click the corresponding point on the <strong>Atlas Slice</strong> to add a manual landmark pair.</p>
             <div class="actions-row" style="margin-top:10px;">
-              <button id="manualModeBtn" class="btn-secondary" data-i18n="btn.startManual">📌 Enter Manual Mode</button>
-              <button id="applyManualBtn" class="btn-primary hidden" data-i18n="btn.applyManual">✕?Apply Manual Landmarks &amp; Realign</button>
-              <button id="clearManualBtn" class="btn-danger  hidden" data-i18n="btn.clearManual">🗑 Clear Manual Points</button>
+              <button id="manualModeBtn" class="btn-secondary" data-i18n="btn.startManual"><i data-lucide="pin" class="btn-icon"></i> Enter Manual Mode</button>
+              <button id="applyManualBtn" class="btn-primary hidden" data-i18n="btn.applyManual"><i data-lucide="check" class="btn-icon"></i> Apply Manual Landmarks &amp; Realign</button>
+              <button id="clearManualBtn" class="btn-danger  hidden" data-i18n="btn.clearManual"><i data-lucide="trash-2" class="btn-icon"></i> Clear Manual Points</button>
             </div>
           </div>
           <!-- Side-by-side canvases (shown in manual mode) -->
           <div class="manual-canvases hidden" id="manualCanvases">
             <div class="manual-side">
-              <div class="manual-side-title" data-i18n="manual.realSide">Real Slice →?click to mark point</div>
+              <div class="manual-side-title" data-i18n="manual.realSide">Real Slice → click to mark point</div>
               <div class="manual-canvas-wrap">
                 <img id="manualRealImg" class="manual-base-img" alt="real slice" />
                 <canvas id="manualRealCanvas" class="manual-canvas"></canvas>
               </div>
             </div>
             <div class="manual-side">
-              <div class="manual-side-title" data-i18n="manual.atlasSide">Atlas Slice →?click corresponding point</div>
+              <div class="manual-side-title" data-i18n="manual.atlasSide">Atlas Slice → click corresponding point</div>
               <div class="manual-canvas-wrap">
                 <img id="manualAtlasImg" class="manual-base-img" alt="atlas slice" />
                 <canvas id="manualAtlasCanvas" class="manual-canvas"></canvas>
@@ -548,10 +691,10 @@
         <div class="channel-section">
           <label class="field-label"><span data-i18n="label.channels">Fluorescence Channel</span></label>
           <div class="channel-pills" id="channelPills">
-            <button data-channel="red"    class="pill active" data-i18n="ch.red">🔴 Red</button>
-            <button data-channel="green"  class="pill"        data-i18n="ch.green">🟢 Green</button>
-            <button data-channel="farred" class="pill"        data-i18n="ch.farred">🟠 Far-Red</button>
-            <button id="batchAll"         class="pill"        data-i18n="ch.all">▶?All Channels</button>
+            <button data-channel="red"    class="pill active" data-i18n="ch.red"><span class="channel-dot channel-dot-red"></span> Red</button>
+            <button data-channel="green"  class="pill"        data-i18n="ch.green"><span class="channel-dot channel-dot-green"></span> Green</button>
+            <button data-channel="farred" class="pill"        data-i18n="ch.farred"><span class="channel-dot channel-dot-farred"></span> Far-Red</button>
+            <button id="batchAll"         class="pill"        data-i18n="ch.all"><i data-lucide="layers" class="btn-icon"></i> All Channels</button>
           </div>
         </div>
 
@@ -576,40 +719,137 @@
         </div>
 
         <div class="actions-row">
-          <button id="runBtn"        class="btn-run"    data-i18n="btn.run">▶?Run Pipeline</button>
-          <button id="cancelBtn"     class="btn-danger" data-i18n="btn.cancel">✕?Cancel</button>
-          <button id="openOutputsBtn" class="btn-ghost" data-i18n="btn.openOutputs">📁 Open Output Folder</button>
+          <button id="runBtn"        class="btn-run"    data-i18n="btn.run"><i data-lucide="play" class="btn-icon"></i> Run Pipeline</button>
+          <button id="cancelBtn"     class="btn-danger" data-i18n="btn.cancel"><i data-lucide="x" class="btn-icon"></i> Cancel</button>
+          <button id="openOutputsBtn" class="btn-ghost" data-i18n="btn.openOutputs"><i data-lucide="folder" class="btn-icon"></i> Open Output Folder</button>
         </div>
 
-        <details class="log-details" open style="margin-top:14px;">
-          <summary data-i18n="log.title">Live Logs ▶?/summary>
+        <details class="log-details" open>
+          <summary data-i18n="log.title">Live Logs</summary>
           <pre id="logBox" class="log-box" data-i18n="log.ready">[ready] Frontend initialized</pre>
         </details>
       </section>
     </div><!-- /tab-workflow -->
 
-
     <!-- ================================================
-         TAB 2: Batch QC Review
+         TAB 2: Manual TIFF Check
     ================================================ -->
+    <div class="tab-content" id="tab-manual-tiff">
+      <header class="topbar">
+        <h1 data-i18n="tab.manualTiff.title">Manual TIFF Check</h1>
+      </header>
+
+      <section class="step-card" id="manualCountCard">
+        <div class="step-header">
+          <span class="step-badge">M</span>
+          <div>
+            <h2 data-i18n="manualCount.title">Manual TIFF Check</h2>
+            <p class="step-desc" data-i18n="manualCount.desc">Open a source TIFF directly for visual inspection and manual counting. Use the mouse wheel to move through Z slices.</p>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <label class="field-label" style="grid-column: span 2;">
+            <span data-i18n="manualCount.source">Manual Count Source TIFF</span>
+            <div class="input-browse">
+              <input id="manualCountSourcePath" placeholder="D:\...\sample.tif" />
+              <button class="btn-browse" data-target="manualCountSourcePath" data-type="file" data-filetypes="tif,tiff" data-i18n="btn.browse">Browse</button>
+            </div>
+          </label>
+          <label class="field-label">
+            <span data-i18n="manualCount.zoom">Zoom</span>
+            <div class="range-row">
+              <input id="manualCountZoom" type="range" min="0.25" max="2.50" step="0.05" value="1.00" />
+              <span id="manualCountZoomValue">1.00×</span>
+            </div>
+          </label>
+          <label class="field-label">
+            <span data-i18n="manualCount.palette">Display</span>
+            <select id="manualCountPalette">
+              <option value="green" selected data-i18n="manualCount.palette.green">Green</option>
+              <option value="gray" data-i18n="manualCount.palette.gray">Gray</option>
+              <option value="magenta" data-i18n="manualCount.palette.magenta">Magenta</option>
+              <option value="amber" data-i18n="manualCount.palette.amber">Amber</option>
+              <option value="turbo" data-i18n="manualCount.palette.turbo">Turbo</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="actions-row">
+          <button id="manualCountLoadBtn" class="btn-primary" data-i18n="manualCount.load">Load TIFF</button>
+          <button id="manualCountExportBtn" class="btn-secondary" data-i18n="manualCount.export">Export Count CSV</button>
+          <button id="manualCountUndoBtn" class="btn-secondary" data-i18n="manualCount.undo">Undo Last Point</button>
+          <button id="manualCountClearSliceBtn" class="btn-secondary" data-i18n="manualCount.clearSlice">Clear Current Z</button>
+          <button id="manualCountClearAllBtn" class="btn-danger" data-i18n="manualCount.clearAll">Clear All Points</button>
+        </div>
+
+        <div class="manual-count-toolbar">
+          <div class="manual-count-pill">
+            <span data-i18n="manualCount.z">Z</span>
+            <strong id="manualCountZText">0 / 0</strong>
+          </div>
+          <div class="manual-count-pill">
+            <span data-i18n="manualCount.sliceCount">Current Z</span>
+            <strong id="manualCountSliceCount">0</strong>
+          </div>
+          <div class="manual-count-pill">
+            <span data-i18n="manualCount.totalCount">Total</span>
+            <strong id="manualCountTotalCount">0</strong>
+          </div>
+          <div id="manualCountStatus" class="manual-count-status">Load a TIFF to start manual counting.</div>
+        </div>
+
+        <p class="hint-text" data-i18n="manualCount.help">Left click adds a count. Right click removes the nearest count. Mouse wheel moves through Z slices.</p>
+
+        <div id="manualCountViewport" class="manual-count-viewport" tabindex="0">
+          <div id="manualCountPlaceholder" class="preview-placeholder" data-i18n="manualCount.placeholder">Load a TIFF to start manual counting.</div>
+          <div id="manualCountStage" class="manual-count-stage hidden">
+            <img id="manualCountImg" class="manual-count-img" alt="manual count source preview" />
+            <canvas id="manualCountCanvas" class="manual-count-canvas"></canvas>
+          </div>
+        </div>
+      </section>
+    </div><!-- /tab-manual-tiff -->
+
+
+      <!-- ================================================
+         TAB 3: Batch QC Review
+      ================================================ -->
     <div class="tab-content" id="tab-qc">
       <header class="topbar">
         <h1 data-i18n="tab.qc.title">Batch QC Review</h1>
         <div class="topbar-actions">
           <span id="qcAllCount" class="qc-count-badge"></span>
-          <button id="refreshQcAllBtn" class="btn-secondary" data-i18n="btn.refreshQc">🔁 Refresh</button>
-          <button id="regenDemoBtn" class="btn-secondary" data-i18n="btn.regenDemo" onclick="regenDemoVisuals()">⚙️ Regen Demo</button>
-          <button id="downloadPanelBtn" class="btn-primary" onclick="window.open('/api/outputs/demo-panel','_blank')">⬇️ Download Panel</button>
+          <button id="refreshQcAllBtn" class="btn-secondary" data-i18n="btn.refreshQc"><i data-lucide="refresh-cw" class="btn-icon"></i> Refresh</button>
+          <button id="regenDemoBtn" class="btn-secondary" data-i18n="btn.regenDemo" onclick="regenDemoVisuals()"><i data-lucide="settings" class="btn-icon"></i> Regen Demo</button>
+          <button id="downloadPanelBtn" class="btn-primary" onclick="window.open('/api/outputs/demo-panel','_blank')"><i data-lucide="download" class="btn-icon"></i> Download Panel</button>
         </div>
       </header>
+
+      <section class="panel" id="wholeBrain3dStatusSection">
+        <div class="results-toolbar">
+          <h2 data-i18n="wb3d.status.title">3D Registration Status</h2>
+          <span id="wholeBrainStageMeta" class="qc-count-badge"></span>
+        </div>
+        <p id="aux2dNotice" class="hint-text" data-i18n="wb3d.status.notice">Whole-brain automatic truth comes from the 3D pipeline. The 2D tools elsewhere remain preview and manual-correction helpers only.</p>
+        <div id="wholeBrainStageList" class="stage-track"></div>
+      </section>
+
+      <section class="panel" id="volumeQcSection">
+        <div class="results-toolbar">
+          <h2 data-i18n="wb3d.qc.title">3D QC Summary</h2>
+          <span id="volumeQcSource" class="qc-count-badge"></span>
+        </div>
+        <div id="volumeQcSummary" class="volume-qc-summary"></div>
+      </section>
 
       <!-- Annotated Slice: region labels on best slice -->
       <section class="panel" id="annotatedSliceSection" style="display:none">
         <h2 data-i18n="qc.annotatedSliceTitle">Atlas Registration — Annotated Brain Regions</h2>
         <p class="hint-text" data-i18n="qc.annotatedSliceHint">Lightsheet image with Allen CCFv3 region boundaries and labels. Click to view full size.</p>
-        <div style="text-align:center;cursor:pointer" onclick="openLightbox('/api/outputs/demo-annotated-slice?'+Date.now(),'Annotated Brain Regions')">
+        <div class="img-click-container" onclick="openLightbox('/api/outputs/demo-annotated-slice?'+Date.now(),'Annotated Brain Regions')">
           <img id="annotatedSliceImg" src="" alt="Annotated Brain Regions"
-               style="max-width:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5)"
+               class="qc-hero-img"
                onerror="document.getElementById('annotatedSliceSection').style.display='none'"/>
         </div>
       </section>
@@ -628,7 +868,7 @@
         <p class="hint-text" data-i18n="qc.bestSliceHint">Registered-slice comparison — click to view full resolution</p>
         <div style="text-align:center;cursor:pointer" onclick="openLightbox('/api/outputs/demo-best-slice?'+Date.now(),'Registration Slice vs Atlas')">
           <img id="bestSliceImg" src="" alt="Best Slice Comparison"
-               style="max-width:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5)"
+               class="qc-hero-img"
                onerror="document.getElementById('bestSliceSection').style.display='none'"/>
         </div>
       </section>
@@ -637,25 +877,29 @@
       <section class="panel" id="demoPanelSection" style="display:none">
         <h2 data-i18n="qc.panelTitle">Whole-Brain Registration Overview</h2>
         <p class="hint-text" data-i18n="qc.panelHint">Multi-slice atlas registration panel — click to view full size</p>
-        <div style="text-align:center;cursor:pointer" onclick="openLightbox('/api/outputs/demo-panel?'+Date.now(),'Registration Panel')">
+        <div class="img-click-container" onclick="openLightbox('/api/outputs/demo-panel?'+Date.now(),'Registration Panel')">
           <img id="demoPanelImg" src="" alt="Demo Panel"
-               style="max-width:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5)"
+               class="qc-hero-img"
                onerror="document.getElementById('demoPanelSection').style.display='none'"/>
         </div>
-        <div id="regStatsBar" style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;font-size:0.9em;color:#aaa"></div>
+        <div id="regStatsBar" class="reg-stats-bar"></div>
       </section>
 
-      <section class="panel">
-        <p class="hint-text" data-i18n="qc.hint">Click any image to enlarge. Generated after running the pipeline.</p>
-        <div id="qcAllGrid" class="qc-grid-large"></div>
-        <div id="qcEmpty" class="empty-hint" data-i18n="qc.empty">No QC images yet. Please run the pipeline in the Registration Workflow tab first.</div>
+      <section class="panel" id="sliceInspectorSection">
+        <div class="results-toolbar">
+          <h2 data-i18n="wb3d.slice.title">Slice Inspector</h2>
+          <span id="sliceInspectorCount" class="qc-count-badge"></span>
+        </div>
+        <p class="hint-text" data-i18n="wb3d.slice.hint">These overlays are exported from the final 3D truth volume. The 2D tools below remain auxiliary.</p>
+        <div id="sliceInspectorGrid" class="qc-grid-large"></div>
+        <div id="sliceInspectorEmpty" class="empty-hint" data-i18n="wb3d.slice.empty">No exported 3D slice overlays yet. Run the whole-brain 3D pipeline first.</div>
       </section>
     </div><!-- /tab-qc -->
 
 
-    <!-- ================================================
-         TAB 3: Results
-    ================================================ -->
+      <!-- ================================================
+         TAB 4: Results
+      ================================================ -->
     <div class="tab-content" id="tab-results">
       <header class="topbar">
         <h1 data-i18n="tab.results.title">Results</h1>
@@ -690,7 +934,7 @@
         <h2 data-i18n="chart.imgTitle">Cell Count Summary</h2>
         <div style="text-align:center;cursor:pointer" onclick="openLightbox('/api/outputs/cell-chart?'+Date.now(),'Cell Count Chart')">
           <img id="cellChartImg" src="" alt="Cell count chart"
-               style="max-width:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.4)"
+               class="qc-hero-img"
                onerror="document.getElementById('cellChartSection').style.display='none'"/>
         </div>
       </section>
@@ -796,7 +1040,7 @@
       <section class="panel">
         <div class="results-toolbar">
           <h2 data-i18n="outputs.title">Output Files</h2>
-          <button id="refreshFileListBtn" class="btn-secondary" data-i18n="btn.refreshResults">🔁 Refresh</button>
+          <button id="refreshFileListBtn" class="btn-secondary" data-i18n="btn.refreshResults"><i data-lucide="refresh-cw" class="btn-icon"></i> Refresh</button>
         </div>
         <p class="hint-text" data-i18n="outputs.hint">Click a PNG to preview · Click CSV/JSON to view content</p>
         <div id="outputFileGrid" class="output-file-grid"></div>
@@ -804,9 +1048,115 @@
       </section>
     </div><!-- /tab-results -->
 
+    <!-- ================================================
+         TAB 5: Model Training
+    ================================================ -->
+    <div class="tab-content" id="tab-training">
+      <h2 class="section-title" data-i18n="training.title">Cellpose Model Training</h2>
+
+      <!-- Training Set Section -->
+      <section class="step-card">
+        <div class="step-header">
+          <span class="step-badge">1</span>
+          <div>
+            <h3 data-i18n="training.datasetTitle">Training Dataset</h3>
+            <p class="step-desc" data-i18n="training.datasetDesc">Annotated images saved from the Mask Editor</p>
+          </div>
+        </div>
+        <div class="step-body">
+          <div id="trainingSetStats" class="training-stats">
+            <div class="stat-card"><span class="stat-val" id="tsImageCount">0</span><span class="stat-label" data-i18n="training.images">Images</span></div>
+            <div class="stat-card"><span class="stat-val" id="tsCellCount">0</span><span class="stat-label" data-i18n="training.cells">Cells</span></div>
+            <div class="stat-card"><span class="stat-val" id="tsAvgCells">0</span><span class="stat-label" data-i18n="training.avgPerImage">Avg/Image</span></div>
+            <div class="stat-card"><span class="stat-val" id="tsReadiness">--</span><span class="stat-label" data-i18n="training.readiness">Status</span></div>
+          </div>
+          <div id="trainingSetList" class="training-set-list">
+            <!-- Populated dynamically -->
+          </div>
+          <button id="refreshTrainingSetBtn" class="btn-secondary btn-sm" style="margin-top:8px;" data-i18n="training.refresh">Refresh</button>
+        </div>
+      </section>
+
+      <!-- Training Config Section -->
+      <section class="step-card">
+        <div class="step-header">
+          <span class="step-badge">2</span>
+          <div>
+            <h3 data-i18n="training.configTitle">Training Configuration</h3>
+            <p class="step-desc" data-i18n="training.configDesc">Select base model and start training</p>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="training-config-grid">
+            <label class="field-label">
+              <span data-i18n="training.baseModel">Base Model</span>
+              <select id="trainBaseModel">
+                <option value="cyto3">cyto3</option>
+                <option value="cpsam">cpsam (Cellpose-SAM)</option>
+                <option value="cyto2">cyto2</option>
+                <option value="nuclei">nuclei</option>
+              </select>
+            </label>
+            <label class="field-label">
+              <span data-i18n="training.modelName">Model Name</span>
+              <input id="trainModelName" type="text" placeholder="brainfast_v1" />
+            </label>
+            <label class="field-label">
+              <span data-i18n="training.epochs">Epochs</span>
+              <input id="trainEpochs" type="number" min="10" max="500" value="100" />
+            </label>
+            <label class="field-label" style="display:flex;align-items:center;gap:8px;">
+              <input id="trainGpu" type="checkbox" checked />
+              <span data-i18n="training.gpu">Use GPU</span>
+            </label>
+          </div>
+          <div class="training-actions" style="margin-top:12px;display:flex;gap:8px;">
+            <button id="startTrainingBtn" class="btn-primary" data-i18n="training.start">Start Training</button>
+            <button id="cancelTrainingBtn" class="btn-secondary" style="display:none;" data-i18n="training.cancel">Cancel Training</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Training Progress Section -->
+      <section class="step-card" id="trainingProgressCard" style="display:none;">
+        <div class="step-header">
+          <span class="step-badge">3</span>
+          <div>
+            <h3 data-i18n="training.progressTitle">Training Progress</h3>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="training-progress-bar-wrap">
+            <div class="training-progress-bar" id="trainProgressBar" style="width:0%;"></div>
+          </div>
+          <div class="training-progress-stats">
+            <span id="trainEpochText">Epoch 0 / 100</span>
+            <span id="trainLossText">Loss: --</span>
+            <span id="trainEtaText">ETA: --</span>
+          </div>
+          <div id="trainStatusMsg" class="training-status-msg"></div>
+        </div>
+      </section>
+
+      <!-- Training Result Section -->
+      <section class="step-card" id="trainingResultCard" style="display:none;">
+        <div class="step-header">
+          <span class="step-badge">&#10003;</span>
+          <div>
+            <h3 data-i18n="training.resultTitle">Training Complete</h3>
+          </div>
+        </div>
+        <div class="step-body">
+          <div id="trainResultSummary" class="training-result-summary"></div>
+          <div style="margin-top:12px;display:flex;gap:8px;">
+            <button id="applyModelBtn" class="btn-primary" data-i18n="training.apply">Apply Model</button>
+          </div>
+        </div>
+      </section>
+    </div><!-- /tab-training -->
 
     <!-- ================================================
-         TAB 4: Projects & Batch Queue
+         TAB 6: Projects & Batch Queue
     ================================================ -->
     <div class="tab-content" id="tab-projects">
       <header class="topbar">
@@ -840,8 +1190,73 @@
   </main>
 </div><!-- /app -->
 
+<!-- Mask Editor Modal -->
+<div id="maskEditorModal" class="mask-editor-modal">
+  <div style="display:flex;flex-direction:column;width:100%;height:100%;">
+    <div class="me-top-bar">
+      <h3 data-i18n="maskEditor.title">Mask Editor</h3>
+      <button id="maskEditorClose" class="me-close-btn" title="Close">&times;</button>
+    </div>
+    <div class="mask-editor-layout">
+      <!-- Left toolbar -->
+      <div class="me-toolbar">
+        <button class="me-tool-btn active" data-me-tool="brush" title="Brush (B)">B</button>
+        <button class="me-tool-btn" data-me-tool="eraser" title="Eraser (E)">E</button>
+        <button class="me-tool-btn" data-me-tool="addcell" title="New Cell (N)">+</button>
+        <button class="me-tool-btn" data-me-tool="delete" title="Delete Cell (D)">D</button>
+        <button class="me-tool-btn" data-me-tool="merge" title="Merge Cells">M</button>
+        <button class="me-tool-btn" data-me-tool="split" title="Split Cell">S</button>
+        <div class="me-tool-sep"></div>
+        <button class="me-tool-btn" data-me-tool="pan" title="Pan (Space+drag)">P</button>
+      </div>
+      <!-- Canvas area -->
+      <div class="me-canvas-area" id="meCanvasArea">
+        <div class="me-canvas-wrap" id="meCanvasWrap">
+          <canvas id="meImageCanvas"></canvas>
+          <canvas id="meMaskCanvas"></canvas>
+        </div>
+        <div class="me-status-bar">
+          <span id="meStatusLeft">Brush: 10px</span>
+          <span id="meStatusRight">Zoom: 100% | 0 cells</span>
+        </div>
+      </div>
+      <!-- Right panel -->
+      <div class="me-right-panel">
+        <div class="me-panel-section">
+          <span class="me-panel-label" data-i18n="maskEditor.brushSize">Brush Size</span>
+          <div class="me-slider-row">
+            <input type="range" id="meBrushSize" min="1" max="50" value="10" />
+            <span class="me-slider-val" id="meBrushSizeVal">10</span>
+          </div>
+        </div>
+        <div class="me-panel-section">
+          <span class="me-panel-label" data-i18n="maskEditor.opacity">Mask Opacity</span>
+          <div class="me-slider-row">
+            <input type="range" id="meMaskOpacity" min="0" max="100" value="50" />
+            <span class="me-slider-val" id="meMaskOpacityVal">50%</span>
+          </div>
+        </div>
+        <div class="me-panel-section">
+          <span class="me-panel-label" data-i18n="maskEditor.cells">Cells</span>
+          <div class="me-cell-list" id="meCellList">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+        <div class="me-actions">
+          <button id="meSaveTrainingBtn" class="me-btn me-btn-primary" data-i18n="maskEditor.save">Save to Training Set</button>
+        </div>
+        <div class="me-actions">
+          <button id="meUndoBtn" class="me-btn me-btn-secondary">Undo</button>
+          <button id="meRedoBtn" class="me-btn me-btn-secondary">Redo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="./app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+<script src="./mask-editor.js"></script>
+<script>if(typeof lucide!=='undefined')lucide.createIcons();</script>
 </body>
 </html>
-
-

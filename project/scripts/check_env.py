@@ -1,11 +1,22 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import sys
 from pathlib import Path
 
-from config_validation import load_config, validate_runtime_config
+_this = Path(__file__).resolve()
+sys.path.insert(0, str(_this.parents[2]))  # D:\Brainfast
+sys.path.insert(0, str(_this.parents[1]))  # D:\Brainfast\project
+
+try:
+    from scripts.asset_bootstrap import atlas_asset_status, default_structure_source
+except ImportError:
+    from project.scripts.asset_bootstrap import atlas_asset_status, default_structure_source
+
+try:
+    from scripts.config_validation import load_config, validate_runtime_config
+except ImportError:
+    from project.scripts.config_validation import load_config, validate_runtime_config
 
 REQUIRED_MODULES = (
     "flask",
@@ -20,15 +31,119 @@ REQUIRED_MODULES = (
 )
 
 OPTIONAL_MODULES = (
-    "cellpose",
+    "ants",  # needed for whole-brain 3D registration (pip install -e ".[wholebrain]")
+    "cellpose",  # needed for Cellpose detection (pip install -e ".[advanced]")
     "SimpleITK",
     "pystray",
     "nrrd",
 )
 
 
-def _module_available(name: str) -> bool:
-    return importlib.util.find_spec(name) is not None
+def _module_importable(name: str) -> tuple[bool, str]:
+    """Try a real import and return (ok, detail).
+
+    ``find_spec`` only checks if the module *name* is visible on sys.path; it
+    does not catch ABI mismatches, DLL load failures, or broken transitive
+    dependencies that make the actual ``import`` crash.  This function
+    performs a real import inside a subprocess-like try/except so that the
+    caller gets both the result and a human-readable failure reason.
+    """
+    try:
+        # ANTs has a known issue: ants.__init__ unconditionally imports
+        # ants.plotting which depends on mpl_toolkits internals that break
+        # with newer matplotlib (>3.9).  The core registration functions work
+        # fine.  We stub out the plotting submodule before importing so that
+        # check_env tests the *functional* part of the package.
+        if name == "ants" and "ants" not in sys.modules:
+            import types
+
+            sys.modules.setdefault("ants.plotting", types.ModuleType("ants.plotting"))
+
+        mod = __import__(name)
+        ver = getattr(mod, "__version__", "")
+        if not ver:
+            try:
+                from importlib.metadata import version as _pkg_version
+
+                ver = _pkg_version(name.replace(".", "-"))
+            except Exception:
+                ver = "installed"
+        return True, ver
+    except Exception as exc:
+        return False, str(exc)
+
+
+# Runtime hotspot checks.
+#
+# Top-level ``import scipy`` can succeed while ``scipy.ndimage`` crashes due
+# to ABI mismatch or missing DLLs.  We verify the EXACT import statements
+# used by the two heaviest entry points:
+#
+#   - project/frontend/server_context.py  (line 24):
+#       from scipy.ndimage import gaussian_filter, map_coordinates
+#
+#   - project/scripts/whole_brain_3d.py   (line 9):
+#       from scipy.ndimage import map_coordinates
+#
+# These checks run IN-PROCESS (same interpreter as check_env and pytest)
+# so there is no risk of subprocess resolving a different Python or
+# site-packages.  If these fail, check_env MUST return non-zero.
+
+_RUNTIME_HOTSPOT_IMPORTS: list[tuple[str, str]] = [
+    # (label, import statement to exec())
+    ("scipy.ndimage", "import scipy.ndimage"),
+    ("skimage.segmentation", "import skimage.segmentation"),
+    (
+        "server_context.py:24 (from scipy.ndimage import gaussian_filter, map_coordinates)",
+        "from scipy.ndimage import gaussian_filter, map_coordinates",
+    ),
+    (
+        "whole_brain_3d.py:9 (from scipy.ndimage import map_coordinates)",
+        "from scipy.ndimage import map_coordinates",
+    ),
+]
+
+
+def _check_runtime_hotspots() -> list[str]:
+    """Verify that runtime-critical imports work IN THIS PROCESS.
+
+    Uses exec() in the same interpreter — not a subprocess — so the check
+    sees exactly the same sys.path, site-packages, and ABI state as pytest
+    and the Flask server.  If scipy.ndimage crashes here, it will also
+    crash in server_context.py and whole_brain_3d.py.
+    """
+    failures: list[str] = []
+    for label, stmt in _RUNTIME_HOTSPOT_IMPORTS:
+        try:
+            exec(stmt)  # noqa: S102 — intentional; checked literal strings only
+        except Exception as exc:
+            failures.append(f"{label}: {exc}")
+    return failures
+
+
+# Version boundary checks for the numerical stack.
+# These must match pyproject.toml [project].dependencies.
+_VERSION_BOUNDS: dict[str, tuple[tuple[int, ...], tuple[int, ...]]] = {
+    "numpy": ((1, 26), (3, 0)),  # >=1.26, <3  (tested with 1.26 and 2.4)
+    "scipy": ((1, 12), (2, 0)),  # >=1.12, <2  (tested with 1.12 and 1.17)
+    "skimage": ((0, 22), (1, 0)),  # >=0.22, <1  (tested with 0.22 and 0.26)
+}
+
+
+def _check_version_bounds(name: str, version_str: str) -> str | None:
+    """Return an error string if *version_str* is outside the pinned range."""
+    if name not in _VERSION_BOUNDS:
+        return None
+    lo, hi = _VERSION_BOUNDS[name]
+    try:
+        parts = tuple(int(x) for x in version_str.split(".")[: len(lo)])
+    except (ValueError, TypeError):
+        return f"{name} version '{version_str}' cannot be parsed"
+    if parts < lo:
+        return f"{name}=={version_str} is below minimum {'.'.join(map(str, lo))}"
+    if parts >= hi:
+        return f"{name}=={version_str} exceeds upper bound <{'.'.join(map(str, hi))}"
+    return None
 
 
 def _print_status(ok: bool, kind: str, label: str, detail: str = "") -> None:
@@ -37,6 +152,22 @@ def _print_status(ok: bool, kind: str, label: str, detail: str = "") -> None:
     if detail:
         line = f"{line}: {detail}"
     print(line)
+
+
+def _resolve_input_dir(raw_value: object, *, project_root: Path, config_path: Path) -> Path | None:
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        return None
+
+    candidate = Path(raw_value)
+    if candidate.is_absolute():
+        return candidate
+
+    for base in (project_root, config_path.parent, Path.cwd()):
+        resolved = (base / candidate).resolve()
+        if resolved.exists():
+            return resolved
+
+    return (project_root / candidate).resolve()
 
 
 def main() -> int:
@@ -64,19 +195,75 @@ def main() -> int:
         failures += 1
 
     for name in REQUIRED_MODULES:
-        ok = _module_available(name)
-        _print_status(ok, "FAIL", f"python module '{name}'")
+        ok, detail = _module_importable(name)
+        _print_status(ok, "FAIL", f"python module '{name}'", detail if not ok else detail)
         if not ok:
             failures += 1
+        else:
+            # Check version bounds for pinned numerical stack
+            ver_err = _check_version_bounds(name, detail)
+            if ver_err:
+                _print_status(False, "FAIL", f"version '{name}'", ver_err)
+                failures += 1
+
+    # Determine which optional modules are actually required by the active config
+    try:
+        cfg_for_deps = load_config(Path(args.config)) if Path(args.config).exists() else {}
+    except Exception:
+        cfg_for_deps = {}
+
+    needs_ants = (
+        cfg_for_deps.get("registration", {}).get("scope") == "whole"
+        and cfg_for_deps.get("registration", {}).get("whole_brain_backend") == "miki_3d"
+    )
+    needs_cellpose = any(
+        str(cfg_for_deps.get("detection", {}).get(key, "")).lower()
+        in {"cpsam", "sam", "cellpose", "cyto", "cyto2", "cyto3", "nuclei"}
+        or str(cfg_for_deps.get("detection", {}).get(key, "")).lower().startswith("cellpose")
+        for key in ("primary_model", "secondary_model")
+    )
+
+    _config_required_modules = set()
+    if needs_ants:
+        _config_required_modules.add("ants")
+    if needs_cellpose:
+        _config_required_modules.add("cellpose")
 
     for name in OPTIONAL_MODULES:
-        ok = _module_available(name)
-        _print_status(ok, "WARN", f"optional module '{name}'")
+        ok, detail = _module_importable(name)
+        if name in _config_required_modules:
+            # Config requires this module — treat as FAIL, not WARN
+            _print_status(
+                ok, "FAIL", f"module '{name}' (required by active config)", detail if not ok else ""
+            )
+            if not ok:
+                failures += 1
+            else:
+                ver_err = _check_version_bounds(name, detail)
+                if ver_err:
+                    _print_status(False, "FAIL", f"version '{name}'", ver_err)
+                    failures += 1
+        else:
+            _print_status(ok, "WARN", f"optional module '{name}'")
 
+    # --- Runtime hotspot checks (submodule importability) ---
+    hotspot_failures = _check_runtime_hotspots()
+    for msg in hotspot_failures:
+        _print_status(False, "FAIL", "runtime hotspot", msg)
+        failures += 1
+    if not hotspot_failures:
+        _print_status(
+            True,
+            "OK",
+            "runtime hotspots (in-process)",
+            f"all {len(_RUNTIME_HOTSPOT_IMPORTS)} checks passed"
+            " (scipy.ndimage, skimage.segmentation, server_context entry, whole_brain_3d entry)",
+        )
+
+    structure_source = default_structure_source(project_root)
     required_assets = [
         project_root / "annotation_25.nii.gz",
         project_root / "configs" / "allen_structure_tree.json",
-        project_root / "configs" / "allen_mouse_structure_graph.csv",
         project_root / "frontend" / "index.html",
         project_root / "frontend" / "server.py",
     ]
@@ -85,6 +272,24 @@ def main() -> int:
         _print_status(ok, "FAIL", "asset", str(path))
         if not ok:
             failures += 1
+    structure_ok = structure_source is not None and structure_source.exists()
+    _print_status(
+        structure_ok,
+        "FAIL",
+        "asset",
+        str(structure_source) if structure_source is not None else "missing structure source",
+    )
+    if not structure_ok:
+        failures += 1
+
+    status = atlas_asset_status(project_root)
+    if not status["annotationReady"] and status["annotationNrrdReady"]:
+        _print_status(
+            False,
+            "WARN",
+            "asset",
+            "annotation_25.nrrd exists but annotation_25.nii.gz is still missing",
+        )
 
     cfg_path = Path(args.config)
     if not cfg_path.exists():
@@ -101,6 +306,23 @@ def main() -> int:
                     _print_status(False, "FAIL", "config", issue)
             else:
                 _print_status(True, "OK", "config", "runtime fields validated")
+                if args.require_input_dir:
+                    input_dir = _resolve_input_dir(
+                        cfg.get("input", {}).get("slice_dir"),
+                        project_root=project_root,
+                        config_path=cfg_path.resolve(),
+                    )
+                    input_dir_ok = (
+                        input_dir is not None and input_dir.exists() and input_dir.is_dir()
+                    )
+                    _print_status(
+                        input_dir_ok,
+                        "FAIL",
+                        "input.slice_dir",
+                        str(input_dir) if input_dir is not None else "missing",
+                    )
+                    if not input_dir_ok:
+                        failures += 1
         except Exception as exc:
             failures += 1
             _print_status(False, "FAIL", "config", str(exc))

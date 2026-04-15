@@ -61,6 +61,20 @@ python -m venv .venv
 pip install -e ".[advanced,dev]"
 ```
 
+### Environment check
+
+Before running the pipeline, validate your environment:
+
+```bash
+cd project
+python scripts/check_env.py --config configs/run_config.template.json
+```
+
+`check_env.py` does real import smoke tests, not just `find_spec()`.
+It verifies that numpy, scipy, skimage (and cellpose/ANTs when your config needs them) actually import and meet version bounds.
+It also checks runtime hotspots (`scipy.ndimage`, `skimage.segmentation`) in isolated subprocesses — a top-level `import scipy` can succeed while `scipy.ndimage` crashes due to ABI mismatch.
+A non-zero exit means your environment cannot run the configured pipeline.
+
 ### Run
 
 ```powershell

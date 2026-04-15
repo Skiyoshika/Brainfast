@@ -1,5 +1,5 @@
 ﻿{
-  "project": {"name": "idlebrain", "version": "mvp-1.0"},
+  "project": {"name": "brainfast", "version": "mvp-1.0"},
   "input": {
     "slice_dir": "data/raw_slices",
     "slice_glob": "*.tif",
@@ -9,27 +9,63 @@
     "slice_spacing_um": 25.0,
     "bit_depth": 16,
     "channel_map": {"red": 0, "green": 1, "farred": 2},
-    "active_channel": "red"
+    "active_channel": "red",
+    "slicing_plane": "coronal"
   },
   "target": {
     "marker": "unspecified",
     "signal_type": "cyto"
   },
   "compute": {
-    "device": "cuda",
-    "gpu_name": "RTX 3070 Ti",
-    "vram_gb": 8
+    "device": "auto"
   },
   "registration": {
     "mode": "2d_slice_with_3d_smoothness",
+    "scope": "whole",
+    "whole_brain_backend": "miki_3d",
+    "truth_source": "3d_registered_volume",
+    "template_path": "configs/allen_ref_cache/average_template_25.nii.gz",
+    "annotation_path": "annotation_25.nii.gz",
+    "atlas_hemisphere": "left",
+    "ants_transform": "SyN",
+    "ml_flip": false,
+    "random_seed": 42,
+    "skip_laplacian_refinement": true,
+    "laplacian_lambda": 0.18,
+    "laplacian_maxiter": 100,
     "auto_first": true,
     "fail_score_threshold": 0.65,
     "landmark_fallback": true,
-    "landmark_max_slices": 5
+    "landmark_max_slices": 5,
+    "atlas_z_range": [0, 528],
+    "atlas_z_from_filename": false,
+    "atlas_z_z_scale": 1.0,
+    "atlas_z_offset": 0,
+    "atlas_z_refine_range": 10,
+    "tissue_shrink_factor": 1.0,
+    "display_gamma": 0.65,
+    "ap_method": "autopick",
+    "deepslice_max_deviation": 25,
+    "enable_silhouette_conform": true,
+    "contour_max_disp_ratio": 0.20,
+    "contour_tps_smooth": 2.0,
+    "contour_n_pts": 96,
+    "enable_sitk_ref_refine": false,
+    "sitk_max_dim": 512,
+    "sitk_mi_bins": 32,
+    "sitk_max_iter": 60,
+    "sitk_mesh_size": 8,
+    "sitk_max_disp_frac": 0.10
   },
   "detection": {
-    "primary_model": "cellpose_cyto2",
-    "secondary_model": "cellpose_nuclei",
+    "mode": "cellpose",
+    "reporter_intensity_threshold_pct": 95.0,
+    "reporter_min_area_px": 8.0,
+    "reporter_max_area_px": 2000.0,
+    "marker_channel": "",
+    "marker_intensity_threshold_pct": 95.0,
+    "primary_model": "cpsam",
+    "secondary_model": "none",
     "merge_primary_secondary": false,
     "cellpose_gpu": true,
     "cellpose_diameter_um": 12.0,

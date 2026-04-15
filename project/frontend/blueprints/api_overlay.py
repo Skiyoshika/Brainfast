@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import os
 import threading
 import uuid as _uuid_mod
 from pathlib import Path
@@ -19,6 +20,12 @@ from project.frontend.services.overlay_service import (
     apply_liquify_and_render,
     render_overlay_from_label,
 )
+
+
+def _normalize_path(p: str) -> str:
+    """Normalize Windows paths: resolve double-backslashes, mixed separators."""
+    return os.path.normpath(p) if p else p
+
 
 bp = Blueprint("api_overlay", __name__, url_prefix="/api")
 
@@ -490,12 +497,22 @@ def get_atlas_layer():
 
 @bp.get("/outputs/overlay-preview")
 def outputs_overlay_preview():
-    fp = ctx._job_file(ctx._query_job_id(), "overlay_preview.png")
-    if not fp.exists():
-        return jsonify(
-            {"ok": False, "error": "overlay preview not found", "error_code": ERR_NOT_FOUND}
-        ), 404
-    return send_from_directory(fp.parent, fp.name)
+    job_id = ctx._query_job_id()
+    # Try primary name first, then nonlinear compare (produced by one-click registration),
+    # then fall back to any overlay_*.png in the job directory.
+    for name in ("overlay_preview.png", "overlay_compare_nonlinear.png"):
+        fp = ctx._job_file(job_id, name)
+        if fp.exists():
+            return send_from_directory(str(fp.parent), fp.name)
+    # Glob fallback: pick the first overlay PNG available
+    job_dir = ctx._job_output_dir(job_id)
+    if job_dir.exists():
+        candidates = sorted(job_dir.glob("overlay_*.png"))
+        if candidates:
+            return send_from_directory(str(candidates[0].parent), candidates[0].name)
+    return jsonify(
+        {"ok": False, "error": "overlay preview not found", "error_code": ERR_NOT_FOUND}
+    ), 404
 
 
 @bp.get("/outputs/overlay-compare")

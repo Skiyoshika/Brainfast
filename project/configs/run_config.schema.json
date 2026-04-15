@@ -49,7 +49,7 @@
     "compute": {
       "type": "object",
       "properties": {
-        "device": { "type": "string", "enum": ["cpu", "cuda", "mps"], "default": "cpu" },
+        "device": { "type": "string", "enum": ["auto", "cpu", "cuda", "mps"], "default": "auto" },
         "gpu_name": { "type": "string" },
         "vram_gb": { "type": "number", "minimum": 0 }
       }

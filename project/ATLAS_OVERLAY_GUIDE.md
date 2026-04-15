@@ -1,7 +1,7 @@
 ﻿# ATLAS_OVERLAY_GUIDE
 
 ## 1) Start app
-- Desktop: run `frontend/dist/IdleBrainUI.exe`
+- Desktop: run `frontend/dist/BrainfastUI.exe`
 - Or dev mode: `cd frontend && python server.py`
 - Open: `http://127.0.0.1:8787`
 

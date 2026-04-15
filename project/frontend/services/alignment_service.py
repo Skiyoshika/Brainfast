@@ -3,13 +3,22 @@
 Blueprints call these functions; scripts are imported here, not in route handlers.
 All functions take plain Path/dict arguments and return plain dicts — no Flask objects.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from tifffile import imread, imwrite
+from PIL import Image
+from tifffile import imread
+
+
+def _save_true_png(path: Path, image: np.ndarray) -> None:
+    arr = np.asarray(image)
+    if arr.dtype != np.uint8:
+        arr = np.clip(arr, 0, 255).astype(np.uint8)
+    Image.fromarray(arr).save(str(path), format="PNG")
 
 
 def score_and_render_comparison(
@@ -18,6 +27,7 @@ def score_and_render_comparison(
     label_after_path: Path,
     compare_out_path: Path,
     alpha: float = 0.45,
+    hemisphere: str = "auto",
 ) -> dict:
     """Score alignment before/after and save a side-by-side comparison image.
 
@@ -25,8 +35,8 @@ def score_and_render_comparison(
     scoreWarning, and compareImage.
     """
     from scripts.ai_landmark import score_alignment, score_alignment_edges
-    from scripts.compare_render import render_before_after
-    from scripts.slice_select import select_real_slice_2d, select_label_slice_2d
+    from scripts.compare_render import _crop_hemisphere, render_before_after
+    from scripts.slice_select import select_label_slice_2d, select_real_slice_2d
 
     real = imread(str(real_path))
     atlas_before = imread(str(label_before_path))
@@ -35,14 +45,25 @@ def score_and_render_comparison(
     atlas_before, _ = select_label_slice_2d(atlas_before)
     atlas_after, _ = select_label_slice_2d(atlas_after)
 
+    # Crop atlas to hemisphere for accurate scoring
+    if hemisphere and hemisphere not in ("auto", "full"):
+        atlas_before = _crop_hemisphere(atlas_before, hemisphere)
+        atlas_after = _crop_hemisphere(atlas_after, hemisphere)
+
     before = score_alignment(real, atlas_before)
     after = score_alignment(real, atlas_after)
     before_edge = score_alignment_edges(real, atlas_before)
     after_edge = score_alignment_edges(real, atlas_after)
 
     render_before_after(
-        real_path, label_before_path, label_after_path, compare_out_path,
-        alpha=alpha, before_score=before_edge, after_score=after_edge,
+        real_path,
+        label_before_path,
+        label_after_path,
+        compare_out_path,
+        alpha=alpha,
+        before_score=before_edge,
+        after_score=after_edge,
+        hemisphere=hemisphere,
     )
     return {
         "beforeScore": before,
@@ -61,6 +82,7 @@ def apply_nonlinear_alignment(
     out_label: Path,
     compare_out: Path,
     alpha: float = 0.45,
+    hemisphere: str = "auto",
 ) -> dict:
     """Apply nonlinear landmark alignment, score result, render comparison.
 
@@ -69,7 +91,14 @@ def apply_nonlinear_alignment(
     from scripts.align_nonlinear import apply_landmark_nonlinear
 
     meta = apply_landmark_nonlinear(real_path, atlas_label_path, pairs_csv, out_label)
-    scores = score_and_render_comparison(real_path, atlas_label_path, out_label, compare_out, alpha)
+    scores = score_and_render_comparison(
+        real_path,
+        atlas_label_path,
+        out_label,
+        compare_out,
+        alpha,
+        hemisphere=hemisphere,
+    )
     return {**meta, **scores}
 
 
@@ -80,6 +109,7 @@ def apply_affine_alignment(
     out_label: Path,
     compare_out: Path,
     alpha: float = 0.45,
+    hemisphere: str = "auto",
 ) -> dict:
     """Apply affine landmark alignment, score result, render comparison.
 
@@ -88,7 +118,14 @@ def apply_affine_alignment(
     from scripts.align_ai import apply_landmark_affine
 
     meta = apply_landmark_affine(real_path, atlas_label_path, pairs_csv, out_label)
-    scores = score_and_render_comparison(real_path, atlas_label_path, out_label, compare_out, alpha)
+    scores = score_and_render_comparison(
+        real_path,
+        atlas_label_path,
+        out_label,
+        compare_out,
+        alpha,
+        hemisphere=hemisphere,
+    )
     return {**meta, **scores}
 
 
@@ -108,7 +145,9 @@ def propose_landmarks(
     from scripts.ai_landmark import propose_landmarks as _propose_landmarks
 
     return _propose_landmarks(
-        real_path, atlas_path, out_csv,
+        real_path,
+        atlas_path,
+        out_csv,
         max_points=max_points,
         min_distance=min_distance,
         ransac_residual=ransac_residual,
@@ -125,7 +164,7 @@ def render_landmark_preview(
 
     Returns the number of landmark pairs drawn.
     """
-    from scripts.slice_select import select_real_slice_2d, select_label_slice_2d
+    from scripts.slice_select import select_label_slice_2d, select_real_slice_2d
 
     real = imread(str(real_path))
     atlas = imread(str(atlas_path))
@@ -142,14 +181,14 @@ def render_landmark_preview(
 
     pairs = pd.read_csv(pairs_csv)
     for _, r in pairs.iterrows():
-        rx, ry = int(r['real_x']), int(r['real_y'])
-        ax, ay = int(r['atlas_x']), int(r['atlas_y'])
+        rx, ry = int(r["real_x"]), int(r["real_y"])
+        ax, ay = int(r["atlas_x"]), int(r["atlas_y"])
         if 0 <= ry < h and 0 <= rx < w:
-            real_rgb[max(0, ry - 2):ry + 3, max(0, rx - 2):rx + 3] = [255, 255, 0]
+            real_rgb[max(0, ry - 2) : ry + 3, max(0, rx - 2) : rx + 3] = [255, 255, 0]
         if 0 <= ay < h and 0 <= ax < w:
-            atlas_rgb[max(0, ay - 2):ay + 3, max(0, ax - 2):ax + 3] = [0, 255, 255]
+            atlas_rgb[max(0, ay - 2) : ay + 3, max(0, ax - 2) : ax + 3] = [0, 255, 255]
 
     pad = np.zeros((h, 8, 3), dtype=np.uint8)
     canvas = np.concatenate([real_rgb, pad, atlas_rgb], axis=1)
-    imwrite(str(out_path), canvas)
+    _save_true_png(out_path, canvas)
     return int(len(pairs))

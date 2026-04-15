@@ -4,7 +4,7 @@
 
 Double-click:
 
-`StartIdleBrainTrial.bat`
+`StartBrainfast.bat`
 
 This starts the desktop launcher from the local Python environment and opens:
 
@@ -16,7 +16,7 @@ The PyInstaller build reached the final EXE step, but Windows Defender blocked i
 
 `WinError 225`
 
-That means the current blocker is OS security policy, not an IdleBrain import/runtime error.
+That means the current blocker is OS security policy, not an Brainfast import/runtime error.
 
 ## Status of the attempted build
 

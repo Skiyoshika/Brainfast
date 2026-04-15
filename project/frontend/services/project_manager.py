@@ -12,7 +12,6 @@ Sample status lifecycle::
 from __future__ import annotations
 
 import uuid
-from pathlib import Path
 from typing import Any
 
 from project.frontend.services.database import get_conn, init_db, now_iso

@@ -1,55 +1,52 @@
-"""
-下载 Allen CCFv3 annotation_25.nrrd 并转换为 annotation_25.nii.gz
-运行方式: python download_atlas.py
-"""
-import urllib.request
-import os
-import sys
+from __future__ import annotations
 
-URL  = "http://download.alleninstitute.org/informatics-archive/current-release/mouse_ccf/annotation/ccf_2017/annotation_25.nrrd"
-NRRD = "annotation_25.nrrd"
-NII  = "annotation_25.nii.gz"
+import argparse
+import json
+from pathlib import Path
 
-# ── 1. Download ──────────────────────────────────────────────────────────────
-if not os.path.exists(NRRD):
-    print(f"Downloading {URL} ...")
-    def _progress(block, block_size, total):
-        done = block * block_size
-        pct  = done / total * 100 if total > 0 else 0
-        mb   = done / 1024 / 1024
-        tot  = total / 1024 / 1024
-        print(f"\r  {pct:5.1f}%  {mb:.1f} / {tot:.1f} MB", end="", flush=True)
-    urllib.request.urlretrieve(URL, NRRD, reporthook=_progress)
-    print(f"\nSaved → {NRRD}")
-else:
-    print(f"Already exists: {NRRD}")
+from scripts.asset_bootstrap import ensure_atlas_assets
 
-# ── 2. Convert NRRD → NIfTI ──────────────────────────────────────────────────
-if not os.path.exists(NII):
-    print("Converting to NIfTI ...")
-    import nrrd
-    import nibabel as nib
-    import numpy as np
 
-    data, header = nrrd.read(NRRD)
-    print(f"  shape: {data.shape}  dtype: {data.dtype}")
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Ensure Brainfast atlas assets are available locally."
+    )
+    parser.add_argument(
+        "--project-root",
+        default=str(Path(__file__).resolve().parent),
+        help="Path to the project/ directory",
+    )
+    parser.add_argument(
+        "--ensure",
+        action="store_true",
+        help="Accepted for compatibility; the script always runs in ensure mode.",
+    )
+    parser.add_argument(
+        "--no-download",
+        action="store_true",
+        help="Only inspect and convert local assets; do not fetch from the network",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the final asset status as JSON",
+    )
+    args = parser.parse_args()
 
-    # NRRD space directions → NIfTI affine (voxel size in mm)
-    # CCFv3 25µm → spacing = 0.025 mm
-    spacings = header.get("space directions", None)
-    if spacings is not None:
-        spacings = np.array(spacings, dtype=float)
-        voxel_mm = np.abs(np.diag(spacings))
+    project_root = Path(args.project_root).resolve()
+    status = ensure_atlas_assets(
+        project_root,
+        allow_download=not args.no_download,
+        logger=lambda msg: print(f"[atlas] {msg}"),
+    )
+    if args.json:
+        print(json.dumps(status, indent=2, ensure_ascii=False))
     else:
-        voxel_mm = np.array([0.025, 0.025, 0.025])
+        print("[atlas] annotation ready:", status["annotationReady"])
+        print("[atlas] structure ready:", status["structureReady"])
+        print("[atlas] structure source:", status["structurePath"] or "<missing>")
+    return 0 if status["allRequiredReady"] else 1
 
-    affine = np.diag(list(voxel_mm) + [1.0])
-    img = nib.Nifti1Image(data.astype(np.int32), affine)
-    img.header.set_zooms(voxel_mm)
-    nib.save(img, NII)
-    print(f"Saved → {NII}  ({os.path.getsize(NII)/1024/1024:.1f} MB)")
-else:
-    print(f"Already exists: {NII}")
 
-print("\nDone! Atlas file ready.")
-print(f"Full path: {os.path.abspath(NII)}")
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -322,26 +322,15 @@ def outputs_demo_panel():
         )
     ):
         try:
-            script = ctx.PROJECT_ROOT / "scripts" / "make_demo_panel.py"
+            script = ctx.PROJECT_ROOT / "scripts" / "refresh_demo.py"
+            cmd = [sys.executable, str(script), "--outputs-dir", str(outputs_root)]
             subprocess.run(
-                [
-                    sys.executable,
-                    str(script),
-                    "--reg_dir",
-                    str(reg_dir),
-                    "--out",
-                    str(panel_path),
-                    "--n",
-                    "12",
-                    "--cols",
-                    "4",
-                    "--size",
-                    "380",
-                ],
+                cmd,
                 cwd=str(ctx.PROJECT_ROOT),
-                timeout=120,
+                timeout=180,
                 check=True,
                 capture_output=True,
+                text=True,
             )
         except Exception as exc:
             return jsonify(
@@ -410,10 +399,11 @@ def outputs_refresh_demo():
                 ctx._append_log(f"[refresh_demo] regenerated 3D QC visuals for {run_dir.name}")
                 return
 
+            cmd = [sys.executable, str(script), "--outputs-dir", str(outputs_root)]
             result = subprocess.run(
-                [sys.executable, str(script)],
+                cmd,
                 cwd=str(ctx.PROJECT_ROOT),
-                timeout=180,
+                timeout=240,
                 capture_output=True,
                 text=True,
             )

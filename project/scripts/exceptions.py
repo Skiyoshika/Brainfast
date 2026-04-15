@@ -14,10 +14,6 @@ class BrainfastError(Exception):
     """Base class for all Brainfast errors. Always catch this in top-level handlers."""
 
 
-# Backwards-compat alias
-IdleBrainError = BrainfastError
-
-
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
 
@@ -73,6 +69,14 @@ class DetectionError(BrainfastError):
         prefix = f"[slice {slice_idx}] " if slice_idx is not None else ""
         super().__init__(prefix + message)
         self.slice_idx = slice_idx
+
+
+class CellposeRuntimeError(DetectionError):
+    """Raised when Cellpose is the configured detector but fails at runtime.
+
+    This prevents a broken/missing Cellpose installation from being silently
+    interpreted as "zero cells detected".
+    """
 
 
 # ── I/O ───────────────────────────────────────────────────────────────────────

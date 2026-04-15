@@ -21,12 +21,22 @@
     "signal_type": "cyto"
   },
   "compute": {
-    "device": "cuda",
+    "device": "auto",
     "gpu_name": "RTX 5060 Laptop GPU",
     "vram_gb": 8
   },
   "registration": {
     "mode": "2d_slice_with_3d_smoothness",
+    "scope": "whole",
+    "whole_brain_backend": "miki_3d",
+    "truth_source": "3d_registered_volume",
+    "template_path": "configs/allen_ref_cache/average_template_25.nii.gz",
+    "annotation_path": "annotation_25.nii.gz",
+    "skip_laplacian_refinement": true,
+    "ants_transform": "SyN",
+    "random_seed": 42,
+    "laplacian_lambda": 0.18,
+    "laplacian_maxiter": 100,
     "auto_first": true,
     "fail_score_threshold": 0.1,
     "landmark_fallback": true,
@@ -35,6 +45,7 @@
     "atlas_z_from_filename": true,
     "atlas_z_z_scale": 0.2,
     "atlas_z_offset": 150,
+    "ml_flip": false,
     "atlas_hemisphere": "right_flipped",
     "atlas_z_refine_range": 0,
     "tissue_shrink_factor": 0.88,
@@ -53,8 +64,9 @@
     "sitk_max_disp_frac": 0.10
   },
   "detection": {
-    "primary_model": "cellpose_cyto2",
-    "secondary_model": "cellpose_nuclei",
+    "mode": "cellpose",
+    "primary_model": "cpsam",
+    "secondary_model": "none",
     "merge_primary_secondary": false,
     "cellpose_gpu": true,
     "cellpose_diameter_um": 12.0,
@@ -73,7 +85,7 @@
     "fallback_log_min_sigma": 1.0,
     "fallback_log_max_sigma": 4.0,
     "fallback_log_num_sigma": 8,
-    "fallback_log_threshold_rel": 0.015,
+    "fallback_log_threshold_rel": 0.10,
     "fallback_min_distance": 6,
     "fallback_threshold": 150.0,
     "auto_switch_on_distortion": true

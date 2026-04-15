@@ -273,35 +273,62 @@ def outputs_registration_qc():
     return send_from_directory(fp.parent, fp.name)
 
 
+@bp.get("/volume-reg-stats")
+def outputs_volume_reg_stats():
+    fp = ctx.active_output_dir() / "volume_registration_qc.csv"
+    if not fp.exists():
+        return jsonify({"ok": False, "error": "volume QC not found"}), 404
+    return send_from_directory(str(fp.parent), fp.name)
+
+
 @bp.get("/reg-slice-list")
 def outputs_reg_slice_list():
-    reg_dir = _outputs_root() / "registered_slices"
-    if not reg_dir.exists():
-        return jsonify({"ok": True, "files": [], "count": 0})
-    files = sorted(reg_dir.glob("slice_*_overlay.png"))
-    return jsonify({"ok": True, "files": [f.name for f in files], "count": len(files)})
+    out = _outputs_root()
+    # Check both truth_export (3D pipeline) and registered_slices (2D pipeline)
+    for subdir in ("truth_export", "registered_slices"):
+        reg_dir = out / subdir
+        if reg_dir.exists():
+            files = sorted(reg_dir.glob("slice_*_overlay.png"))
+            if files:
+                return jsonify({"ok": True, "files": [f.name for f in files], "count": len(files)})
+    return jsonify({"ok": True, "files": [], "count": 0})
 
 
 @bp.get("/reg-slice/<filename>")
 def outputs_reg_slice_file(filename: str):
-    reg_dir = _outputs_root() / "registered_slices"
+    out = _outputs_root()
     safe = Path(filename).name
-    fp = reg_dir / safe
-    if not fp.exists() or not safe.endswith(".png"):
+    if not safe.endswith(".png"):
         return jsonify({"ok": False, "error": "file not found", "error_code": ERR_NOT_FOUND}), 404
-    return send_from_directory(str(reg_dir), safe)
+    for subdir in ("truth_export", "registered_slices"):
+        reg_dir = out / subdir
+        fp = reg_dir / safe
+        if fp.exists():
+            return send_from_directory(str(reg_dir), safe)
+    return jsonify({"ok": False, "error": "file not found", "error_code": ERR_NOT_FOUND}), 404
 
 
 @bp.get("/file-list")
 def outputs_file_list():
-    outputs_root = _outputs_root()
-    if not outputs_root.exists():
-        return jsonify({"ok": True, "files": []})
+    out_dir = _outputs_root()
+    if not out_dir.exists():
+        return jsonify({"ok": True, "files": [], "dir": str(out_dir)})
     files = []
-    for f in sorted(outputs_root.iterdir()):
+    for f in sorted(out_dir.iterdir()):
         if f.is_file():
             files.append({"name": f.name, "size": f.stat().st_size, "ext": f.suffix.lower()})
-    return jsonify({"ok": True, "files": files, "dir": str(outputs_root)})
+        elif f.is_dir():
+            # Include first-level subdir files (e.g. paper_report/)
+            for sf in sorted(f.iterdir()):
+                if sf.is_file():
+                    files.append(
+                        {
+                            "name": f"{f.name}/{sf.name}",
+                            "size": sf.stat().st_size,
+                            "ext": sf.suffix.lower(),
+                        }
+                    )
+    return jsonify({"ok": True, "files": files, "dir": str(out_dir)})
 
 
 @bp.get("/registration-runs")
@@ -353,7 +380,7 @@ def outputs_registration_run_file(run_name: str, filename: str):
     return send_from_directory(str(run_dir), safe)
 
 
-@bp.get("/named/<filename>")
+@bp.get("/named/<path:filename>")
 def outputs_named(filename: str):
     safe = Path(filename).name
     outputs_root = _outputs_root()
@@ -469,14 +496,26 @@ def outputs_qc_file(filename: str):
     return send_from_directory(str(qc_dir), safe)
 
 
+@bp.post("/open-folder")
+def outputs_open_folder():
+    out_dir = ctx.active_output_dir()
+    if not out_dir.exists():
+        return jsonify({"ok": False, "error": "output folder not found", "path": str(out_dir)}), 404
+    try:
+        ctx.open_folder_in_shell(out_dir)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc), "path": str(out_dir)}), 500
+    return jsonify({"ok": True, "path": str(out_dir)})
+
+
 @bp.get("/ap-density")
 def outputs_ap_density():
     """Return per-AP-slice cell count for the AP density chart in the Results tab.
 
     Merges cell_counts_leaf.csv (has slice_id) with slice_registration_qc.csv
-    (has slice_id → best_z / atlas AP coordinate).
+    (has slice_id -> best_z / atlas AP coordinate).
     """
-    import pandas as pd  # local import — only needed for this route
+    import pandas as pd  # local import -- only needed for this route
 
     outputs_root = _outputs_root()
     leaf_path = outputs_root / "cell_counts_leaf.csv"
@@ -501,7 +540,7 @@ def outputs_ap_density():
             {"ok": False, "error": f"Failed to read CSVs: {exc}", "error_code": ERR_INTERNAL}
         ), 500
 
-    # Identify the AP column — may be named best_z, atlas_z, ap_index, etc.
+    # Identify the AP column -- may be named best_z, atlas_z, ap_index, etc.
     ap_col = next((c for c in ("best_z", "atlas_z", "ap_index", "ap") if c in qc.columns), None)
     if ap_col is None or "slice_id" not in qc.columns or "slice_id" not in leaf.columns:
         return (

@@ -1,4 +1,4 @@
-"""api_pipeline.py — Pipeline run/status/cancel/logs/history routes."""
+"""api_pipeline.py - Pipeline run/status/cancel/logs/history routes."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from flask import Blueprint, jsonify, request, send_from_directory
+from flask import Blueprint, current_app, jsonify, request, send_from_directory
 
 import project.frontend.server_context as ctx
 from project.frontend.api_errors import (
@@ -18,9 +18,33 @@ from project.frontend.api_errors import (
     ERR_INVALID_INPUT,
     ERR_PIPELINE_RUNNING,
 )
+from project.frontend.app_metadata import read_version_info
+from project.scripts.asset_bootstrap import atlas_asset_status
 from project.scripts.config_validation import collect_runtime_config_issues, load_config
 
 bp = Blueprint("api_pipeline", __name__)
+
+
+def _detect_compute() -> dict:
+    """Auto-detect GPU availability for the /api/info endpoint."""
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            name = torch.cuda.get_device_name(0)
+            try:
+                vram = round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1)
+            except Exception:
+                vram = 0
+            return {
+                "device": "cuda",
+                "gpuName": name,
+                "vramGb": vram,
+                "torchVersion": torch.__version__,
+            }
+    except ImportError:
+        pass
+    return {"device": "cpu", "gpuName": "", "vramGb": 0, "torchVersion": ""}
 
 
 def _resolve_job_id(payload: dict | None = None) -> str:
@@ -40,30 +64,6 @@ def _job_outputs_dir(job_id: str | None = None) -> Path:
 def _make_job_id() -> str:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return ctx._sanitize_job_id(f"job_{stamp}_{uuid4().hex[:8]}")
-
-
-def _read_version_info() -> dict[str, str]:
-    version_path = ctx.PROJECT_ROOT / "version.json"
-    fallback = {"version": "0.5.1", "build_date": "", "commit": ""}
-    # Try version.json first (created by build_version_json.py during release)
-    if version_path.exists():
-        try:
-            data = json.loads(version_path.read_text(encoding="utf-8"))
-            return {
-                "version": str(data.get("version", fallback["version"])),
-                "build_date": str(data.get("build_date", "")),
-                "commit": str(data.get("commit", "")),
-            }
-        except Exception:
-            pass
-    # Fall back to setuptools-scm generated _version.py
-    try:
-        import project._version as _v  # type: ignore[import]
-
-        return {"version": str(_v.__version__), "build_date": "", "commit": ""}
-    except Exception:
-        pass
-    return fallback
 
 
 def _ALLOWED_CONFIG_ROOTS():
@@ -200,18 +200,26 @@ def index():
 
 @bp.get("/api/info")
 def info():
+    assets = atlas_asset_status(ctx.PROJECT_ROOT)
     default_atlas = ctx.PROJECT_ROOT / "annotation_25.nii.gz"
     default_struct = ctx.DEFAULT_STRUCTURE_SOURCE
-    version = _read_version_info()
+    version_info = read_version_info(ctx.PROJECT_ROOT)
     return jsonify(
         {
             "app": "BrainfastUI",
-            "version": version["version"],
-            "buildDate": version["build_date"],
-            "commit": version["commit"],
+            "version": version_info["version"],
+            "buildDate": version_info["build_date"],
+            "commit": version_info["commit"],
+            "repository": version_info.get("repository", ""),
+            "releasesPage": version_info.get("releases_page", ""),
             "frontend": str(ctx.ROOT),
             "project": str(ctx.PROJECT_ROOT),
-            "outputs": str(ctx.OUTPUT_DIR),
+            "outputs": str(ctx.active_output_dir()),
+            "limits": {
+                "maxContentLengthBytes": int(current_app.config.get("MAX_CONTENT_LENGTH") or 0)
+            },
+            "assets": assets,
+            "compute": _detect_compute(),
             "defaults": {
                 "atlasPath": str(default_atlas),
                 "structPath": str(default_struct) if default_struct.exists() else "",
@@ -317,7 +325,6 @@ def run_pipeline():
     channels = payload.get("channels", ["red"])
     if isinstance(channels, str):
         channels = [channels]
-
     run_params = payload.get("params", {})
     # BUG-1 fix: set running=True inside the lock BEFORE starting the thread,
     # so concurrent requests see the correct state and cannot bypass the 409 check.
@@ -438,7 +445,7 @@ def history():
 
 @bp.get("/api/poll")
 def poll():
-    """Composite poll endpoint — replaces three independent polling loops.
+    """Composite poll endpoint -- replaces three independent polling loops.
 
     Returns a single JSON object containing:
       running, done, error, progress, slicesDone, slicesTotal,
@@ -553,7 +560,7 @@ def export_methods_text():
             f"and hierarchical atlas aggregation."
         )
     text_cn = (
-        f"【方法段落参考（中文）】\n"
+        "【方法段落参考（中文）】\n"
         f"脑图谱配准使用 Brainfast v0.3 完成（运行时间：{ts}）。"
         f"显微图像分辨率为 {pixel_size} μm/像素。"
         f"图谱配准参照 Allen 小鼠脑图谱（CCFv3，annotation_25.nii.gz，体素间距 25 μm"
@@ -563,7 +570,7 @@ def export_methods_text():
         f"{detection_cn}荧光通道：{ch_str}。"
     )
     text_en = (
-        f"\n【Methods paragraph reference (English)】\n"
+        "\n\n[Methods Paragraph Reference (English)]\n"
         f"Brain atlas registration was performed using Brainfast v0.3 (run: {ts}). "
         f"Microscopy images were acquired at {pixel_size} μm/pixel. "
         f"Section registration was carried out against the Allen Mouse Brain Atlas "

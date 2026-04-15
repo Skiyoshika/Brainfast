@@ -2,6 +2,7 @@ Flask==3.0.3
 matplotlib==3.8.3
 nibabel==5.2.1
 numpy==1.26.4
+packaging>=24.0
 pandas==2.2.2
 Pillow==10.2.0
 scikit-image==0.22.0
@@ -9,6 +10,15 @@ scipy==1.12.0
 tifffile==2024.2.12
 tqdm==4.66.2
 
-# Optional: GPU-accelerated cell detection
+# Optional: whole-brain 3D registration (pip install -e ".[wholebrain]")
+# antspyx>=0.4
+
+# Optional: GPU-accelerated cell detection (pip install -e ".[advanced]")
 # SimpleITK==2.3.1
 # cellpose==2.2.3
+
+# Optional: pip install bg-atlasapi for BrainGlobe atlas support (CCFv3-BBP, etc.)
+# bg-atlasapi>=2.0.0
+
+# Optional: pip install DeepSlice for CNN-based AP estimation
+# DeepSlice>=1.0.0

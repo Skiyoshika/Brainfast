@@ -1,4 +1,5 @@
 """Unit tests for config_validation and exceptions modules."""
+
 from __future__ import annotations
 
 import sys
@@ -9,17 +10,21 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.config_validation import collect_runtime_config_issues, validate_runtime_config, load_config
+from scripts.config_validation import (
+    collect_runtime_config_issues,
+    load_config,
+    validate_runtime_config,
+)
 from scripts.exceptions import (
-    ConfigError,
-    RegistrationError,
     AlignmentScoreError,
-    DetectionError,
     AtlasError,
-    PipelineError,
+    BrainfastError,
+    ConfigError,
+    DetectionError,
     InputError,
     OutputError,
-    BrainfastError,
+    PipelineError,
+    RegistrationError,
 )
 
 
@@ -35,6 +40,7 @@ def _minimal_valid_cfg() -> dict:
             "active_channel": "red",
         },
         "detection": {"primary_model": "fallback"},
+        "registration": {},
         "dedup": {"neighbor_slices": 1, "r_xy_um": 8.0},
         "outputs": {
             "leaf_csv": "outputs/leaf.csv",
@@ -103,7 +109,7 @@ class TestValidateRuntimeConfig(unittest.TestCase):
 
 
 class TestExceptionHierarchy(unittest.TestCase):
-    def test_all_errors_are_idlebrain_errors(self):
+    def test_all_errors_are_brainfast_errors(self):
         for cls in (
             ConfigError,
             RegistrationError,
@@ -126,7 +132,9 @@ class TestExceptionHierarchy(unittest.TestCase):
         self.assertIn("0.050", str(err))
 
     def test_config_error_formats_issue_list(self):
-        err = ConfigError("Validation failed", issues=["field_a is required", "field_b must be > 0"])
+        err = ConfigError(
+            "Validation failed", issues=["field_a is required", "field_b must be > 0"]
+        )
         msg = str(err)
         self.assertIn("field_a", msg)
         self.assertIn("field_b", msg)

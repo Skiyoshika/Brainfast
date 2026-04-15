@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 from scipy.sparse.linalg import cg
-
 from scripts.laplacian_refine import WeightedDirichletLaplacian, apply_deformation_field
 
 

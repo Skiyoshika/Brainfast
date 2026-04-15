@@ -3,6 +3,7 @@
 Blueprints call these functions; scripts are imported here, not in route handlers.
 All functions take plain Path/dict arguments and return plain Python objects.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -25,8 +26,9 @@ def apply_liquify_and_render(
 
     Returns ``(corrected_label_array, diagnostic_dict)`` from render_overlay.
     """
-    from scripts.slice_select import select_label_slice_2d
     from scripts.overlay_render import render_overlay
+    from scripts.slice_select import select_label_slice_2d
+
     from project.frontend.server_context import _apply_liquify_drags
 
     lbl_raw = imread(str(base_label_path))

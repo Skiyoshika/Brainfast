@@ -7,7 +7,6 @@ import re
 from collections import Counter
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Cell-count chart
 # ---------------------------------------------------------------------------
@@ -497,7 +496,6 @@ def generate_detection_confidence_samples(
     import pandas as pd
     import tifffile
     from PIL import Image, ImageDraw, ImageFont
-
     from scripts.image_utils import norm_u8_robust
     from scripts.make_demo_panel import _crop_bounds
 
@@ -615,10 +613,11 @@ def generate_detection_confidence_samples(
 # ---------------------------------------------------------------------------
 
 
+
 def generate_demo_comparison(
     slice_idx: int,
     reg_dir: Path,
-    data_dir: Path,
+    data_dir: Path | None,
     out_path: Path,
 ) -> None:
     """Generate side-by-side raw vs atlas comparison for a legacy 2D slice."""
@@ -626,8 +625,8 @@ def generate_demo_comparison(
     import numpy as np
     import tifffile as tf
     from PIL import Image, ImageDraw, ImageFont
-
     from scripts.make_demo_panel import _crop_to_brain, _vibrant_recolor
+
 
     ov_path = reg_dir / f"slice_{slice_idx:04d}_overlay.png"
     lbl_path = reg_dir / f"slice_{slice_idx:04d}_registered_label.tif"
@@ -639,7 +638,7 @@ def generate_demo_comparison(
         ov = np.array(image.convert("RGB"))
     lbl = tf.imread(str(lbl_path)) if lbl_path.exists() else np.zeros(ov.shape[:2], dtype=np.int32)
 
-    raw_files = sorted(data_dir.glob("*.tif"))
+    raw_files = sorted(data_dir.glob("*.tif")) if data_dir and data_dir.exists() else []
     raw_file = raw_files[min(slice_idx, len(raw_files) - 1)] if raw_files else None
     if raw_file:
         raw_orig = tf.imread(str(raw_file))
@@ -898,7 +897,6 @@ def generate_registration_annotated_slice(
 ) -> None:
     import numpy as np
     from PIL import Image, ImageDraw, ImageFont
-
     from scripts.make_demo_panel import (
         _apply_tissue_alpha,
         _combined_structure_lookup,

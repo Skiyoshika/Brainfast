@@ -192,8 +192,15 @@ def test_runpaths_accepts_custom_outputs_dir(tmp_path: Path) -> None:
 
 
 def test_info_reads_version_json() -> None:
-    with app.test_client() as client:
-        resp = client.get("/api/info")
-        assert resp.status_code == 200
-        data = resp.get_json()
-        assert data["version"] == "0.5.1"
+    # Ensure PROJECT_ROOT points to the real project dir so version.json is found
+    import project.frontend.server_context as ctx
+    saved = ctx.PROJECT_ROOT
+    ctx.PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    try:
+        with app.test_client() as client:
+            resp = client.get("/api/info")
+            assert resp.status_code == 200
+            data = resp.get_json()
+            assert data["version"] == "0.5.1"
+    finally:
+        ctx.PROJECT_ROOT = saved

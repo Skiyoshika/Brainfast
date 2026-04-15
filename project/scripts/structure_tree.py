@@ -33,29 +33,7 @@ def _load_structure_table_cached(path_str: str) -> pd.DataFrame:
         df = pd.read_csv(path)
     elif path.suffix.lower() == ".json":
         data = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(data, dict):
-            raise ValueError(f"structure json must contain an object: {path}")
-        rows = []
-        for raw_id, info in data.items():
-            if not isinstance(info, dict):
-                continue
-            try:
-                rid = int(raw_id)
-            except Exception:
-                continue
-            rows.append(
-                {
-                    "id": rid,
-                    "name": str(info.get("name", "")).strip(),
-                    "acronym": str(info.get("acronym", "")).strip(),
-                    "color_hex_triplet": str(info.get("color", "")).strip(),
-                    "parent_structure_id": pd.NA,
-                    "structure_id_path": f"/{rid}/",
-                    "depth": 0,
-                    "graph_order": rid,
-                    "hemisphere_id": pd.NA,
-                }
-            )
+        rows = _structure_rows_from_json(data, path)
         df = pd.DataFrame(rows)
     else:
         raise ValueError(f"unsupported structure source: {path}")
@@ -110,6 +88,104 @@ def _load_structure_table_cached(path_str: str) -> pd.DataFrame:
         df["structure_id_path"].fillna(df["id"].map(lambda x: f"/{x}/")).astype(str)
     )
     return df.sort_values(["graph_order", "id"]).reset_index(drop=True)
+
+
+def _structure_rows_from_json(data: object, path: Path) -> list[dict]:
+    if isinstance(data, dict) and "msg" in data:
+        return _rows_from_graph_payload(data)
+
+    if isinstance(data, list):
+        return _rows_from_graph_payload(data)
+
+    if not isinstance(data, dict):
+        raise ValueError(f"structure json must contain an object or graph payload: {path}")
+
+    rows = []
+    for raw_id, info in data.items():
+        if not isinstance(info, dict):
+            continue
+        try:
+            rid = int(raw_id)
+        except Exception:
+            continue
+        rows.append(
+            {
+                "id": rid,
+                "name": str(info.get("name", "")).strip(),
+                "acronym": str(info.get("acronym", "")).strip(),
+                "color_hex_triplet": str(info.get("color", "")).strip(),
+                "parent_structure_id": pd.NA,
+                "structure_id_path": f"/{rid}/",
+                "depth": 0,
+                "graph_order": rid,
+                "hemisphere_id": pd.NA,
+            }
+        )
+    return rows
+
+
+def _rows_from_graph_payload(data: object) -> list[dict]:
+    if isinstance(data, dict):
+        raw_roots = data.get("msg", [])
+    elif isinstance(data, list):
+        raw_roots = data
+    else:
+        raw_roots = []
+    if not isinstance(raw_roots, list):
+        raise ValueError("structure graph payload must contain a list of nodes")
+
+    rows: list[dict] = []
+    fallback_order = 0
+
+    def _color_hex(node: dict) -> str:
+        raw = str(node.get("color_hex_triplet") or node.get("color") or "").strip()
+        if raw:
+            return raw
+        rgb = node.get("rgb_triplet")
+        if isinstance(rgb, list) and len(rgb) >= 3:
+            try:
+                return "".join(f"{max(0, min(255, int(v))):02X}" for v in rgb[:3])
+            except Exception:
+                return ""
+        return ""
+
+    def _walk(node: dict, parent_id: int | None, path_ids: list[int], depth: int) -> None:
+        nonlocal fallback_order
+        try:
+            rid = int(node["id"])
+        except Exception:
+            return
+        current_path = path_ids + [rid]
+        graph_order = node.get("graph_order")
+        if graph_order is None:
+            graph_order = fallback_order
+        fallback_order += 1
+        rows.append(
+            {
+                "id": rid,
+                "name": str(node.get("name", "")).strip(),
+                "acronym": str(node.get("acronym", "")).strip(),
+                "color_hex_triplet": _color_hex(node),
+                "parent_structure_id": parent_id if parent_id is not None else pd.NA,
+                "structure_id_path": str(
+                    node.get("structure_id_path")
+                    or ("/" + "/".join(str(v) for v in current_path) + "/")
+                ),
+                "depth": int(node.get("depth", depth)),
+                "graph_order": int(graph_order),
+                "hemisphere_id": node.get("hemisphere_id", pd.NA),
+            }
+        )
+        children = node.get("children", [])
+        if isinstance(children, list):
+            for child in children:
+                if isinstance(child, dict):
+                    _walk(child, rid, current_path, depth + 1)
+
+    for root in raw_roots:
+        if isinstance(root, dict):
+            _walk(root, None, [], 0)
+    return rows
 
 
 def load_structure_table(path: Path | str) -> pd.DataFrame:

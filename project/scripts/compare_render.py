@@ -14,6 +14,20 @@ def _norm_u8(img: np.ndarray) -> np.ndarray:
     return ((img - img.min()) / (np.ptp(img) + 1e-6) * 255.0).astype(np.uint8)
 
 
+def _crop_hemisphere(label: np.ndarray, hemisphere: str) -> np.ndarray:
+    """Crop a full-brain label to the specified hemisphere."""
+    if hemisphere in ("right", "right_flipped"):
+        half = label.shape[1] // 2
+        cropped = label[:, half:]
+        if hemisphere == "right_flipped":
+            cropped = np.fliplr(cropped)
+        return cropped
+    elif hemisphere == "left":
+        half = label.shape[1] // 2
+        return label[:, :half]
+    return label
+
+
 def render_before_after(
     real_path: Path,
     before_label_path: Path,
@@ -22,6 +36,7 @@ def render_before_after(
     alpha: float = 0.45,
     before_score: float | None = None,
     after_score: float | None = None,
+    hemisphere: str = "auto",
 ) -> Path:
     real = imread(str(real_path))
     b = imread(str(before_label_path))
@@ -30,6 +45,11 @@ def render_before_after(
     real, _ = select_real_slice_2d(real, source_path=real_path)
     b, _ = select_label_slice_2d(b)
     a, _ = select_label_slice_2d(a)
+
+    # Crop atlas labels to hemisphere before resizing
+    if hemisphere and hemisphere not in ("auto", "full"):
+        b = _crop_hemisphere(b, hemisphere)
+        a = _crop_hemisphere(a, hemisphere)
 
     # ensure label maps match real slice size
     if b.shape != real.shape:

@@ -8,7 +8,7 @@ import numpy as np
 
 try:
     from scripts.allen_colors import load_allen_color_map
-except Exception:
+except ImportError:
     from allen_colors import load_allen_color_map
 
 

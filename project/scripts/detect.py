@@ -577,7 +577,7 @@ def detect_cells_cellpose(
                 )
                 if result is None:
                     continue
-                masks, flows, styles, diams = result
+                masks, flows, styles, *_ = result  # cellpose v4 returns 3 values; v3 returned 4
                 tile_intensity = img[y0:y1, x0:x1].astype(np.float32)
                 tile_df = _masks_to_centroids(
                     masks,

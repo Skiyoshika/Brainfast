@@ -255,7 +255,14 @@ def outputs_leaf_channel(channel: str):
 
 @bp.get("/hierarchy")
 def outputs_hierarchy():
-    fp = _outputs_root() / "cell_counts_hierarchy.csv"
+    # Prefer the user-refined liquify3d hierarchy when it exists so the
+    # Results tab reflects Phase β corrections. Falls back to the original
+    # pipeline hierarchy for runs that have not been through the liquify
+    # close-the-loop step.
+    root = _outputs_root()
+    refined = root / "cell_counts_hierarchy_liquify3d.csv"
+    original = root / "cell_counts_hierarchy.csv"
+    fp = refined if refined.exists() else original
     if not fp.exists():
         return jsonify(
             {"ok": False, "error": "hierarchy output not found", "error_code": ERR_NOT_FOUND}

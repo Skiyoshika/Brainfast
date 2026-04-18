@@ -56,11 +56,13 @@ from project.frontend.blueprints.api_compare import bp as compare_bp
 from project.frontend.blueprints.api_demo import bp as demo_bp
 from project.frontend.blueprints.api_detect_preview import bp as detect_preview_bp
 from project.frontend.blueprints.api_docs import bp as docs_bp
+from project.frontend.blueprints.api_liquify_3d import bp as liquify_3d_bp
 from project.frontend.blueprints.api_outputs import bp as outputs_bp
 from project.frontend.blueprints.api_overlay import bp as overlay_bp
 from project.frontend.blueprints.api_pipeline import bp as pipeline_bp
 from project.frontend.blueprints.api_projects import bp as projects_bp
 from project.frontend.blueprints.api_training import bp as training_bp
+from project.frontend.blueprints.api_wizard import bp as wizard_bp
 
 
 def create_app() -> Flask:
@@ -80,6 +82,8 @@ def create_app() -> Flask:
     app.register_blueprint(detect_preview_bp)
     app.register_blueprint(docs_bp)
     app.register_blueprint(projects_bp)
+    app.register_blueprint(liquify_3d_bp)
+    app.register_blueprint(wizard_bp)
 
     @app.errorhandler(RequestEntityTooLarge)
     def _handle_request_too_large(_exc):

@@ -113,6 +113,10 @@
         <span class="nav-icon"><i data-lucide="settings"></i></span>
         <span data-i18n="nav.workflow">Registration Workflow</span>
       </button>
+      <button class="nav-btn" data-tab="newsample">
+        <span class="nav-icon"><i data-lucide="rocket"></i></span>
+        <span data-i18n="nav.newsample">New Sample</span>
+      </button>
       <button class="nav-btn" data-tab="manual-tiff">
         <span class="nav-icon"><i data-lucide="microscope"></i></span>
         <span data-i18n="nav.manualTiff">Manual TIFF Check</span>
@@ -120,6 +124,10 @@
       <button class="nav-btn" data-tab="qc">
         <span class="nav-icon"><i data-lucide="scan-eye"></i></span>
         <span data-i18n="nav.qc">Batch QC Review</span>
+      </button>
+      <button class="nav-btn" data-tab="liquify3d">
+        <span class="nav-icon"><i data-lucide="move"></i></span>
+        <span data-i18n="nav.liquify3d">3D Liquify</span>
       </button>
       <button class="nav-btn" data-tab="results">
         <span class="nav-icon"><i data-lucide="bar-chart-3"></i></span>
@@ -732,6 +740,84 @@
     </div><!-- /tab-workflow -->
 
     <!-- ================================================
+         TAB: New Sample (onboarding wizard)
+    ================================================ -->
+    <div class="tab-content" id="tab-newsample">
+      <section class="panel">
+        <h2 data-i18n="newsample.title">New Sample — Onboarding Wizard</h2>
+        <p class="hint-text" data-i18n="newsample.hint">
+          Point at a folder of TIFF slices (or a multi-page TIFF), let Brainfast read the metadata,
+          then launch the registration pipeline without editing any config files.
+        </p>
+
+        <!-- Step 1: Source -->
+        <div class="form-row" style="gap:12px; align-items:end; margin-top:10px;">
+          <label style="flex:1;display:flex;flex-direction:column;gap:4px;">
+            <span data-i18n="newsample.sourcePath">
+              <strong>Step 1.</strong> Source path (directory of slice TIFFs, or a multi-page TIFF)
+            </span>
+            <input id="wizSourcePath" type="text"
+                   placeholder="D:/Brainfast/project/data/35_C0_full_raw"
+                   style="width:100%;" />
+          </label>
+          <button type="button" class="btn" id="wizInspectBtn">
+            <i data-lucide="search" class="btn-icon"></i>
+            <span data-i18n="newsample.inspect">Inspect</span>
+          </button>
+        </div>
+        <div id="wizInspectStatus" class="hint-text" style="margin-top:6px;"></div>
+
+        <!-- Step 2: Configure -->
+        <div style="margin-top:18px; padding-top:10px; border-top:1px dashed var(--border,#333);">
+          <p><strong data-i18n="newsample.step2">Step 2.</strong>
+            <span data-i18n="newsample.step2hint">Configure (defaults auto-filled from inspection)</span>
+          </p>
+          <div class="form-row" style="gap:12px; flex-wrap:wrap; margin-top:6px;">
+            <label style="display:flex;flex-direction:column;gap:4px;">
+              <span data-i18n="newsample.sampleId">Sample ID</span>
+              <input id="wizSampleId" type="text" placeholder="35_C0" style="width:160px;" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;">
+              <span data-i18n="newsample.pixelUm">XY pixel (µm)</span>
+              <input id="wizPixelUm" type="number" step="0.001" value="5.0" style="width:120px;" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;">
+              <span data-i18n="newsample.zUm">Z spacing (µm)</span>
+              <input id="wizZUm" type="number" step="0.001" value="25.0" style="width:120px;" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;">
+              <span data-i18n="newsample.hemi">Atlas hemisphere</span>
+              <select id="wizHemi" style="width:160px;">
+                <option value="right_flipped">right_flipped</option>
+                <option value="right">right</option>
+                <option value="left">left</option>
+              </select>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;">
+              <span data-i18n="newsample.channel">Channel</span>
+              <select id="wizChannel" style="width:120px;">
+                <option value="red">red (C0)</option>
+                <option value="green">green (C1)</option>
+                <option value="farred">farred (C2)</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <!-- Step 3: Launch -->
+        <div class="form-row" style="gap:12px; margin-top:18px; padding-top:10px; border-top:1px dashed var(--border,#333);">
+          <button type="button" class="btn btn-primary" id="wizLaunchBtn" disabled>
+            <i data-lucide="play" class="btn-icon"></i>
+            <span data-i18n="newsample.launch">
+              <strong>Step 3.</strong> Generate config &amp; start pipeline
+            </span>
+          </button>
+          <span id="wizLaunchStatus" class="hint-text"></span>
+        </div>
+      </section>
+    </div><!-- /tab-newsample -->
+
+    <!-- ================================================
          TAB 2: Manual TIFF Check
     ================================================ -->
     <div class="tab-content" id="tab-manual-tiff">
@@ -1186,6 +1272,143 @@
         <div id="batchQueueTable"><div class="empty-hint" data-i18n="batch.empty">Queue is empty.</div></div>
       </section>
     </div><!-- /tab-projects -->
+
+    <!-- ============ 3D LIQUIFY TAB ============ -->
+    <div class="tab-content" id="tab-liquify3d">
+      <section class="panel">
+        <h2 data-i18n="liquify3d.title">3D Landmark Liquify</h2>
+        <p class="hint-text" data-i18n="liquify3d.hint">
+          Click on the overlay: first click marks where the <strong>atlas region currently sits</strong>,
+          second click marks where the <strong>real anatomy actually is</strong>. The backend accumulates
+          these pairs across z-slices and solves a 3D Laplacian warp to snap the annotation to the tissue.
+        </p>
+
+        <div class="form-row" style="gap:12px; align-items:center; flex-wrap:wrap;">
+          <label style="display:flex;gap:6px;align-items:center;">
+            <span data-i18n="liquify3d.jobLabel">Job ID</span>
+            <input id="liq3dJobId" type="text" style="width:140px;" />
+          </label>
+          <button type="button" class="btn" id="liq3dReloadBtn">
+            <i data-lucide="refresh-cw" class="btn-icon"></i>
+            <span data-i18n="liquify3d.reload">Reload slice list</span>
+          </button>
+          <span id="liq3dSliceStatus" class="hint-text" data-i18n="liquify3d.noSlices">No slices loaded</span>
+        </div>
+
+        <div class="form-row" style="gap:12px; align-items:center; margin-top:10px;">
+          <label style="flex:1;display:flex;gap:8px;align-items:center;">
+            <span data-i18n="liquify3d.z">z =</span>
+            <input id="liq3dZ" type="range" min="0" max="0" value="0" style="flex:1;" />
+            <input id="liq3dZNum" type="number" min="0" value="0" style="width:80px;" />
+            <span id="liq3dZMax" class="hint-text">/ 0</span>
+          </label>
+        </div>
+
+        <div class="form-row" style="gap:12px; align-items:center; margin-top:10px;">
+          <span data-i18n="liquify3d.modeLabel">Next click:</span>
+          <label><input type="radio" name="liq3dClickMode" value="atlas" checked />
+            <span data-i18n="liquify3d.modeAtlas">Atlas (where region currently is)</span></label>
+          <label><input type="radio" name="liq3dClickMode" value="real" />
+            <span data-i18n="liquify3d.modeReal">Real (where it should be)</span></label>
+          <span id="liq3dPendingStatus" class="hint-text"></span>
+        </div>
+
+        <div id="liq3dCanvasWrap" style="position:relative; margin-top:12px; max-width:100%; overflow:auto;">
+          <img id="liq3dImg" src="" alt="overlay" style="display:none; max-width:100%;" />
+          <canvas id="liq3dCanvas" style="position:absolute; left:0; top:0; cursor:crosshair;"></canvas>
+        </div>
+        <div id="liq3dCoordBadge" class="hint-text" style="margin-top:6px; font-family:monospace;"></div>
+
+        <div class="form-row" style="gap:12px; margin-top:12px;">
+          <button type="button" class="btn btn-primary" id="liq3dApplyBtn">
+            <i data-lucide="play" class="btn-icon"></i>
+            <span data-i18n="liquify3d.apply">Apply 3D warp (Laplacian)</span>
+          </button>
+          <button type="button" class="btn" id="liq3dUndoBtn" title="Undo last pair (Ctrl+Z)">
+            <i data-lucide="undo-2" class="btn-icon"></i>
+            <span data-i18n="liquify3d.undo">Undo last (Ctrl+Z)</span>
+          </button>
+          <button type="button" class="btn" id="liq3dClearBtn">
+            <i data-lucide="trash-2" class="btn-icon"></i>
+            <span data-i18n="liquify3d.clear">Clear all pairs</span>
+          </button>
+          <span id="liq3dApplyStatus" class="hint-text"></span>
+        </div>
+
+        <!-- Close-the-loop: propagate refined annotation into cell counts -->
+        <div class="form-row" style="gap:12px; align-items:center; margin-top:14px; padding-top:10px; border-top:1px dashed var(--border,#333);">
+          <button type="button" class="btn btn-primary" id="liq3dFinalizeBtn">
+            <i data-lucide="check-circle-2" class="btn-icon"></i>
+            <span data-i18n="liquify3d.finalize">Finalize &amp; re-export cell counts</span>
+          </button>
+          <span id="liq3dFinalizeStatus" class="hint-text">
+            Uses the liquify-refined annotation + existing cells CSV to produce
+            <code>cell_counts_hierarchy_liquify3d.csv</code>.
+          </span>
+        </div>
+
+        <!-- QC done sign-off (#11) -->
+        <div class="form-row" style="gap:12px; align-items:center; margin-top:14px; padding-top:10px; border-top:1px dashed var(--border,#333);">
+          <button type="button" class="btn" id="liq3dQcDoneBtn" title="Mark this job as user-approved and persist sign-off metrics">
+            <i data-lucide="badge-check" class="btn-icon"></i>
+            <span data-i18n="liquify3d.qcDone">Mark QC done</span>
+          </button>
+          <span id="liq3dQcStatus" class="hint-text"></span>
+        </div>
+
+        <!-- Phase γ: class-prior closed-loop controls -->
+        <div class="form-row" style="gap:8px; align-items:center; margin-top:14px; padding-top:10px; border-top:1px dashed var(--border,#333);">
+          <label style="display:flex;gap:6px;align-items:center;">
+            <span data-i18n="liquify3d.classLabel">Class</span>
+            <input id="liq3dClassName" type="text" placeholder="ChATe27" list="liq3dClassList" style="width:160px;" />
+            <datalist id="liq3dClassList"></datalist>
+          </label>
+          <button type="button" class="btn" id="liq3dPriorStatusBtn">
+            <i data-lucide="info" class="btn-icon"></i>
+            <span data-i18n="liquify3d.priorStatus">Prior status</span>
+          </button>
+          <button type="button" class="btn" id="liq3dPriorHeatBtn" title="Show class-prior landmark density across z">
+            <i data-lucide="bar-chart-2" class="btn-icon"></i>
+            <span data-i18n="liquify3d.priorHeat">Coverage heatmap</span>
+          </button>
+          <button type="button" class="btn" id="liq3dSaveToPriorBtn">
+            <i data-lucide="upload" class="btn-icon"></i>
+            <span data-i18n="liquify3d.saveToPrior">Save job → class prior</span>
+          </button>
+          <button type="button" class="btn" id="liq3dLoadFromPriorBtn">
+            <i data-lucide="download" class="btn-icon"></i>
+            <span data-i18n="liquify3d.loadFromPrior">Warm-start from prior</span>
+          </button>
+          <span id="liq3dPriorBanner" class="hint-text"></span>
+        </div>
+        <div id="liq3dPriorHeatRow" style="margin-top:6px; display:none;">
+          <div class="hint-text" style="margin-bottom:2px;" data-i18n="liquify3d.priorHeatHint">
+            Class-prior landmark density across z (taller bar = more contributing samples at that z):
+          </div>
+          <canvas id="liq3dPriorHeatCanvas" width="800" height="48"
+                  style="width:100%; height:48px; background:var(--bg-alt,#1c1c1c); border:1px solid var(--border,#333); border-radius:4px;"></canvas>
+        </div>
+
+        <div style="margin-top:14px;">
+          <h3 style="font-size:14px;margin:0 0 6px 0;" data-i18n="liquify3d.pairsTitle">
+            Landmark pairs (<span id="liq3dPairCount">0</span>)
+          </h3>
+          <div id="liq3dPairsWrap" style="max-height:320px; overflow:auto; border:1px solid var(--border, #333); border-radius:4px;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px;">
+              <thead style="background:var(--bg-alt, #222);">
+                <tr>
+                  <th style="padding:4px;">#</th><th style="padding:4px;">z</th>
+                  <th style="padding:4px;" data-i18n="liquify3d.atlasHdr">Atlas (y, x)</th>
+                  <th style="padding:4px;" data-i18n="liquify3d.realHdr">Real (y, x)</th>
+                  <th style="padding:4px;"></th>
+                </tr>
+              </thead>
+              <tbody id="liq3dPairsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div><!-- /tab-liquify3d -->
 
   </main>
 </div><!-- /app -->

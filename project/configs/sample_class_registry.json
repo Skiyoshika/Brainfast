@@ -1,0 +1,9 @@
+{
+  "_comment": "Sample-class auto-detect: maps sample/job ID regex → class prior name. First match wins; invalid entries are skipped silently.",
+  "patterns": [
+    {"match": "^3[59]_", "class": "ChATe27"},
+    {"match": "^4[01]_", "class": "ChATe27"},
+    {"match": "^PV",     "class": "PVe3"},
+    {"match": "^SST",    "class": "SSTe4"}
+  ]
+}

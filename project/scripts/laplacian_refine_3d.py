@@ -19,8 +19,6 @@ from pathlib import Path
 import nibabel as nib
 import numpy as np
 from scipy.ndimage import binary_dilation, binary_erosion
-from scipy.sparse import csr_matrix, diags
-from scipy.sparse.linalg import cg
 from scripts.registration_3d_ants import compute_registration_metrics
 
 _log = logging.getLogger(__name__)
@@ -105,155 +103,10 @@ def _extract_boundary_correspondences(
 
 
 # ---------------------------------------------------------------------------
-# 2. Sparse Laplacian matrix
-# ---------------------------------------------------------------------------
-
-
-def _build_laplacian_3d(shape: tuple[int, int, int], spacing: tuple[float, ...]) -> csr_matrix:
-    """Build 3D Laplacian matrix with spacing-weighted finite differences.
-
-    For a grid of shape (D, H, W), the Laplacian at voxel (i,j,k) is:
-        L[v] = sum_neighbors (u_neighbor - u_v) / h^2
-
-    Returns sparse matrix of size (D*H*W, D*H*W).
-    """
-    D, H, W = shape
-    N = D * H * W
-    sz, sy, sx = [float(s) for s in spacing[:3]]
-
-    # Weights for each axis
-    wz = 1.0 / (sz * sz)
-    wy = 1.0 / (sy * sy)
-    wx = 1.0 / (sx * sx)
-
-    rows, cols, vals = [], [], []
-
-    def _idx(z, y, x):
-        return z * H * W + y * W + x
-
-    for z in range(D):
-        for y in range(H):
-            for x in range(W):
-                v = _idx(z, y, x)
-                diag_val = 0.0
-
-                if z > 0:
-                    rows.append(v)
-                    cols.append(_idx(z - 1, y, x))
-                    vals.append(wz)
-                    diag_val -= wz
-                if z < D - 1:
-                    rows.append(v)
-                    cols.append(_idx(z + 1, y, x))
-                    vals.append(wz)
-                    diag_val -= wz
-                if y > 0:
-                    rows.append(v)
-                    cols.append(_idx(z, y - 1, x))
-                    vals.append(wy)
-                    diag_val -= wy
-                if y < H - 1:
-                    rows.append(v)
-                    cols.append(_idx(z, y + 1, x))
-                    vals.append(wy)
-                    diag_val -= wy
-                if x > 0:
-                    rows.append(v)
-                    cols.append(_idx(z, y, x - 1))
-                    vals.append(wx)
-                    diag_val -= wx
-                if x < W - 1:
-                    rows.append(v)
-                    cols.append(_idx(z, y, x + 1))
-                    vals.append(wx)
-                    diag_val -= wx
-
-                rows.append(v)
-                cols.append(v)
-                vals.append(diag_val)
-
-    return csr_matrix(
-        (np.array(vals, dtype=np.float64), (np.array(rows), np.array(cols))),
-        shape=(N, N),
-    )
-
-
-def _build_laplacian_3d_fast(
-    shape: tuple[int, int, int],
-    spacing: tuple[float, ...],
-) -> csr_matrix:
-    """Vectorized Laplacian construction (much faster than triple loop)."""
-    D, H, W = shape
-    N = D * H * W
-    sz, sy, sx = [float(s) for s in spacing[:3]]
-    wz = 1.0 / (sz * sz)
-    wy = 1.0 / (sy * sy)
-    wx = 1.0 / (sx * sx)
-
-    # Each voxel connects to up to 6 neighbours
-    idx = np.arange(N, dtype=np.int64)
-    z_idx = idx // (H * W)
-    y_idx = (idx % (H * W)) // W
-    x_idx = idx % W
-
-    rows_list, cols_list, vals_list = [], [], []
-
-    # z-axis neighbours
-    mask = z_idx > 0
-    rows_list.append(idx[mask])
-    cols_list.append(idx[mask] - H * W)
-    vals_list.append(np.full(mask.sum(), wz))
-
-    mask = z_idx < D - 1
-    rows_list.append(idx[mask])
-    cols_list.append(idx[mask] + H * W)
-    vals_list.append(np.full(mask.sum(), wz))
-
-    # y-axis neighbours
-    mask = y_idx > 0
-    rows_list.append(idx[mask])
-    cols_list.append(idx[mask] - W)
-    vals_list.append(np.full(mask.sum(), wy))
-
-    mask = y_idx < H - 1
-    rows_list.append(idx[mask])
-    cols_list.append(idx[mask] + W)
-    vals_list.append(np.full(mask.sum(), wy))
-
-    # x-axis neighbours
-    mask = x_idx > 0
-    rows_list.append(idx[mask])
-    cols_list.append(idx[mask] - 1)
-    vals_list.append(np.full(mask.sum(), wx))
-
-    mask = x_idx < W - 1
-    rows_list.append(idx[mask])
-    cols_list.append(idx[mask] + 1)
-    vals_list.append(np.full(mask.sum(), wx))
-
-    # Diagonal: negative sum of neighbour weights
-    diag_val = np.zeros(N, dtype=np.float64)
-    nz_lo = (z_idx > 0).astype(np.float64)
-    nz_hi = (z_idx < D - 1).astype(np.float64)
-    ny_lo = (y_idx > 0).astype(np.float64)
-    ny_hi = (y_idx < H - 1).astype(np.float64)
-    nx_lo = (x_idx > 0).astype(np.float64)
-    nx_hi = (x_idx < W - 1).astype(np.float64)
-    diag_val = -(nz_lo + nz_hi) * wz - (ny_lo + ny_hi) * wy - (nx_lo + nx_hi) * wx
-
-    rows_list.append(idx)
-    cols_list.append(idx)
-    vals_list.append(diag_val)
-
-    all_rows = np.concatenate(rows_list)
-    all_cols = np.concatenate(cols_list)
-    all_vals = np.concatenate(vals_list)
-
-    return csr_matrix((all_vals, (all_rows, all_cols)), shape=(N, N))
-
-
-# ---------------------------------------------------------------------------
-# 3. Laplace PDE solve with boundary conditions
+# 2. Laplace PDE solve with boundary conditions
+#    (Sparse matrix construction delegated to regtools_laplacian — see
+#    solveLaplacianFromCorrespondences for the Dirichlet BC + CG+Jacobi
+#    implementation.)
 # ---------------------------------------------------------------------------
 
 
@@ -270,50 +123,50 @@ def _solve_laplace_displacement(
     """Solve Laplace equation for a smooth displacement field.
 
     Given boundary correspondences (surface points with known displacements),
-    solve ∇²u = 0 in the interior with Dirichlet boundary conditions.
+    delegate to the vendored RegTools solver which uses true Dirichlet
+    boundary conditions + CG with Jacobi preconditioner. This replaces the
+    earlier penalty-method implementation that OOM'd on large volumes
+    (see docs/.../2026-04-16-registration-quality-investigation.md Bug #4).
 
-    Instead of modifying the Laplacian rows (expensive for large grids),
-    we use a penalty method: add large weights to boundary voxels so the
-    solution is strongly attracted to the boundary displacement values.
+    ``bc_weights`` is no longer used: RegTools' Dirichlet solver treats
+    boundary voxels as hard constraints, so per-point confidence weighting
+    is not meaningful inside the solve. Weights remain in the signature so
+    upstream callers that still pass them are unaffected.
 
     Returns displacement field of shape (3, D, H, W).
     """
-    D, H, W = shape
-    N = D * H * W
+    try:
+        from scripts.regtools_laplacian import solveLaplacianFromCorrespondences
+    except ImportError:
+        from regtools_laplacian import solveLaplacianFromCorrespondences
 
-    _log.info("Building Laplacian matrix for %dx%dx%d grid (%d DOF)...", D, H, W, N)
-    L = _build_laplacian_3d_fast(shape, spacing)
+    # Boundary correspondences are already template-space voxel coordinates,
+    # so ``bc_coords`` are the Dirichlet *target* points; the matching moving-
+    # space locations are ``bc_coords + bc_displacements`` which become the
+    # *source* points. The solver returns a (3, D, H, W) field where axis d
+    # contains the displacement along axis d at every voxel.
+    source_pts = bc_coords.astype(float) + bc_displacements.astype(float)
+    target_pts = bc_coords.astype(float)
 
-    # Boundary condition penalty weight — large enough to enforce BC
-    # but not so large as to make the system ill-conditioned
-    penalty = 1e4
+    _ = bc_weights  # acknowledged, unused under Dirichlet BC
 
-    # Build penalty matrix and RHS for each displacement component
-    bc_flat_idx = (bc_coords[:, 0] * H * W + bc_coords[:, 1] * W + bc_coords[:, 2]).astype(np.int64)
-
-    # Penalty diagonal: penalty at BC voxels, 0 elsewhere
-    penalty_diag = np.zeros(N, dtype=np.float64)
-    np.add.at(penalty_diag, bc_flat_idx, penalty * bc_weights)
-
-    A = L + diags(penalty_diag, 0, shape=(N, N), format="csr")
-
-    displacement_field = np.zeros((3, D, H, W), dtype=np.float32)
-
-    for axis in range(3):
-        # RHS: penalty * bc_displacement at boundary voxels
-        rhs = np.zeros(N, dtype=np.float64)
-        np.add.at(rhs, bc_flat_idx, penalty * bc_weights * bc_displacements[:, axis])
-
-        _log.info("Solving Laplace equation for axis %d (CG, rtol=%.0e)...", axis, rtol)
-        solution, info = cg(A, rhs, rtol=rtol, maxiter=maxiter)
-        if info == 0:
-            _log.info("  Axis %d converged", axis)
+    def _log_adapter(msg, level="info"):
+        if level == "warning":
+            _log.warning(msg)
         else:
-            _log.warning("  Axis %d did not converge (info=%d)", axis, info)
+            _log.info(msg)
 
-        displacement_field[axis] = solution.reshape(D, H, W).astype(np.float32)
-
-    return displacement_field
+    deformation_field = solveLaplacianFromCorrespondences(
+        vol_shape=shape,
+        source_pts=source_pts,
+        target_pts=target_pts,
+        axes=(0, 1, 2),
+        rtol=rtol,
+        maxiter=maxiter,
+        spacing=spacing,
+        log_fn=_log_adapter,
+    )
+    return deformation_field.astype(np.float32)
 
 
 # ---------------------------------------------------------------------------

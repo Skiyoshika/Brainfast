@@ -406,3 +406,99 @@ class TestExtrapolateAnnotationToTissue:
         # Top rows should be filled with 10, bottom with 20
         assert (result_vol[0, 0:3, 2:] == 10).all()
         assert (result_vol[0, 3:6, 2:] == 20).all()
+
+
+def test_ap_auto_compute_uses_source_z_numbers_when_merged_names_lack_z(
+    tmp_path, monkeypatch
+):
+    """AP auto-compute must read z-numbers from original input_dir files,
+    not the sanitized merged_####.tif filenames.
+
+    Regression: when merged files are named ``merged_0000.tif`` the regex
+    ``z(\\d+)`` matches nothing, so `_z_nums` stays empty and ap_start/ap_end
+    silently fall back to the full-atlas [0, 528] default. This forces ANTs to
+    stretch a partial brain (~2.8 mm of slices) across the whole 12 mm atlas
+    and destroys the registration (Dice ≈ 0.30 vs Miki-level 0.74).
+
+    Expected: with source files z0050..z0600.tif, scale=0.2, offset=150, the
+    AP window passed to ``prepare_half_template_inputs`` must be around
+    [150, 280], not [0, 528].
+    """
+    input_dir = tmp_path / "input"
+    outputs_dir = tmp_path / "outputs"
+    merged_dir = tmp_path / "merged"
+    input_dir.mkdir()
+    outputs_dir.mkdir()
+    merged_dir.mkdir()
+
+    # Real microscope layout: z-numbered source slices, z = 50, 55, ..., 600.
+    z_values = list(range(50, 601, 5))
+    for z in z_values:
+        (input_dir / f"z{z:04d}.tif").write_bytes(b"")
+
+    # Merged sanitized filenames — this is what whole_brain_3d.py observes
+    # after the merge stage. These file names do NOT contain "z<digits>".
+    merged_paths = []
+    for i, _ in enumerate(z_values):
+        p = merged_dir / f"merged_{i:04d}.tif"
+        p.write_bytes(b"")
+        merged_paths.append(p)
+
+    ap_capture: dict = {}
+
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d.build_volume_from_tiffs",
+        lambda **kwargs: {"volume_path": outputs_dir / "vol.nii.gz", "shape": [2, 2, 2]},
+    )
+
+    def capture_prepare(**kwargs):
+        ap_capture["ap_start"] = kwargs.get("ap_start")
+        ap_capture["ap_end"] = kwargs.get("ap_end")
+        return {
+            "template_path": outputs_dir / "template_half.nii.gz",
+            "annotation_path": outputs_dir / "annotation_half.nii.gz",
+        }
+
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d.prepare_half_template_inputs", capture_prepare
+    )
+    # Raise immediately after template_prep so we do not need to mock ANTs etc.
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d.run_ants_registration",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("halt-after-prepare")),
+    )
+
+    with pytest.raises(RuntimeError, match="halt-after-prepare"):
+        run_whole_brain_3d(
+            cfg={
+                "input": {
+                    "pixel_size_um_xy": 5.0,
+                    "slice_spacing_um": 25.0,
+                    "slicing_plane": "coronal",
+                    "slice_glob": "z*.tif",
+                },
+                "quantify_fn": lambda **kwargs: {},
+                "registration": {
+                    "atlas_hemisphere": "left",
+                    "ml_flip": False,
+                    "atlas_z_from_filename": True,
+                    "atlas_z_z_scale": 0.2,
+                    "atlas_z_offset": 150,
+                },
+            },
+            input_dir=input_dir,
+            outputs_dir=outputs_dir,
+            merged_slice_paths=merged_paths,
+        )
+
+    # Expected with z_min=50, z_max=600, scale=0.2, offset=150:
+    #   ap_start = max(0, int(50*0.2)+150-10)  = 150
+    #   ap_end   = min(528, int(600*0.2)+150+10) = 280
+    assert ap_capture["ap_start"] == 150, (
+        f"AP auto-compute regressed: ap_start={ap_capture['ap_start']}, "
+        "expected 150 (source z=50..600, scale=0.2, offset=150)."
+    )
+    assert ap_capture["ap_end"] == 280, (
+        f"AP auto-compute regressed: ap_end={ap_capture['ap_end']}, "
+        "expected 280 (source z=50..600, scale=0.2, offset=150)."
+    )

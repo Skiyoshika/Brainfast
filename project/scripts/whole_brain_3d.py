@@ -482,8 +482,13 @@ def run_whole_brain_3d(
 
         z_scale = float(reg_cfg.get("atlas_z_z_scale", 0.2))
         z_offset = int(reg_cfg.get("atlas_z_offset", 0))
-        _s_dir = Path(merged_slice_paths[0]).parent if merged_slice_paths else Path(input_dir)
-        _s_glob = "*.tif" if merged_slice_paths else str(input_cfg.get("slice_glob", "z*.tif"))
+        # Always read z-numbers from the ORIGINAL source directory — merged
+        # files are renamed to merged_####.tif during staging and no longer
+        # carry the "z<digits>" token that the regex below needs. Using the
+        # source dir keeps AP auto-compute working for both direct and merged
+        # pipeline invocations.
+        _s_dir = Path(input_dir)
+        _s_glob = str(input_cfg.get("slice_glob", "z*.tif"))
         _s_paths = sorted(_s_dir.glob(_s_glob))
         if _s_paths and reg_cfg.get("atlas_z_from_filename", False):
             _z_nums = []
@@ -532,6 +537,7 @@ def run_whole_brain_3d(
         pixel_um_xy=pixel_size_um_xy,
         z_spacing_um=slice_spacing_um,
         glob_pattern=volume_glob,
+        xy_downsample_cap=reg_cfg.get("xy_downsample_cap"),
     )
     # Trust the actual path returned by the builder, not the requested path.
     volume_path = Path(volume_meta["volume_path"])
@@ -578,6 +584,127 @@ def run_whole_brain_3d(
         ap_end=ap_end,
         out_dir=template_dir,
     )
+
+    # Optional intensity adaptation stage (Phase α of closed-loop plan).
+    # Pre-aligns the moving volume's histogram + local contrast to the
+    # template so ANTs MI/CC has a stronger cross-modality signal. Opt in
+    # via `registration.intensity_adapt.mode`: off|hist_match|clahe|
+    # hist_match+clahe. Default off → identity, bit-for-bit backwards
+    # compatible. See docs/.../2026-04-16-internal-alignment-closed-loop-plan.md.
+    intensity_adapt_cfg = reg_cfg.get("intensity_adapt") or {}
+    intensity_adapt_mode = str(intensity_adapt_cfg.get("mode", "off")).strip()
+    if intensity_adapt_mode and intensity_adapt_mode != "off":
+        try:
+            from scripts.intensity_adapter import adapt_intensity
+        except ImportError:
+            from intensity_adapter import adapt_intensity
+
+        _emit(
+            "Intensity Adapt",
+            2,
+            20,
+            f"Applying intensity adaptation (mode={intensity_adapt_mode})",
+            {"mode": intensity_adapt_mode},
+        )
+        _moving_vol_img = nib.load(str(volume_meta["volume_path"]))
+        _template_vol_img = nib.load(str(template_meta["template_path"]))
+        _moving_arr = np.asarray(_moving_vol_img.dataobj)
+        _template_arr = np.asarray(_template_vol_img.dataobj)
+        _adapted = adapt_intensity(
+            _moving_arr,
+            _template_arr,
+            mode=intensity_adapt_mode,
+            clahe_kernel_size=int(intensity_adapt_cfg.get("clahe_kernel_size", 32)),
+            clahe_clip_limit=float(intensity_adapt_cfg.get("clahe_clip_limit", 0.01)),
+        )
+        adapted_path = outputs_dir / "volume" / "input_volume_adapted.nii.gz"
+        adapted_path.parent.mkdir(parents=True, exist_ok=True)
+        nib.save(
+            nib.Nifti1Image(_adapted, _moving_vol_img.affine, _moving_vol_img.header),
+            str(adapted_path),
+        )
+        volume_meta["intensity_adapted_path"] = adapted_path
+        volume_meta["volume_path"] = adapted_path
+        print(
+            f"[intensity-adapt] mode={intensity_adapt_mode} written to {adapted_path}"
+        )
+
+    # Optional axis alignment stage — vendored from UCI-XuLab-RegTools.
+    # Detects the longitudinal fissure in moving + template, fits plane
+    # normals via SVD, and pre-rotates the moving volume so ANTs SyN does
+    # not waste capacity on global roll/pitch correction. Off by default
+    # to stay bit-for-bit compatible with older runs; opt in via
+    # `registration.axis_alignment_enabled: true`.
+    axis_alignment_enabled = bool(reg_cfg.get("axis_alignment_enabled", False))
+    axis_align_dir = outputs_dir / "axis_alignment"
+    if axis_alignment_enabled:
+        from scipy.ndimage import affine_transform as _scipy_affine_transform
+
+        try:
+            from scripts.regtools_align import compute_longitudinal_fissure_alignment
+        except ImportError:
+            from regtools_align import compute_longitudinal_fissure_alignment
+
+        _emit(
+            "Axis Alignment",
+            2,
+            18,
+            "Longitudinal-fissure axis alignment (vendored from RegTools)",
+            {"axis_alignment_dir": str(axis_align_dir)},
+        )
+        axis_align_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            _moving_vol_img = nib.load(str(volume_meta["volume_path"]))
+            _template_vol_img = nib.load(str(template_meta["template_path"]))
+            _moving_raw = np.asarray(_moving_vol_img.dataobj).astype(np.float32)
+            _template_raw = np.asarray(_template_vol_img.dataobj).astype(np.float32)
+
+            # RegTools' preprocess() clips at max_val=400 (tuned for CCF
+            # intensity range). Brainfast volumes are 0–65535 uint16, so
+            # rescale to the expected range before handing off.
+            def _scale_to_align_range(vol: np.ndarray) -> np.ndarray:
+                p99 = float(np.percentile(vol, 99))
+                if p99 <= 0:
+                    return vol.astype(np.float32)
+                return np.clip(vol, 0, p99).astype(np.float32) / p99 * 400.0
+
+            _moving_scaled = _scale_to_align_range(_moving_raw)
+            _template_scaled = _scale_to_align_range(_template_raw)
+
+            affine4x4, _mcoef, _tcoef, _mpts, _tpts = (
+                compute_longitudinal_fissure_alignment(_moving_scaled, _template_scaled)
+            )
+            np.save(str(axis_align_dir / "axisAlignA.npy"), affine4x4)
+
+            # Apply affine (rotation only, pivot at origin) to the original
+            # uint16 moving volume so ANTs sees a globally-aligned input.
+            rot3x3 = affine4x4[:3, :3]
+            offset = affine4x4[:3, 3]
+            aligned = _scipy_affine_transform(
+                _moving_raw,
+                matrix=rot3x3,
+                offset=offset,
+                order=1,
+                mode="constant",
+                cval=0.0,
+            )
+            aligned_u16 = np.clip(aligned, 0, 65535).astype(np.uint16)
+            aligned_path = axis_align_dir / "input_volume_aligned.nii.gz"
+            nib.save(
+                nib.Nifti1Image(aligned_u16, _moving_vol_img.affine, _moving_vol_img.header),
+                str(aligned_path),
+            )
+            volume_meta["axis_aligned_volume_path"] = aligned_path
+            volume_meta["volume_path"] = aligned_path  # ANTs consumes the pre-aligned volume
+            print(
+                f"[axis-align] Applied fissure-based rotation (saved {aligned_path}). "
+                f"Moving normal: {_mcoef}; template normal: {_tcoef}."
+            )
+        except Exception as _ax_err:  # noqa: BLE001 — axis alignment is best-effort
+            print(
+                f"[axis-align] Skipped: {_ax_err}. Continuing with unaligned volume. "
+                "Set registration.axis_alignment_enabled=false to silence this attempt."
+            )
 
     _emit(
         "ANTS Registration",

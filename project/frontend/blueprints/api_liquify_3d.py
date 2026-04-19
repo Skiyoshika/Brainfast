@@ -57,7 +57,7 @@ def _class_registry_path() -> Path:
 
 def _progress_cb_for_job(job_id: str):
     """Build a progress_cb closure that writes to the job's liquify progress."""
-    job_dir = ctx._job_output_dir(job_id)
+    job_dir = _resolve_job_dir(job_id)
 
     def _cb(stage, idx, total, percent, message):
         write_liquify_progress(
@@ -81,6 +81,39 @@ def _class_priors_root() -> Path:
     """
     return ctx.PROJECT_ROOT / "train_data_set" / "class_priors"
 
+
+def _resolve_job_dir(job_id: str) -> Path:
+    """Pick the actual outputs dir for a job id, trying both conventions.
+
+    Brainfast has two places pipelines land:
+
+    1. ``outputs/jobs/<job_id>/`` — where `/api/run`-launched UI jobs write
+       (ctx._job_output_dir default).
+    2. ``outputs/<run_name>/`` — where CLI ``main.py --output-name X`` or
+       ``BRAINCOUNT_OUTPUT_DIR`` runs write.
+
+    The 3D Liquify tab needs to work with BOTH, because a user who ran the
+    pipeline from CLI should still be able to type their run name as the
+    Job ID and see the annotation. We check the UI convention first (where
+    `/api/run` would have written) and fall back to the CLI convention when
+    the primary dir has no pipeline artifacts.
+
+    Returns the best match. If neither exists the primary path is returned
+    so future writes land in the UI-native location.
+    """
+    primary = ctx._job_output_dir(job_id)
+    if primary.exists() and (primary / "ants_registration").exists():
+        return primary
+    alt = ctx.OUTPUT_DIR / job_id
+    if alt.exists() and (alt / "ants_registration").exists():
+        return alt
+    return primary
+
+
+def _job_file_for(job_id: str, filename: str) -> Path:
+    """Like ctx._job_file but honours both jobs/<id>/ and <id>/ conventions."""
+    return _resolve_job_dir(job_id) / filename
+
 bp = Blueprint("api_liquify_3d", __name__, url_prefix="/api")
 
 _LANDMARKS_FILENAME = "landmarks_3d.csv"
@@ -93,7 +126,7 @@ _REFINED_ANNOTATION_FILENAME = "annotation_refined_liquify3d.nii.gz"
 
 
 def _landmark_store_for(job_id: str) -> LandmarkStore:
-    return LandmarkStore(ctx._job_file(job_id, _LANDMARKS_FILENAME))
+    return LandmarkStore(_job_file_for(job_id, _LANDMARKS_FILENAME))
 
 
 def _resolve_annotation_path(job_id: str) -> Path | None:
@@ -104,7 +137,7 @@ def _resolve_annotation_path(job_id: str) -> Path | None:
     pipeline's huge annotation and OOM the solver, so we require callers to
     copy/link the annotation into their job directory first.
     """
-    candidate = ctx._job_output_dir(job_id) / "ants_registration" / "annotation_registered.nii.gz"
+    candidate = _resolve_job_dir(job_id) / "ants_registration" / "annotation_registered.nii.gz"
     return candidate if candidate.exists() else None
 
 
@@ -128,7 +161,7 @@ def liquify_3d_state():
     job_id = ctx._query_job_id()
     store = _landmark_store_for(job_id)
     pairs = store.list_pairs()
-    refined_path = ctx._job_file(job_id, _REFINED_ANNOTATION_FILENAME)
+    refined_path = _job_file_for(job_id, _REFINED_ANNOTATION_FILENAME)
     annotation_path = _resolve_annotation_path(job_id)
     source_available = annotation_path is not None
 
@@ -245,7 +278,7 @@ def liquify_3d_qc_done():
     note = str(payload.get("note") or "")
     class_name = str(payload.get("className") or "").strip()
 
-    marker_path = ctx._job_file(job_id, _QC_DONE_FILENAME)
+    marker_path = _job_file_for(job_id, _QC_DONE_FILENAME)
     record = {
         "jobId": job_id,
         "timestamp": _time.time(),
@@ -289,7 +322,7 @@ def liquify_3d_qc_status():
     import json as _json
 
     job_id = ctx._query_job_id()
-    marker_path = ctx._job_file(job_id, _QC_DONE_FILENAME)
+    marker_path = _job_file_for(job_id, _QC_DONE_FILENAME)
     if not marker_path.exists():
         return jsonify({"ok": True, "jobId": job_id, "done": False})
     try:
@@ -319,7 +352,7 @@ def liquify_3d_progress():
     anything yet).
     """
     job_id = ctx._query_job_id()
-    data = read_liquify_progress(ctx._job_output_dir(job_id))
+    data = read_liquify_progress(_resolve_job_dir(job_id))
     return jsonify({"ok": True, "jobId": job_id, **data})
 
 
@@ -466,9 +499,9 @@ def liquify_3d_apply():
             404,
         )
 
-    out_path = ctx._job_file(job_id, _REFINED_ANNOTATION_FILENAME)
+    out_path = _job_file_for(job_id, _REFINED_ANNOTATION_FILENAME)
     # Reset any stale progress from a prior run so the poller starts clean.
-    clear_liquify_progress(ctx._job_output_dir(job_id))
+    clear_liquify_progress(_resolve_job_dir(job_id))
     meta = refine_annotation_with_landmarks(
         annotation_path=annotation_path,
         landmarks_csv=store.path,
@@ -611,7 +644,7 @@ def class_prior_apply_warm_start():
             404,
         )
 
-    target_csv = ctx._job_file(job_id, _LANDMARKS_FILENAME)
+    target_csv = _job_file_for(job_id, _LANDMARKS_FILENAME)
     try:
         written = prior.apply_as_warm_start(target_csv, force=force)
     except ValueError as exc:
@@ -650,7 +683,7 @@ def _resolve_cells_csv(job_id: str) -> Path | None:
       2. ``cells_mapped.csv`` — already mapped; finalize drops the stale
          region columns before re-mapping.
     """
-    job_dir = ctx._job_output_dir(job_id)
+    job_dir = _resolve_job_dir(job_id)
     for name in ("cells_dedup.csv", "cells_mapped.csv"):
         p = job_dir / name
         if p.exists():
@@ -668,7 +701,7 @@ def _resolve_real_slice_paths(job_id: str) -> list[Path]:
     """Collect the moving-volume slice paths recorded by the original
     truth export so we can re-run it against the refined annotation.
     """
-    job_dir = ctx._job_output_dir(job_id)
+    job_dir = _resolve_job_dir(job_id)
     # Option A: read slice_registration_qc.csv and lift the 'slice_path'
     # column — most faithful to the original run's slice ordering.
     qc_csv = job_dir / "slice_registration_qc.csv"
@@ -702,7 +735,7 @@ def liquify_3d_finalize():
     payload = request.get_json(silent=True) or {}
     job_id = ctx._payload_job_id(payload)
 
-    job_dir = ctx._job_output_dir(job_id)
+    job_dir = _resolve_job_dir(job_id)
     refined_path = job_dir / "annotation_refined_liquify3d.nii.gz"
     if not refined_path.exists():
         return (
@@ -750,7 +783,15 @@ def liquify_3d_finalize():
     pixel_size_um = float(payload.get("pixelSizeUm", 5.0))
     slicing_plane = str(payload.get("slicingPlane", "coronal"))
     atlas_hemisphere = str(payload.get("atlasHemisphere", ""))
+    # Fall back to the default Allen structure ontology when the caller
+    # didn't specify one — otherwise ``aggregate_by_region`` drops the
+    # structure_source column and returns an empty hierarchy, leaving the
+    # Results tab with zero region rows even though leaf counts exist.
     structure_csv = payload.get("structureCsv")
+    if not structure_csv:
+        default_struct = getattr(ctx, "DEFAULT_STRUCTURE_SOURCE", None)
+        if default_struct and Path(str(default_struct)).exists():
+            structure_csv = str(default_struct)
 
     clear_liquify_progress(job_dir)
     try:

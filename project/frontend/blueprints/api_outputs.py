@@ -22,8 +22,39 @@ RUN_STATE_FILE = ".registration_runs_state.json"
 RUN_ARCHIVE_DIR = "archive/registration_runs"
 
 
+_PIPELINE_ARTIFACT_MARKERS = (
+    "ants_registration",
+    "truth_export",
+    "cells_mapped.csv",
+    "cell_counts_hierarchy.csv",
+    "cell_counts_hierarchy_liquify3d.csv",
+)
+
+
 def _outputs_root() -> Path:
-    return ctx._job_output_dir(ctx._query_job_id())
+    """Resolve the outputs dir for the current job id, trying both conventions.
+
+    Brainfast has two ways pipelines land:
+      1. ``outputs/jobs/<id>/`` — for jobs launched via the UI's `/api/run`.
+      2. ``outputs/<run_name>/`` — for CLI runs with ``main.py --output-name X``
+         or the ``BRAINCOUNT_OUTPUT_DIR`` env var.
+
+    Output endpoints (Results tab, hierarchy, reg-slice-list, etc.) need to
+    work with both so a user who ran the pipeline from the CLI can still
+    type their run name as the Job ID and see the results. We check the
+    UI convention first, then fall back to the CLI convention when it holds
+    the actual pipeline artifacts.
+    """
+    job_id = ctx._query_job_id()
+    primary = ctx._job_output_dir(job_id)
+    if primary.exists() and any(
+        (primary / m).exists() for m in _PIPELINE_ARTIFACT_MARKERS
+    ):
+        return primary
+    alt = ctx.OUTPUT_DIR / job_id
+    if alt.exists() and any((alt / m).exists() for m in _PIPELINE_ARTIFACT_MARKERS):
+        return alt
+    return primary
 
 
 def _run_state_path(outputs_root: Path | None = None) -> Path:

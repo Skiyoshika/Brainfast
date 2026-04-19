@@ -230,24 +230,51 @@ class ClassPriorStore:
             ]
 
     def _write_raw_entries(self, entries: list[dict]) -> None:
-        tmp = self._entry_csv.with_suffix(self._entry_csv.suffix + ".tmp")
-        with tmp.open("w", newline="", encoding="utf-8") as fh:
-            w = csv.writer(fh)
-            w.writerow(self._ENTRY_COLUMNS)
-            for e in entries:
-                w.writerow(
-                    [
-                        e["z"],
-                        e["atlas_y"],
-                        e["atlas_x"],
-                        e["sum_dy"],
-                        e["sum_dx"],
-                        e["sum_sq_dy"],
-                        e["sum_sq_dx"],
-                        e["n"],
-                    ]
-                )
-        tmp.replace(self._entry_csv)
+        # Unique-tmpfile + retry-on-PermissionError so concurrent writers
+        # (e.g. a user double-clicking "Save job → class prior") don't
+        # collide on a shared .tmp filename the way Windows hates.
+        import os as _os
+        import tempfile as _tempfile
+        import time as _time
+
+        self._entry_csv.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = _tempfile.mkstemp(
+            prefix=self._entry_csv.name + ".",
+            suffix=".tmp",
+            dir=str(self._entry_csv.parent),
+        )
+        tmp = Path(tmp_name)
+        try:
+            with _os.fdopen(fd, "w", newline="", encoding="utf-8") as fh:
+                w = csv.writer(fh)
+                w.writerow(self._ENTRY_COLUMNS)
+                for e in entries:
+                    w.writerow(
+                        [
+                            e["z"],
+                            e["atlas_y"],
+                            e["atlas_x"],
+                            e["sum_dy"],
+                            e["sum_dx"],
+                            e["sum_sq_dy"],
+                            e["sum_sq_dx"],
+                            e["n"],
+                        ]
+                    )
+            last_error: OSError | None = None
+            for attempt in range(8):
+                try:
+                    tmp.replace(self._entry_csv)
+                    last_error = None
+                    break
+                except PermissionError as exc:
+                    last_error = exc
+                    _time.sleep(0.01 * (attempt + 1))
+            if last_error is not None:
+                raise last_error
+        finally:
+            if tmp.exists():
+                tmp.unlink()
 
     def _find_merge_target(
         self,

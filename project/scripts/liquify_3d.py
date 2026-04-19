@@ -113,13 +113,41 @@ class LandmarkStore:
             self._path.unlink()
 
     def _rewrite(self, pairs: Iterable[LandmarkPair]) -> None:
-        tmp_path = self._path.with_suffix(self._path.suffix + ".tmp")
-        with tmp_path.open("w", newline="", encoding="utf-8") as fh:
-            writer = csv.writer(fh)
-            writer.writerow(self._COLUMNS)
-            for p in pairs:
-                writer.writerow([p.z, p.real[0], p.real[1], p.atlas[0], p.atlas[1]])
-        tmp_path.replace(self._path)
+        # Use mkstemp so each caller gets a unique tmp filename even under
+        # concurrent removals (Windows raises PermissionError when two
+        # threads collide on the same .tmp name during the final
+        # atomic-replace step). Retry the replace a few times with small
+        # back-off to survive a brief Windows file-handle hold-over too.
+        import os as _os
+        import tempfile as _tempfile
+        import time as _time
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = _tempfile.mkstemp(
+            prefix=self._path.name + ".",
+            suffix=".tmp",
+            dir=str(self._path.parent),
+        )
+        tmp_path = Path(tmp_name)
+        try:
+            with _os.fdopen(fd, "w", newline="", encoding="utf-8") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(self._COLUMNS)
+                for p in pairs:
+                    writer.writerow([p.z, p.real[0], p.real[1], p.atlas[0], p.atlas[1]])
+            last_error: OSError | None = None
+            for attempt in range(8):
+                try:
+                    tmp_path.replace(self._path)
+                    last_error = None
+                    break
+                except PermissionError as exc:
+                    last_error = exc
+                    _time.sleep(0.01 * (attempt + 1))
+            if last_error is not None:
+                raise last_error
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
 
 
 # ---------------------------------------------------------------------------

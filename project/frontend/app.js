@@ -509,6 +509,12 @@ const LANGS = {
     'training.apply': 'Apply Model',
     'toast.runDetailsFailed': 'Failed to open run details.',
     'outputs.previewDesc': 'Text preview for the selected output file.',
+    // ----- Pre-existing i18n gaps (index.html refs without LANGS entries) -----
+    'label.pixelSizeQuick': 'Pixel size not auto-detected:',
+    'hint.pixelSizeQuick': '(Cleared tissue: ~5 µm, thin sections: ~0.65 µm)',
+    'label.configPath': 'Run Config JSON (optional, defaults to template)',
+    'label.runName': 'Output Run Name (defaults to input folder name)',
+    'btn.exportExcel': '📊 Export Excel',
     // ----- New Sample wizard -----
     'nav.newsample': 'New Sample',
     'newsample.title': 'New Sample — Onboarding Wizard',
@@ -1045,6 +1051,12 @@ const LANGS = {
     'training.apply': '应用模型',
     'toast.runDetailsFailed': '打开运行详情失败。',
     'outputs.previewDesc': '所选输出文件的文本预览。',
+    // ----- 补充老版 UI 缺失的 i18n 键 -----
+    'label.pixelSizeQuick': '像素尺寸未自动检测：',
+    'hint.pixelSizeQuick': '（清脑组织：约 5 µm；薄切片：约 0.65 µm）',
+    'label.configPath': '运行配置 JSON（可选，默认使用模板）',
+    'label.runName': '输出运行名称（默认使用输入文件夹名称）',
+    'btn.exportExcel': '📊 导出 Excel',
     // ----- 新样本向导 -----
     'nav.newsample': '新样本',
     'newsample.title': '新样本 — 引导向导',

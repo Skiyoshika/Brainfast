@@ -251,7 +251,14 @@ def _build_run_config(payload: dict) -> dict:
             "cellpose_gpu": True,
             "cellpose_diameter_um": 12.0,
             "cellpose_channels": [0, 0],
-            "allow_fallback": False,
+            # Fallback ON by default so new users aren't dead-ended by
+            # Cellpose OOM on large section sizes (cpsam tiles a 1636×1359
+            # slice into 952 × 3 × 730 × 730 float32 = 5.67 GiB per slice
+            # at batch size 1). The LoG fallback is much lighter and
+            # produces usable cell counts even on low-VRAM machines.
+            # Strict pipelines should override this to False explicitly.
+            "allow_fallback": True,
+            "fallback_model": "log",
         },
         "dedup": {
             "enabled": True,
@@ -308,10 +315,13 @@ def wizard_launch():
     sample_id = cfg["project"]["name"]
     job_id = sample_id
 
-    # Persist the wizard-built config under the job's outputs dir so it is
-    # discoverable next to the pipeline outputs (mirrors what the existing
-    # /api/run endpoint does for hand-built configs).
-    job_dir = ctx.OUTPUT_DIR / job_id
+    # Persist the wizard-built config under the SAME outputs dir where
+    # ctx._runner will write the pipeline artifacts. Previously we wrote
+    # to outputs/<id>/ while the runner wrote to outputs/jobs/<id>/ —
+    # an inconsistency that made the wizard's returned outputs_dir a
+    # dead pointer. Use ctx._job_output_dir here so the config, progress
+    # file, and pipeline artifacts all live together.
+    job_dir = ctx._job_output_dir(job_id)
     runtime_dir = job_dir / "runtime_configs"
     runtime_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")

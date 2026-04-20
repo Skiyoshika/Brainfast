@@ -125,6 +125,69 @@ def test_run_real_input_routes_whole_brain_mode_to_3d_orchestrator(tmp_path, mon
     assert route_hit["quantify_kwargs"]["outputs_dir"].name == "outputs"
 
 
+def test_extract_channel_preserves_other_channels_in_tmp_dir(tmp_path):
+    """Calling _extract_channel_to_tmp for a second channel must not wipe the
+    first channel's files — otherwise dual-channel UI overlay breaks.
+    """
+    import numpy as np
+    from tifffile import imwrite
+
+    from project.scripts.main import _extract_channel_to_tmp
+
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    for i in range(2):
+        arr = np.zeros((4, 4), dtype=np.uint16)
+        imwrite(str(src_dir / f"z{i:04d}_C0.tif"), arr)
+        imwrite(str(src_dir / f"z{i:04d}_C1.tif"), arr + 100)
+
+    tmp_dir = tmp_path / "tmp_channel"
+    src_c0 = sorted(src_dir.glob("*_C0.tif"))
+    src_c1 = sorted(src_dir.glob("*_C1.tif"))
+
+    _extract_channel_to_tmp(src_c0, tmp_dir, ch_idx=0)
+    assert sorted(p.name for p in tmp_dir.glob("ch_0_*.tif")) == [
+        "ch_0_0000.tif",
+        "ch_0_0001.tif",
+    ]
+
+    _extract_channel_to_tmp(src_c1, tmp_dir, ch_idx=1)
+    names = sorted(p.name for p in tmp_dir.glob("*.tif"))
+    assert "ch_0_0000.tif" in names
+    assert "ch_0_0001.tif" in names
+    assert "ch_1_0000.tif" in names
+    assert "ch_1_0001.tif" in names
+
+
+def test_extract_channel_replaces_only_same_channel_on_rerun(tmp_path):
+    import numpy as np
+    from tifffile import imwrite
+
+    from project.scripts.main import _extract_channel_to_tmp
+
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    for i in range(3):
+        arr = np.zeros((4, 4), dtype=np.uint16)
+        imwrite(str(src_dir / f"z{i:04d}_C0.tif"), arr)
+        imwrite(str(src_dir / f"z{i:04d}_C1.tif"), arr + 100)
+
+    tmp_dir = tmp_path / "tmp_channel"
+    _extract_channel_to_tmp(sorted(src_dir.glob("*_C0.tif")), tmp_dir, ch_idx=0)
+    _extract_channel_to_tmp(sorted(src_dir.glob("*_C1.tif")), tmp_dir, ch_idx=1)
+    _extract_channel_to_tmp(sorted(src_dir.glob("*_C0.tif"))[:2], tmp_dir, ch_idx=0)
+    names = sorted(p.name for p in tmp_dir.glob("*.tif"))
+    assert sorted(n for n in names if n.startswith("ch_0_")) == [
+        "ch_0_0000.tif",
+        "ch_0_0001.tif",
+    ]
+    assert sorted(n for n in names if n.startswith("ch_1_")) == [
+        "ch_1_0000.tif",
+        "ch_1_0001.tif",
+        "ch_1_0002.tif",
+    ]
+
+
 def test_run_config_defaults_anchor_whole_brain_3d_contract():
     _project = Path(__file__).resolve().parents[2]
     template = (_project / "configs" / "run_config.template.json").read_text(

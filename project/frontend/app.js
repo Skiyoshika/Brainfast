@@ -554,6 +554,10 @@ const LANGS = {
     'liquify3d.loadFromPrior': 'Warm-start from prior',
     'liquify3d.priorHeat': 'Coverage heatmap',
     'liquify3d.priorHeatHint': 'Class-prior landmark density across z (taller bar = more contributing samples at that z):',
+    'liquify3d.overlay2ndChannel': 'Overlay 2nd channel',
+    'liquify3d.overlayChannel': 'Channel:',
+    'liquify3d.overlayColor': 'Tint:',
+    'liquify3d.overlayOpacity': 'Opacity:',
   },
   zh: {
     'nav.workflow': '配准工作流',
@@ -1096,6 +1100,10 @@ const LANGS = {
     'liquify3d.loadFromPrior': '用先验热启动',
     'liquify3d.priorHeat': '覆盖热力图',
     'liquify3d.priorHeatHint': '类先验地标在 z 方向的密度分布（柱越高 = 该 z 位置贡献样本越多）：',
+    'liquify3d.overlay2ndChannel': '叠加第二通道',
+    'liquify3d.overlayChannel': '通道:',
+    'liquify3d.overlayColor': '颜色:',
+    'liquify3d.overlayOpacity': '透明度:',
   },
 };
 
@@ -6261,6 +6269,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   const zMax       = el('liq3dZMax');
   const pendingStatus = el('liq3dPendingStatus');
   const img        = el('liq3dImg');
+  const overlayImg = el('liq3dOverlayImg');
   const canvas     = el('liq3dCanvas');
   const ctx        = canvas.getContext('2d');
   const applyBtn   = el('liq3dApplyBtn');
@@ -6268,6 +6277,12 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   const applyStatus= el('liq3dApplyStatus');
   const pairsBody  = el('liq3dPairsBody');
   const pairCountEl = el('liq3dPairCount');
+  const overlayRow      = el('liq3dOverlayRow');
+  const overlayToggle   = el('liq3dOverlayToggle');
+  const overlayChannel  = el('liq3dOverlayChannel');
+  const overlayColor    = el('liq3dOverlayColor');
+  const overlayOpacity  = el('liq3dOverlayOpacity');
+  const overlayOpacityNum = el('liq3dOverlayOpacityNum');
 
   // ------ util: job id resolution ------
   function currentJobId() {
@@ -6427,8 +6442,77 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       canvas.style.height = img.clientHeight + 'px';
       redraw();
       _renderCoordBadge();
+      _refreshOverlayImage();
     };
   }
+
+  // ------ Dual-channel overlay (Phase 4) --------------------------------
+  // Pull ch_<N>_<z>.tif for the selected second channel, render it tinted,
+  // and stack on top of the main overlay via CSS mix-blend-mode:screen.
+  // Completely passive: when the toggle is off, the overlay img is hidden.
+  function _refreshOverlayImage() {
+    if (!overlayImg || !overlayToggle) return;
+    if (!overlayToggle.checked) {
+      overlayImg.style.display = 'none';
+      overlayImg.src = '';
+      return;
+    }
+    const ch = (overlayChannel?.value || '').trim();
+    if (!ch || !state.sliceFiles.length) {
+      overlayImg.style.display = 'none';
+      return;
+    }
+    const tint = (overlayColor?.value || 'ffffff').trim();
+    const opacity = Math.max(0, Math.min(100, Number(overlayOpacity?.value || 60))) / 100;
+    const jid = currentJobId();
+    const url = `/api/outputs/raw-channel-slice?job=${encodeURIComponent(jid)}`
+              + `&z=${state.currentZ}&channel=${encodeURIComponent(ch)}&tint=${encodeURIComponent(tint)}`
+              + `&ts=${Date.now()}`;
+    overlayImg.onload = () => {
+      overlayImg.style.display = '';
+      overlayImg.style.opacity = String(opacity);
+      // Match the main image's rendered size so the two overlays line up.
+      overlayImg.style.width = img.clientWidth + 'px';
+    };
+    overlayImg.onerror = () => {
+      overlayImg.style.display = 'none';
+    };
+    overlayImg.src = url;
+  }
+
+  async function _refreshChannelOptions() {
+    if (!overlayChannel || !overlayRow) return;
+    try {
+      const resp = await fetch(
+        `/api/outputs/channel-info?job=${encodeURIComponent(currentJobId())}`
+      );
+      const data = await resp.json();
+      const list = (data && Array.isArray(data.channels)) ? data.channels : [];
+      overlayChannel.innerHTML = '';
+      for (const name of list) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        overlayChannel.appendChild(opt);
+      }
+      // Only show the whole row if the job has ≥2 distinct channels so the
+      // control stays out of the way for single-channel runs.
+      overlayRow.style.display = list.length >= 2 ? '' : 'none';
+      // Default to the 2nd channel in the list (first one is usually the
+      // reporter C0 which is already the base image).
+      if (list.length >= 2) overlayChannel.value = list[1];
+    } catch (_) {
+      overlayRow.style.display = 'none';
+    }
+  }
+
+  overlayToggle?.addEventListener('change', _refreshOverlayImage);
+  overlayChannel?.addEventListener('change', _refreshOverlayImage);
+  overlayColor?.addEventListener('change', _refreshOverlayImage);
+  overlayOpacity?.addEventListener('input', () => {
+    if (overlayOpacityNum) overlayOpacityNum.textContent = overlayOpacity.value + '%';
+    _refreshOverlayImage();
+  });
 
   // ------ canvas interaction ------
   function canvasToImageCoords(e) {
@@ -6531,7 +6615,11 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   el('liq3dClassName')?.addEventListener('change', _saveTabState);
 
   // ------ buttons ------
-  reloadBtn.addEventListener('click', () => { reloadSliceList(); refreshState(); });
+  reloadBtn.addEventListener('click', () => {
+    reloadSliceList();
+    refreshState();
+    _refreshChannelOptions();
+  });
 
   clearBtn.addEventListener('click', async () => {
     if (!confirm('Clear all landmark pairs for this job?')) return;

@@ -1313,8 +1313,38 @@
           <span id="liq3dPendingStatus" class="hint-text"></span>
         </div>
 
+        <!-- 2nd-channel overlay controls (shown only when job has >=2 channels) -->
+        <div id="liq3dOverlayRow" class="form-row" style="gap:12px; align-items:center; margin-top:10px; display:none;">
+          <label style="display:flex; gap:6px; align-items:center;">
+            <input type="checkbox" id="liq3dOverlayToggle" />
+            <span data-i18n="liquify3d.overlay2ndChannel">Overlay 2nd channel</span>
+          </label>
+          <label style="display:flex; gap:6px; align-items:center;">
+            <span data-i18n="liquify3d.overlayChannel">Channel:</span>
+            <select id="liq3dOverlayChannel" style="width:110px;">
+              <!-- populated from /api/outputs/channel-info -->
+            </select>
+          </label>
+          <label style="display:flex; gap:6px; align-items:center;">
+            <span data-i18n="liquify3d.overlayColor">Tint:</span>
+            <select id="liq3dOverlayColor" style="width:110px;">
+              <option value="00ffff">Cyan (青)</option>
+              <option value="00ff00">Green (绿)</option>
+              <option value="ff00ff">Magenta (品红)</option>
+              <option value="ffff00">Yellow (黄)</option>
+              <option value="ffffff">White (白)</option>
+            </select>
+          </label>
+          <label style="display:flex; gap:6px; align-items:center;">
+            <span data-i18n="liquify3d.overlayOpacity">Opacity:</span>
+            <input id="liq3dOverlayOpacity" type="range" min="0" max="100" value="60" style="width:90px;" />
+            <span id="liq3dOverlayOpacityNum" class="hint-text" style="min-width:32px;">60%</span>
+          </label>
+        </div>
+
         <div id="liq3dCanvasWrap" style="position:relative; margin-top:12px; max-width:100%; overflow:auto;">
           <img id="liq3dImg" src="" alt="overlay" style="display:none; max-width:100%;" />
+          <img id="liq3dOverlayImg" src="" alt="overlay-2" style="display:none; position:absolute; left:0; top:0; max-width:100%; pointer-events:none; mix-blend-mode:screen;" />
           <canvas id="liq3dCanvas" style="position:absolute; left:0; top:0; cursor:crosshair;"></canvas>
         </div>
         <div id="liq3dCoordBadge" class="hint-text" style="margin-top:6px; font-family:monospace;"></div>

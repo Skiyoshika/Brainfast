@@ -168,9 +168,16 @@ def _extract_channel_to_tmp(src_files: list[Path], out_dir: Path, ch_idx: int) -
     - 3D Z-stack volumes: (Z, H, W) → extract individual Z-slices
       For Z-stacks, channel is selected by filename (C0, C1, etc.) not array index.
     """
-    if out_dir.exists():
-        shutil.rmtree(out_dir, ignore_errors=True)
+    # Only remove stale files for the CURRENT channel — keep other channels'
+    # tmp slices intact so dual-channel workflows (C0 + C1) can coexist
+    # in the same outputs_dir. Previously this wiped the whole dir and
+    # destroyed C0 data whenever C1 started.
     out_dir.mkdir(parents=True, exist_ok=True)
+    for stale in out_dir.glob(f"ch_{ch_idx}_*.tif"):
+        try:
+            stale.unlink()
+        except OSError:
+            pass
     out = []
 
     # Filter files by channel suffix in filename (e.g., _C0.tif, _C1.tif)
@@ -540,6 +547,14 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
         cfg = dict(cfg)
         if "quantify_fn" not in cfg:
             cfg["quantify_fn"] = lambda **kwargs: _quantify_against_exported_truth(**kwargs)
+        # Dual-channel reuse: when the runner set BRAINCOUNT_REUSE_FROM_DIR for
+        # a 2nd+ channel, inject it into registration so stages 1-5 are skipped
+        # and only cell detection on *this* channel's slices runs.
+        _reuse_env = os.environ.get("BRAINCOUNT_REUSE_FROM_DIR", "").strip()
+        if _reuse_env:
+            reg_cfg = dict(cfg.get("registration", {}) or {})
+            reg_cfg["reuse_from_dir"] = _reuse_env
+            cfg["registration"] = reg_cfg
         return run_whole_brain_3d(
             cfg=cfg,
             input_dir=input_dir,

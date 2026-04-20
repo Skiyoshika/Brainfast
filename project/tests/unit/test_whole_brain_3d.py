@@ -140,6 +140,138 @@ def test_run_whole_brain_3d_emits_expected_stage_sequence(tmp_path, monkeypatch)
     assert result["truth_source"] == "3d_registered_volume"
 
 
+def test_run_whole_brain_3d_reuses_registration_from_prior_dir(tmp_path, monkeypatch):
+    """When ``registration.reuse_from_dir`` points at a prior channel's
+    outputs_dir with all required artifacts, stages 1–5 are skipped and only
+    Quantification (stage 6) runs. The *current* channel's merged_slice_paths
+    still flow into quantification so cell detection uses C1 data.
+
+    This is the dual-channel case: C0 already ran the full pipeline once and
+    produced ants_registration/, laplacian_refinement/, truth_export/, etc.
+    C1 only needs to re-detect + re-map against C0's truth slices.
+    """
+    prior_dir = tmp_path / "prior_c0"
+    prior_dir.mkdir()
+    (prior_dir / "ants_registration").mkdir()
+    (prior_dir / "laplacian_refinement").mkdir()
+    (prior_dir / "truth_export").mkdir()
+    # Required artifact stubs — real files, not just presence markers
+    (prior_dir / "ants_registration" / "annotation_registered.nii.gz").write_bytes(b"\x00")
+    (prior_dir / "laplacian_refinement" / "annotation_refined.nii.gz").write_bytes(b"\x00")
+    (prior_dir / "laplacian_refinement" / "laplacian_deformation_field.npy").write_bytes(b"\x00")
+    # Fake 3 truth rows by leaving the dir empty; we monkeypatch the loader
+
+    input_dir = tmp_path / "input_c1"
+    outputs_dir = tmp_path / "outputs_c1"
+    input_dir.mkdir()
+    outputs_dir.mkdir()
+    for i in range(3):
+        (input_dir / f"z{i:04d}.tif").write_bytes(b"")
+
+    # Fail the test if any stage-1-to-5 function is called. Quantification
+    # must be the ONLY stage that runs.
+    def _should_not_call(name):
+        def _die(**kwargs):
+            raise AssertionError(f"reuse mode must not call {name}")
+
+        return _die
+
+    for fn_name in (
+        "build_volume_from_tiffs",
+        "prepare_half_template_inputs",
+        "run_ants_registration",
+        "refine_registered_volume",
+        "_apply_refinement_field_to_annotation_volume",
+        "_warp_annotation_volume_to_input_space",
+        "export_registered_truth_slices",
+    ):
+        monkeypatch.setattr(
+            f"project.scripts.whole_brain_3d.{fn_name}",
+            _should_not_call(fn_name),
+            raising=False,
+        )
+
+    quant_calls: list[dict] = []
+
+    def fake_quantify(**kwargs):
+        quant_calls.append(kwargs)
+        return {"leaf_csv": str(outputs_dir / "cell_counts_leaf.csv")}
+
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d.run_quantification_from_truth",
+        fake_quantify,
+    )
+
+    stages: list[tuple[str, int]] = []
+
+    def _progress(stage_name, stage_index, stage_count, percent, message, artifacts):
+        stages.append((stage_name, percent))
+
+    result = run_whole_brain_3d(
+        cfg={
+            "input": {
+                "pixel_size_um_xy": 5.0,
+                "slice_spacing_um": 25.0,
+                "slicing_plane": "coronal",
+                "active_channel": "farred",
+            },
+            "quantify_fn": lambda **kwargs: {"cells_mapped_csv": "c1.csv"},
+            "registration": {
+                "atlas_hemisphere": "right_flipped",
+                "ml_flip": False,
+                "reuse_from_dir": str(prior_dir),
+            },
+        },
+        input_dir=input_dir,
+        outputs_dir=outputs_dir,
+        merged_slice_paths=[],
+        progress_cb=_progress,
+    )
+
+    # Only Quantification should have emitted progress
+    stage_names = [s for s, _p in stages]
+    assert "Quantification" in stage_names
+    assert "ANTS Registration" not in stage_names
+    assert "Laplacian Refinement" not in stage_names
+    assert "Truth Export" not in stage_names
+
+    # quantify_fn received C1's input_dir (merged_slice_paths from C1) even
+    # though the annotation paths came from the prior C0 dir
+    assert len(quant_calls) == 1
+    assert quant_calls[0]["input_dir"] == input_dir
+    # ants_meta / refine_meta should reference prior dir paths so truth
+    # export artifacts are consistent with C0's registration
+    reused_ants = quant_calls[0]["ants_meta"]
+    assert Path(reused_ants["registered_volume"]).parent == (prior_dir / "ants_registration")
+    assert result["truth_source"] == "3d_registered_volume"
+
+
+def test_run_whole_brain_3d_reuse_requires_core_artifacts(tmp_path):
+    """If reuse_from_dir is set but key artifacts are missing, fail loudly
+    rather than silently skipping and producing garbage output.
+    """
+    prior_dir = tmp_path / "incomplete_prior"
+    prior_dir.mkdir()
+    # intentionally empty — no ants_registration/ etc.
+
+    input_dir = tmp_path / "input_c1"
+    outputs_dir = tmp_path / "outputs_c1"
+    input_dir.mkdir()
+    outputs_dir.mkdir()
+
+    with pytest.raises((FileNotFoundError, ValueError), match="reuse"):
+        run_whole_brain_3d(
+            cfg={
+                "input": {"pixel_size_um_xy": 5.0, "slice_spacing_um": 25.0},
+                "quantify_fn": lambda **kwargs: {},
+                "registration": {"reuse_from_dir": str(prior_dir)},
+            },
+            input_dir=input_dir,
+            outputs_dir=outputs_dir,
+            merged_slice_paths=[],
+        )
+
+
 def test_run_whole_brain_3d_skip_laplacian(tmp_path, monkeypatch):
     """When skip_laplacian_refinement=True, refine_registered_volume is NOT called."""
     import nibabel as nib

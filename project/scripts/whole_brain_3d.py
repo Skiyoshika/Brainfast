@@ -376,6 +376,152 @@ def _direct_z_mapping_fallback(
     return True
 
 
+# ---------------------------------------------------------------------------
+# Dual-channel fast path — reuse registration artifacts from a prior channel
+# ---------------------------------------------------------------------------
+# A typical dual-channel sample has C0 (e.g. 560nm reporter) and C1 (e.g. 640nm
+# co-label). Because ANTs registration aligns the *tissue silhouette* (shared
+# between channels) to the Allen atlas, running the full 4-hour pipeline a
+# second time for C1 is wasted work — the registration, Laplacian refinement,
+# and atlas-back-warp are all identical. Only cell detection on the C1 slice
+# stack produces channel-specific output.
+#
+# When ``registration.reuse_from_dir`` points at a completed C0 run's
+# outputs_dir, we short-circuit stages 1-5 and run only Quantification (stage 6)
+# with C1's merged_slice_paths as the detection source. Net cost for C1 drops
+# from ~4h to ~15-30min (pure detection + aggregation).
+#
+# Required artifacts in the prior dir:
+#   ants_registration/annotation_registered.nii.gz
+#   ants_registration/fwd_transform_0.nii.gz + fwd_transform_1.mat
+#   ants_registration/inv_transform_0.mat + inv_transform_1.nii.gz
+#   laplacian_refinement/annotation_refined.nii.gz
+#   laplacian_refinement/laplacian_deformation_field.npy
+#   truth_export/slice_XXXX_registered_label.tif (one per slice)
+
+
+_REUSE_REQUIRED_FILES = (
+    "ants_registration/annotation_registered.nii.gz",
+    "laplacian_refinement/annotation_refined.nii.gz",
+    "laplacian_refinement/laplacian_deformation_field.npy",
+)
+
+
+def _reuse_prior_registration_and_quantify(
+    prior_dir: Path,
+    input_dir: Path,
+    outputs_dir: Path,
+    merged_slice_paths: list[Path],
+    cfg: dict,
+    quantify_fn,
+    emit,
+) -> dict:
+    """Reuse a prior channel's registration artifacts and only re-run
+    quantification on the current channel's merged_slice_paths.
+    """
+    prior_dir = Path(prior_dir)
+    if not prior_dir.exists():
+        raise FileNotFoundError(f"reuse_from_dir does not exist: {prior_dir}")
+    missing = [f for f in _REUSE_REQUIRED_FILES if not (prior_dir / f).exists()]
+    if missing:
+        raise FileNotFoundError(
+            f"reuse_from_dir {prior_dir} is missing required artifacts: {missing}"
+        )
+
+    emit(
+        "Quantification",
+        6,
+        10,
+        f"Reusing registration artifacts from {prior_dir.name}; detecting current channel cells",
+        {"reused_from": str(prior_dir)},
+    )
+
+    prior_ants_dir = prior_dir / "ants_registration"
+    prior_refine_dir = prior_dir / "laplacian_refinement"
+    prior_truth_dir = prior_dir / "truth_export"
+
+    # Reconstruct meta dicts the quantifier expects. We only populate the
+    # fields that are actually read downstream.
+    ants_meta = {
+        "registered_volume": prior_ants_dir / "ants_result.nii.gz",
+        "forward_transforms": sorted(prior_ants_dir.glob("fwd_transform_*")),
+        "inverse_transforms": sorted(prior_ants_dir.glob("inv_transform_*")),
+        "metrics_csv": prior_ants_dir / "registration_metrics.csv",
+    }
+    refine_meta = {
+        "final_registered_path": prior_refine_dir / "final_registered.nii.gz",
+        "field_path": prior_refine_dir / "laplacian_deformation_field.npy",
+        "metrics_csv": prior_refine_dir / "refinement_metrics.csv",
+    }
+    volume_meta = {
+        "volume_path": prior_dir / "volume" / "input_volume.nii.gz",
+        "ml_flipped": False,
+    }
+    template_meta = {
+        "template_path": prior_dir / "template_prep" / "template_half.nii.gz",
+        "annotation_path": prior_dir / "template_prep" / "annotation_half.nii.gz",
+    }
+
+    # Build truth_rows by walking prior truth_export/ and pairing each
+    # registered_label.tif with the matching CURRENT-channel slice path so
+    # cell detection runs on the new channel's fluorescence. slice_id is the
+    # integer index derived from the filename.
+    truth_rows = []
+    if prior_truth_dir.exists() and merged_slice_paths:
+        prior_labels = sorted(prior_truth_dir.glob("slice_*_registered_label.tif"))
+        for i, label_path in enumerate(prior_labels):
+            if i >= len(merged_slice_paths):
+                break
+            overlay_path = prior_truth_dir / label_path.name.replace(
+                "_registered_label.tif", "_overlay.png"
+            )
+            truth_rows.append(
+                {
+                    "slice_id": i,
+                    "real_slice_path": str(merged_slice_paths[i]),
+                    "registered_label_path": str(label_path),
+                    "overlay_path": str(overlay_path) if overlay_path.exists() else "",
+                }
+            )
+
+    refined_annotation_path = prior_refine_dir / "annotation_refined.nii.gz"
+    registered_annotation_path = prior_ants_dir / "annotation_registered.nii.gz"
+
+    quant_meta = run_quantification_from_truth(
+        cfg=cfg,
+        quantify_fn=quantify_fn,
+        input_dir=Path(input_dir),
+        outputs_dir=outputs_dir,
+        merged_slice_paths=list(merged_slice_paths),
+        truth_rows=truth_rows,
+        truth_source="3d_registered_volume",
+        volume_meta=volume_meta,
+        template_meta=template_meta,
+        ants_meta=ants_meta,
+        refine_meta=refine_meta,
+    )
+    emit(
+        "Quantification",
+        6,
+        100,
+        "Quantification (reused registration) completed",
+        {"cells_mapped_csv": str(quant_meta.get("cells_mapped_csv", ""))},
+    )
+
+    return {
+        "truth_source": "3d_registered_volume",
+        "volume_meta": volume_meta,
+        "template_meta": template_meta,
+        "ants_meta": ants_meta,
+        "refine_meta": refine_meta,
+        "truth_rows": truth_rows,
+        "quant_meta": quant_meta,
+        "refined_annotation_path": refined_annotation_path,
+        "annotation_registered_path": registered_annotation_path,
+        "reused_from": str(prior_dir),
+    }
+
+
 def run_whole_brain_3d(
     cfg: dict,
     input_dir: Path,
@@ -523,6 +669,24 @@ def run_whole_brain_3d(
     truth_dir = outputs_dir / "truth_export"
     refined_annotation_path = refine_dir / "annotation_refined.nii.gz"
     registered_annotation_path = ants_dir / "annotation_registered.nii.gz"
+
+    # -----------------------------------------------------------------
+    # Dual-channel fast path: reuse registration artifacts from a prior
+    # channel's outputs_dir and skip stages 1-5. Only the quantification
+    # stage runs, using the *current* channel's slice paths for detection.
+    # -----------------------------------------------------------------
+    reuse_from_dir = reg_cfg.get("reuse_from_dir")
+    if reuse_from_dir:
+        reuse_result = _reuse_prior_registration_and_quantify(
+            prior_dir=Path(str(reuse_from_dir)),
+            input_dir=Path(input_dir),
+            outputs_dir=outputs_dir,
+            merged_slice_paths=list(merged_slice_paths),
+            cfg=cfg,
+            quantify_fn=quantify_fn,
+            emit=_emit,
+        )
+        return reuse_result
 
     _emit(
         "Volume Build",

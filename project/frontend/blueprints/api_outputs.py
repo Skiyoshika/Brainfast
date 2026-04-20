@@ -9,11 +9,12 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from flask import Blueprint, jsonify, send_file, send_from_directory
+from flask import Blueprint, jsonify, request, send_file, send_from_directory
 
 import project.frontend.server_context as ctx
 from project.frontend.api_errors import (
     ERR_INTERNAL,
+    ERR_INVALID_INPUT,
     ERR_NOT_FOUND,
 )
 
@@ -344,6 +345,166 @@ def outputs_reg_slice_file(filename: str):
         if fp.exists():
             return send_from_directory(str(reg_dir), safe)
     return jsonify({"ok": False, "error": "file not found", "error_code": ERR_NOT_FOUND}), 404
+
+
+# ---------------------------------------------------------------------------
+# Raw per-channel fluorescence rendering — backing for the dual-channel UI
+# overlay. The pipeline's truth_export contains C0's atlas overlay. To overlay
+# a 2nd channel on the same slice, the UI fetches this endpoint which reads
+# tmp_channel/ch_<N>_<SLICE>.tif, normalizes intensity, and returns an 8-bit
+# PNG with optional pseudocolor tinting.
+# ---------------------------------------------------------------------------
+
+
+@bp.get("/raw-channel-slice")
+def outputs_raw_channel_slice():
+    """Render tmp_channel/ch_<N>_<z_idx>.tif as a PNG with per-channel tint.
+
+    Query params:
+        job        — job id (default: active job)
+        z          — slice index (integer, 0-based matching overlay slice index)
+        channel    — channel name (red/green/farred) used to look up ch_N via
+                     cfg.input.channel_map; defaults to 'farred'
+        tint       — hex color like 00ffff (cyan); renders grayscale tinted
+                     this color. Defaults to white (no tint).
+        vmax       — optional int, overrides auto percentile clip
+    """
+    from io import BytesIO
+
+    import numpy as np
+    from PIL import Image
+    from tifffile import imread as _tif_read
+
+    out = _outputs_root()
+    try:
+        z = int(request.args.get("z", 0))
+    except ValueError:
+        return jsonify({"ok": False, "error": "bad z", "error_code": ERR_INVALID_INPUT}), 400
+    channel = str(request.args.get("channel", "farred")).strip().lower()
+    tint_hex = str(request.args.get("tint", "")).strip().lstrip("#")
+    vmax_q = request.args.get("vmax")
+
+    # Resolve channel_map from the most recent runtime_config to find ch_<N>.
+    channel_map = {"red": 0, "green": 1, "farred": 2}
+    runtime_dir = out / "runtime_configs"
+    if runtime_dir.exists():
+        cfgs = sorted(runtime_dir.glob("run_config_*.json"))
+        if cfgs:
+            import json
+
+            try:
+                cfg = json.loads(cfgs[-1].read_text(encoding="utf-8-sig"))
+                channel_map = cfg.get("input", {}).get("channel_map", channel_map)
+            except Exception:  # noqa: BLE001 — keep fallback if config unreadable
+                pass
+    ch_idx = int(channel_map.get(channel, channel_map.get("farred", 2)))
+
+    ch_dir = out / "tmp_channel"
+    if not ch_dir.exists():
+        return jsonify({
+            "ok": False,
+            "error": f"tmp_channel/ missing under {out}",
+            "error_code": ERR_NOT_FOUND,
+        }), 404
+    fp = ch_dir / f"ch_{ch_idx}_{z:04d}.tif"
+    if not fp.exists():
+        return jsonify({
+            "ok": False,
+            "error": f"slice {fp.name} not found (channel={channel}, z={z})",
+            "error_code": ERR_NOT_FOUND,
+        }), 404
+
+    try:
+        arr = _tif_read(str(fp))
+    except Exception as exc:  # noqa: BLE001 — surface file read errors to caller
+        return jsonify({"ok": False, "error": f"read failed: {exc}"}), 500
+    if arr.ndim == 3:
+        arr = arr[0]
+
+    # Robust percentile normalization so fluorescence doesn't clip on bright cells
+    if vmax_q:
+        try:
+            vmax = float(vmax_q)
+        except ValueError:
+            vmax = float(np.percentile(arr, 99.5))
+    else:
+        vmax = float(np.percentile(arr, 99.5))
+    vmin = float(np.percentile(arr, 1.0))
+    denom = max(vmax - vmin, 1.0)
+    gray = np.clip((arr.astype(np.float32) - vmin) / denom, 0.0, 1.0)
+    gray_u8 = (gray * 255.0).astype(np.uint8)
+
+    # Apply tint: multiply grayscale with RGB tint color → pseudo-color
+    if tint_hex and len(tint_hex) == 6:
+        try:
+            r = int(tint_hex[0:2], 16)
+            g = int(tint_hex[2:4], 16)
+            b = int(tint_hex[4:6], 16)
+        except ValueError:
+            r = g = b = 255
+        rgb = np.stack(
+            [
+                (gray_u8.astype(np.uint16) * r // 255).astype(np.uint8),
+                (gray_u8.astype(np.uint16) * g // 255).astype(np.uint8),
+                (gray_u8.astype(np.uint16) * b // 255).astype(np.uint8),
+            ],
+            axis=-1,
+        )
+        img = Image.fromarray(rgb, mode="RGB")
+    else:
+        img = Image.fromarray(gray_u8, mode="L")
+
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf.getvalue(), 200, {"Content-Type": "image/png", "Cache-Control": "no-cache"}
+
+
+@bp.get("/channel-info")
+def outputs_channel_info():
+    """Return list of channels for which tmp_channel/ch_<N>_*.tif exist.
+
+    Used by the 3D Liquify UI to decide whether the "Overlay 2nd channel"
+    toggle should be visible + which channels to offer. Response:
+        {"ok": true, "channels": ["red", "farred"], "slice_count": 646,
+         "channel_map": {"red": 0, "green": 1, "farred": 2}}
+    """
+    out = _outputs_root()
+    channel_map = {"red": 0, "green": 1, "farred": 2}
+    runtime_dir = out / "runtime_configs"
+    if runtime_dir.exists():
+        cfgs = sorted(runtime_dir.glob("run_config_*.json"))
+        if cfgs:
+            import json
+
+            try:
+                cfg = json.loads(cfgs[-1].read_text(encoding="utf-8-sig"))
+                channel_map = cfg.get("input", {}).get("channel_map", channel_map)
+            except Exception:  # noqa: BLE001 — best-effort; keep defaults
+                pass
+    ch_dir = out / "tmp_channel"
+    if not ch_dir.exists():
+        return jsonify({"ok": True, "channels": [], "slice_count": 0, "channel_map": channel_map})
+    # Inverse lookup: ch_<N>_*.tif → find which channel names exist
+    present_indices: set[int] = set()
+    slice_counts: dict[int, int] = {}
+    for f in ch_dir.glob("ch_*_*.tif"):
+        try:
+            idx = int(f.name.split("_")[1])
+            present_indices.add(idx)
+            slice_counts[idx] = slice_counts.get(idx, 0) + 1
+        except (IndexError, ValueError):
+            continue
+    present_names = [
+        name for name, idx in channel_map.items() if int(idx) in present_indices
+    ]
+    total_slices = max(slice_counts.values()) if slice_counts else 0
+    return jsonify({
+        "ok": True,
+        "channels": present_names,
+        "slice_count": total_slices,
+        "channel_map": channel_map,
+    })
 
 
 @bp.get("/file-list")

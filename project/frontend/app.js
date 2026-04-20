@@ -6370,7 +6370,16 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   // ------ slice list ------
   async function reloadSliceList() {
     try {
-      const resp = await fetch('/api/outputs/reg-slice-list');
+      // Pass the Job ID from the liquify panel's own input so the slice
+      // overlay list matches the job the user just typed. Previously the
+      // fetch had no ?job= param and always returned the default job's
+      // slices, making the panel claim "No registered slices" even after
+      // the user filled a valid completed job id.
+      const jid = currentJobId();
+      const url = jid && jid !== 'default'
+        ? `/api/outputs/reg-slice-list?job=${encodeURIComponent(jid)}`
+        : '/api/outputs/reg-slice-list';
+      const resp = await fetch(url);
       const data = await resp.json();
       state.sliceFiles = data.files || [];
       if (!state.sliceFiles.length) {
@@ -6392,11 +6401,23 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
     }
   }
 
+  function _sliceImgUrl(fname) {
+    // Same dual-source logic as reloadSliceList so the slice PNG comes from
+    // the job we just typed rather than the default job.
+    const jid = currentJobId();
+    const base = `/api/outputs/reg-slice/${fname}`;
+    const suffix = `ts=${Date.now()}`;
+    if (jid && jid !== 'default') {
+      return `${base}?job=${encodeURIComponent(jid)}&${suffix}`;
+    }
+    return `${base}?${suffix}`;
+  }
+
   function loadSliceImage() {
     if (!state.sliceFiles.length) return;
     const fname = state.sliceFiles[state.currentZ];
     if (!fname) return;
-    img.src = `/api/outputs/reg-slice/${fname}?ts=${Date.now()}`;
+    img.src = _sliceImgUrl(fname);
     img.style.display = '';
     img.onload = () => {
       state.imageNaturalSize = { h: img.naturalHeight, w: img.naturalWidth };

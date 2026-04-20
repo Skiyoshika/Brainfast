@@ -284,6 +284,15 @@ def wizard_launch():
     """
     payload = request.get_json(silent=True) or {}
 
+    # Single-channel callers still send inputDir (str). Dual-channel callers
+    # send inputDirs (dict {channel_name: dir}). If only inputDirs is given
+    # we synthesize inputDir for the legacy required-field validation.
+    input_dirs_payload = payload.get("inputDirs")
+    if isinstance(input_dirs_payload, dict) and input_dirs_payload and not payload.get("inputDir"):
+        # Pick the dir for the first declared channel as the primary
+        primary_ch = (payload.get("channels") or [next(iter(input_dirs_payload))])[0]
+        payload["inputDir"] = input_dirs_payload.get(primary_ch)
+
     required = ("sampleId", "inputDir", "pixelSizeUm", "zSpacingUm")
     missing = [k for k in required if k not in payload or payload[k] in (None, "")]
     if missing:
@@ -311,6 +320,25 @@ def wizard_launch():
             404,
         )
 
+    # Validate every dir when multi-channel. Fail loudly before spawning work
+    # so the user gets a fast, actionable error instead of a mid-pipeline crash.
+    per_channel_dirs: dict[str, str] = {}
+    if isinstance(input_dirs_payload, dict) and input_dirs_payload:
+        for ch_name, ch_dir_raw in input_dirs_payload.items():
+            ch_dir = Path(str(ch_dir_raw)).expanduser()
+            if not ch_dir.exists():
+                return (
+                    jsonify(
+                        {
+                            "ok": False,
+                            "error": f"inputDirs[{ch_name}] not found: {ch_dir}",
+                            "error_code": ERR_NOT_FOUND,
+                        }
+                    ),
+                    404,
+                )
+            per_channel_dirs[str(ch_name)] = str(ch_dir)
+
     cfg = _build_run_config(payload)
     sample_id = cfg["project"]["name"]
     job_id = sample_id
@@ -332,11 +360,19 @@ def wizard_launch():
     if isinstance(channels, str):
         channels = [channels]
 
+    # Runner accepts either a single str or a dict keyed by channel name.
+    # Use dict form when we have per-channel dirs (covers dual-channel runs);
+    # otherwise the single inputDir keeps backwards compatibility with every
+    # existing wizard test + the single-channel happy path.
+    runner_input: object = str(input_dir)
+    if per_channel_dirs and len(channels) > 1:
+        runner_input = per_channel_dirs
+
     # Reuse server_context._runner (same code path as /api/run) so progress
     # tracking and status endpoints continue to work without additional UI.
     t = threading.Thread(
         target=ctx._runner,
-        args=(str(cfg_path), str(input_dir), list(channels), {}),
+        args=(str(cfg_path), runner_input, list(channels), {}),
         kwargs={"job_id": job_id},
         daemon=True,
     )
@@ -348,6 +384,7 @@ def wizard_launch():
             "jobId": job_id,
             "config_path": str(cfg_path),
             "input_dir": str(input_dir),
+            "input_dirs": per_channel_dirs or {channels[0]: str(input_dir)},
             "channels": list(channels),
             "outputs_dir": str(job_dir),
         }

@@ -529,6 +529,10 @@ const LANGS = {
     'newsample.hemi': 'Atlas hemisphere',
     'newsample.channel': 'Channel',
     'newsample.launch': 'Step 3. Generate config & start pipeline',
+    'newsample.addSecondChannel': 'Add second channel',
+    'newsample.secondChannelHint': 'Runs only detection (~15 min) on the 2nd channel — reuses the first channel\'s registration. Both channels become overlay-able in 3D Liquify.',
+    'newsample.secondSource': '2nd source path (directory or multi-page TIFF)',
+    'newsample.secondChannel': '2nd channel',
     // ----- 3D Liquify -----
     'nav.liquify3d': '3D Liquify',
     'liquify3d.title': '3D Landmark Liquify',
@@ -1075,6 +1079,10 @@ const LANGS = {
     'newsample.hemi': '图谱半球',
     'newsample.channel': '通道',
     'newsample.launch': '步骤 3。生成配置并启动管线',
+    'newsample.addSecondChannel': '添加第二通道',
+    'newsample.secondChannelHint': '仅对第二通道跑检测（约 15 分钟）— 复用第一通道的配准结果。两个通道都能在 3D Liquify 里叠加查看。',
+    'newsample.secondSource': '第二通道源路径（目录或多页 TIFF）',
+    'newsample.secondChannel': '第二通道',
     // ----- 3D 液化 -----
     'nav.liquify3d': '3D 液化',
     'liquify3d.title': '3D 地标液化',
@@ -6994,8 +7002,69 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   const channel    = $('wizChannel');
   const launchBtn  = $('wizLaunchBtn');
   const launchStatus = $('wizLaunchStatus');
+  // Dual-channel controls (Phase 5)
+  const addSecondToggle = $('wizAddSecondChannel');
+  const secondFields    = $('wizSecondChannelFields');
+  const source2Input    = $('wiz2SourcePath');
+  const inspect2Btn     = $('wiz2InspectBtn');
+  const inspect2Status  = $('wiz2InspectStatus');
+  const channel2        = $('wiz2Channel');
 
   let lastInspect = null;
+  let lastInspect2 = null;
+
+  addSecondToggle?.addEventListener('change', () => {
+    if (secondFields) {
+      secondFields.style.display = addSecondToggle.checked ? '' : 'none';
+    }
+  });
+
+  inspect2Btn?.addEventListener('click', async () => {
+    const sp = (source2Input?.value || '').trim();
+    if (!sp) {
+      inspect2Status.textContent = 'Please enter the 2nd channel source path.';
+      inspect2Status.style.color = 'var(--warn,#ffa726)';
+      return;
+    }
+    inspect2Status.textContent = 'Inspecting 2nd channel…';
+    inspect2Status.style.color = '';
+    try {
+      const resp = await fetch('/api/wizard/inspect-source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourcePath: sp }),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        inspect2Status.textContent = '2nd inspect failed: ' + (data.error || resp.status);
+        inspect2Status.style.color = 'var(--danger,#f55)';
+        lastInspect2 = null;
+        return;
+      }
+      lastInspect2 = data;
+      const lines = [`Detected: ${data.kind}`];
+      if (data.kind === 'multipage_tiff') {
+        lines.push(`pages=${data.n_pages}`);
+        if (data.needs_extraction) {
+          lines.push('⚠ needs extract_zstack first');
+        }
+      } else {
+        lines.push(`files=${data.n_files}`);
+      }
+      if (data.sample_shape) lines.push(`shape=${JSON.stringify(data.sample_shape)}`);
+      // Consistency check against 1st channel: same shape + same page count.
+      if (lastInspect && data.sample_shape && lastInspect.sample_shape) {
+        if (JSON.stringify(data.sample_shape) !== JSON.stringify(lastInspect.sample_shape)) {
+          lines.push('⚠ shape differs from 1st channel — registration reuse may break');
+        }
+      }
+      inspect2Status.textContent = lines.join('  |  ');
+    } catch (err) {
+      inspect2Status.textContent = '2nd inspect failed: ' + err.message;
+      inspect2Status.style.color = 'var(--danger,#f55)';
+      lastInspect2 = null;
+    }
+  });
 
   inspectBtn.addEventListener('click', async () => {
     const sp = (sourceInput.value || '').trim();
@@ -7062,20 +7131,48 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       launchStatus.textContent = 'Fill sample id, source path, pixel + z spacing first.';
       return;
     }
+    // Build channel list + per-channel input dirs
+    const ch1 = channel.value;
+    const channels = [ch1];
+    const inputDirs = { [ch1]: sourceInput.value.trim() };
+    if (addSecondToggle?.checked) {
+      const ch2 = channel2.value;
+      const src2 = (source2Input.value || '').trim();
+      if (!src2) {
+        launchStatus.textContent = '2nd channel enabled but source path is empty.';
+        return;
+      }
+      if (ch2 === ch1) {
+        launchStatus.textContent = '2nd channel must differ from the 1st.';
+        return;
+      }
+      channels.push(ch2);
+      inputDirs[ch2] = src2;
+    }
     launchBtn.disabled = true;
-    launchStatus.textContent = 'Launching pipeline…';
+    launchStatus.textContent = channels.length > 1
+      ? `Launching dual-channel pipeline (${channels.join(' + ')})…`
+      : 'Launching pipeline…';
     try {
+      const payload = {
+        sampleId: sampleId.value.trim(),
+        pixelSizeUm: parseFloat(pixelUm.value),
+        zSpacingUm: parseFloat(zUm.value),
+        channels,
+        atlasHemisphere: hemi.value,
+      };
+      // Keep single-channel shape backwards compatible: inputDir (str) for
+      // legacy jobs; inputDirs (dict) when multiple channels are declared.
+      if (channels.length > 1) {
+        payload.inputDirs = inputDirs;
+        payload.inputDir = inputDirs[ch1]; // fallback for old handlers
+      } else {
+        payload.inputDir = inputDirs[ch1];
+      }
       const resp = await fetch('/api/wizard/launch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sampleId: sampleId.value.trim(),
-          inputDir: sourceInput.value.trim(),
-          pixelSizeUm: parseFloat(pixelUm.value),
-          zSpacingUm: parseFloat(zUm.value),
-          channels: [channel.value],
-          atlasHemisphere: hemi.value,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await resp.json();
       if (!data.ok) {
@@ -7083,8 +7180,11 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
         launchBtn.disabled = false;
         return;
       }
+      const dualSuffix = channels.length > 1
+        ? ` · 2nd channel reuses registration (≈15 min after 1st completes)`
+        : '';
       launchStatus.textContent =
-        `✓ Pipeline started for jobId="${data.jobId}". ` +
+        `✓ Pipeline started for jobId="${data.jobId}".${dualSuffix} ` +
         `Check the Registration Workflow tab for progress.`;
       launchStatus.style.color = 'var(--success,#4caf50)';
     } catch (err) {

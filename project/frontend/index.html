@@ -804,6 +804,44 @@
           </div>
         </div>
 
+        <!-- Step 2b: Optional second channel (dual-channel) -->
+        <div id="wizSecondChannelBlock" style="margin-top:14px; padding:10px; border:1px dashed var(--border,#333); border-radius:6px;">
+          <div class="form-row" style="gap:10px; align-items:center;">
+            <label style="display:flex; gap:6px; align-items:center;">
+              <input type="checkbox" id="wizAddSecondChannel" />
+              <strong data-i18n="newsample.addSecondChannel">Add second channel</strong>
+            </label>
+            <span class="field-hint" data-i18n="newsample.secondChannelHint">
+              Runs only detection (≈15 min) on the 2nd channel — reuses the first channel's registration. Both channels become overlay-able in 3D Liquify.
+            </span>
+          </div>
+          <div id="wizSecondChannelFields" style="display:none; margin-top:8px;">
+            <div class="form-row" style="gap:12px; align-items:end;">
+              <label style="flex:1; display:flex; flex-direction:column; gap:4px;">
+                <span data-i18n="newsample.secondSource">2nd source path (directory or multi-page TIFF)</span>
+                <input id="wiz2SourcePath" type="text"
+                       placeholder="D:/Brainfast/project/data/35_C1_full"
+                       style="width:100%;" />
+              </label>
+              <button type="button" class="btn" id="wiz2InspectBtn">
+                <i data-lucide="search" class="btn-icon"></i>
+                <span data-i18n="newsample.inspect">Inspect</span>
+              </button>
+            </div>
+            <div id="wiz2InspectStatus" class="hint-text" style="margin-top:6px;"></div>
+            <div class="form-row" style="gap:12px; margin-top:8px; flex-wrap:wrap;">
+              <label style="display:flex; flex-direction:column; gap:4px;">
+                <span data-i18n="newsample.secondChannel">2nd channel</span>
+                <select id="wiz2Channel" style="width:140px;">
+                  <option value="farred">farred (C2)</option>
+                  <option value="green">green (C1)</option>
+                  <option value="red">red (C0)</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+
         <!-- Step 3: Launch -->
         <div class="form-row" style="gap:12px; margin-top:18px; padding-top:10px; border-top:1px dashed var(--border,#333);">
           <button type="button" class="btn btn-primary" id="wizLaunchBtn" disabled>

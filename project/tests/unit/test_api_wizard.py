@@ -194,3 +194,122 @@ def test_launch_rejects_nonexistent_input_dir(client, tmp_path):
         content_type="application/json",
     )
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# /api/wizard/launch — dual-channel (Phase 5)
+# ---------------------------------------------------------------------------
+
+
+def test_launch_accepts_inputDirs_dict_for_dual_channel(client, tmp_path, monkeypatch):
+    """Dual-channel payload sends inputDirs={red:..., farred:...} + channels=[...].
+    Runner should receive the dict so per-channel slice dirs are respected.
+    """
+    dir_red = tmp_path / "c0_slices"
+    dir_far = tmp_path / "c1_slices"
+    dir_red.mkdir()
+    dir_far.mkdir()
+    imwrite(str(dir_red / "z0000.tif"), np.full((4, 4), 100, dtype=np.uint16))
+    imwrite(str(dir_far / "z0000.tif"), np.full((4, 4), 200, dtype=np.uint16))
+
+    captured: dict = {}
+
+    def _fake_runner(config, input_dir, channels, params, *, job_id=None):
+        captured["config"] = str(config)
+        captured["input_dir"] = input_dir
+        captured["channels"] = list(channels)
+
+    monkeypatch.setattr(ctx, "_runner", _fake_runner)
+
+    resp = client.post(
+        "/api/wizard/launch",
+        data=json.dumps(
+            {
+                "sampleId": "dual42",
+                "inputDirs": {"red": str(dir_red), "farred": str(dir_far)},
+                "pixelSizeUm": 5.0,
+                "zSpacingUm": 24.765,
+                "channels": ["red", "farred"],
+                "atlasHemisphere": "right_flipped",
+            }
+        ),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200, resp.get_json()
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert set(data["channels"]) == {"red", "farred"}
+    assert set(data["input_dirs"].keys()) == {"red", "farred"}
+
+    # Runner received the dict form so per-channel dirs are preserved
+    assert isinstance(captured["input_dir"], dict)
+    assert captured["input_dir"]["red"] == str(dir_red)
+    assert captured["input_dir"]["farred"] == str(dir_far)
+    assert captured["channels"] == ["red", "farred"]
+
+
+def test_launch_dual_channel_rejects_missing_channel_dir(client, tmp_path, monkeypatch):
+    """If inputDirs references a directory that doesn't exist, fail fast with
+    404 + channel name so the user knows which path is broken.
+    """
+    dir_red = tmp_path / "c0_slices"
+    dir_red.mkdir()
+    imwrite(str(dir_red / "z0000.tif"), np.full((4, 4), 100, dtype=np.uint16))
+
+    # Runner must NOT be invoked when validation fails
+    called = False
+
+    def _fake_runner(*args, **kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(ctx, "_runner", _fake_runner)
+
+    resp = client.post(
+        "/api/wizard/launch",
+        data=json.dumps(
+            {
+                "sampleId": "dual_bad",
+                "inputDirs": {
+                    "red": str(dir_red),
+                    "farred": str(tmp_path / "does_not_exist"),
+                },
+                "pixelSizeUm": 5.0,
+                "zSpacingUm": 25.0,
+                "channels": ["red", "farred"],
+            }
+        ),
+        content_type="application/json",
+    )
+    assert resp.status_code == 404
+    body = resp.get_json()
+    assert body["ok"] is False
+    assert "farred" in body["error"]
+    assert not called
+
+
+def test_launch_inputDirs_alone_synthesizes_inputDir_for_legacy_validation(client, tmp_path, monkeypatch):
+    """Callers may send only inputDirs (no inputDir) — backend should still
+    pass the legacy required-field check by picking the first channel's dir.
+    """
+    dir_red = tmp_path / "c0_slices"
+    dir_red.mkdir()
+    imwrite(str(dir_red / "z0000.tif"), np.full((4, 4), 100, dtype=np.uint16))
+
+    monkeypatch.setattr(ctx, "_runner", lambda *a, **kw: None)
+
+    resp = client.post(
+        "/api/wizard/launch",
+        data=json.dumps(
+            {
+                "sampleId": "dual_no_legacy_field",
+                # No inputDir at all — only inputDirs
+                "inputDirs": {"red": str(dir_red)},
+                "pixelSizeUm": 5.0,
+                "zSpacingUm": 25.0,
+                "channels": ["red"],
+            }
+        ),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200, resp.get_json()

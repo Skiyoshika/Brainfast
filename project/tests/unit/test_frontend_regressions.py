@@ -150,6 +150,11 @@ def test_app_js_has_auto_warm_start_flow_for_empty_jobs():
       - the job has zero existing landmark pairs
     It must never force-overwrite; jobs with existing pairs get a clear
     "manual overwrite required" banner pointing them at the explicit button.
+
+    Review finding 3 — the fire-once guard must be scoped by (jobId, class),
+    NOT a single page-lifetime boolean, so switching jobs or classes
+    triggers a fresh auto-apply attempt. Clearing pairs also resets the
+    guard so the user sees auto-apply re-fire after a manual Clear.
     """
     js = (_FRONTEND_DIR / "app.js").read_text(encoding="utf-8", errors="replace")
 
@@ -170,8 +175,33 @@ def test_app_js_has_auto_warm_start_flow_for_empty_jobs():
     assert "manual overwrite required" in js, (
         "banner must explain why auto-apply was skipped"
     )
-    # Fire-once guard: flag prevents repeated applies if the user re-enters tab
-    assert "_autoWarmStartTried" in js
+    # Review finding 3 — scoped guard, not a lifetime-of-page boolean.
+    assert "_autoWarmStartTried" in js, (
+        "expected an _autoWarmStartTried guard tracking which (jobId, class) "
+        "pairs have already been auto-applied"
+    )
+    # Must be a Set / Map (scopable), not a naked boolean.
+    assert "_autoWarmStartTried = new Set" in js or "_autoWarmStartTried = new Map" in js, (
+        "fire-once guard must be a Set/Map keyed by signature; a boolean "
+        "never resets on job/class change so the user only ever gets one "
+        "auto-apply per page load"
+    )
+    # Changing job id must retrigger — jobInput listener present
+    assert "jobInput?.addEventListener('change'" in js or \
+           "jobInput.addEventListener('change'" in js, (
+        "jobInput change must re-run _autoWarmStartIfEmpty so switching jobs "
+        "doesn't leave the user on a stale page-load-only guard"
+    )
+    # Clearing pairs must invalidate the tried signature so the user sees a
+    # fresh auto-apply after manual Clear. Scan a generous window after the
+    # clearBtn handler anchor — the handler contains a nested fetch() block
+    # whose own ``});`` would confuse a naive index-based slice.
+    clear_start = js.index("clearBtn.addEventListener('click'")
+    clear_window = js[clear_start : clear_start + 1200]
+    assert "_autoWarmStartTried" in clear_window, (
+        "clearBtn handler must reset the auto-warm-start guard so the next "
+        "refreshState sees the empty-pairs job as a fresh candidate"
+    )
 
 
 def test_app_js_has_readable_manual_tiff_translations():
@@ -296,6 +326,50 @@ def test_manual_preview_image_supports_pseudocolor_palette(tmp_path, client):
     rgb = np.asarray(Image.open(io.BytesIO(res.data)).convert("RGB"))
     mask = rgb.max(axis=2) > 0
     assert np.any(rgb[..., 0][mask] != rgb[..., 1][mask])
+
+
+def test_calibration_save_and_learn_use_the_same_dir_when_rename_fails(
+    tmp_path, monkeypatch
+):
+    """Review finding 2 — on the rename-fail fallback path, ``_save_...`` used
+    to write to legacy ``train_data_set/`` while ``_learn_...`` read from the
+    new ``outputs/state/calibration/samples/`` because each helper resolved
+    the dir independently. A resolver must pin the choice so save + learn
+    agree on one location.
+    """
+    import project.frontend.server_context as ctx_mod
+
+    project_root = tmp_path / "proj"
+    project_root.mkdir()
+    (project_root / "train_data_set").mkdir()
+    (project_root / "train_data_set" / "1_Ori.png").write_bytes(b"legacy")
+    monkeypatch.setattr(ctx_mod, "PROJECT_ROOT", project_root)
+
+    # Pin the shared state root somewhere we can observe, then force the
+    # rename to fail (as happens on Windows when another process is reading
+    # the legacy dir, or on a cross-disk BRAINFAST_STATE_DIR mount).
+    state_root = tmp_path / "state"
+    monkeypatch.setenv("BRAINFAST_STATE_DIR", str(state_root))
+    real_rename = Path.rename
+
+    def _fail_rename(self, target, *a, **kw):
+        if self.name == "train_data_set":
+            raise OSError("simulated cross-disk rename failure")
+        return real_rename(self, target, *a, **kw)
+
+    monkeypatch.setattr(Path, "rename", _fail_rename)
+
+    # Whatever resolver save + learn share must return the SAME dir.
+    save_dir = ctx_mod._resolve_calibration_samples_dir()
+    learn_dir = ctx_mod._resolve_calibration_samples_dir()
+    assert save_dir == learn_dir, (
+        "save vs learn must agree on one calibration samples dir after "
+        "a rename-failure fallback"
+    )
+    # Since the rename failed but legacy has data, both must point at the
+    # legacy dir (reading the new empty one would make Save Calibration +
+    # Learn a silent no-op).
+    assert save_dir == project_root / "train_data_set"
 
 
 def test_extract_preview_frame_reads_single_page_without_full_stack_imread(tmp_path, monkeypatch):

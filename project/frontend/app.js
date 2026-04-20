@@ -1598,6 +1598,14 @@ function formatEtaSeconds(seconds) {
   return remMins ? `${hours}h ${remMins}m` : `${hours}h`;
 }
 function getRunEtaSeconds(status) {
+  // Prefer backend ETA (per-stage baselines + self-correction). It works
+  // throughout the entire pipeline including ANTs where slicesDone is 0.
+  const backendEta = status?.eta?.etr_total_s;
+  if (Number.isFinite(backendEta) && backendEta > 0) {
+    return Math.round(backendEta);
+  }
+  // Fallback: naive (total - done) × per-slice elapsed. Only useful during
+  // slice-iterating phases (Truth Export, Detection) where slicesDone > 0.
   const done = Number(status?.slicesDone || 0);
   const total = Number(status?.slicesTotal || 0);
   const startEpoch = Number(status?.startEpoch || 0);
@@ -2473,6 +2481,7 @@ function _applyPollResponse(p) {
 
   // Slice progress bar
   state.startEpoch = Number(p.startEpoch || state.startEpoch || 0) || null;
+  state.lastBackendEta = p?.eta || null;
   _updateSliceProgressBar(p.slicesDone || 0, p.slicesTotal || 0);
 
   // Running state divergence detection
@@ -3690,7 +3699,15 @@ function _updateSliceProgressBar(done, total) {
   if (!wrap) return;
   if (done === 0 && total === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
-  const etaSeconds = getRunEtaSeconds({ running: state.running, slicesDone: done, slicesTotal: total, startEpoch: state.startEpoch });
+  // Prefer the backend ETA captured by the latest /api/status poll —
+  // works during ANTs etc. when slicesDone is still 0.
+  const etaSeconds = getRunEtaSeconds({
+    running: state.running,
+    slicesDone: done,
+    slicesTotal: total,
+    startEpoch: state.startEpoch,
+    eta: state.lastBackendEta,
+  });
   txt.textContent = etaSeconds != null
     ? `${done} / ${total || '?'} · ${t('progress.eta', { eta: formatEtaSeconds(etaSeconds) })}`
     : `${done} / ${total || '?'}`;

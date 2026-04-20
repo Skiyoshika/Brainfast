@@ -107,9 +107,32 @@ def _resolve_structure_source(project_root: Path) -> Path:
     )
 
 
-def _load_tuned_overlay_params(outputs_dir: Path) -> tuple[dict, str, int]:
-    tuned_json = outputs_dir / "trainset_tuned_params.json"
-    if not tuned_json.exists():
+def _load_tuned_overlay_params(
+    outputs_dir: Path, *, project_root: Path | None = None
+) -> tuple[dict, str, int]:
+    """Resolve tuned overlay params, preferring a job-local snapshot.
+
+    Resolution order:
+      1. ``<outputs_dir>/trainset_tuned_params.json`` — job-local snapshot.
+         Captured at run start so a later global re-learn doesn't change the
+         behavior of an already-running job.
+      2. Shared state ``<state_root>/calibration/trainset_tuned_params.json``
+         — default surface for UI-triggered calibration learn runs.
+      3. Empty defaults.
+    """
+    try:
+        from scripts.paths import calibration_tuned_json
+    except ImportError:
+        from project.scripts.paths import calibration_tuned_json  # type: ignore[no-redef]
+
+    local_json = outputs_dir / "trainset_tuned_params.json"
+    tuned_json = local_json if local_json.exists() else None
+    if tuned_json is None and project_root is not None:
+        shared = calibration_tuned_json(project_root)
+        if shared.exists():
+            tuned_json = shared
+
+    if tuned_json is None:
         return {}, "cover", 1
 
     data = json.loads(tuned_json.read_text(encoding="utf-8-sig"))
@@ -137,6 +160,45 @@ def _load_tuned_overlay_params(outputs_dir: Path) -> tuple[dict, str, int]:
                     edge_smooth_iter = int(params["edgeSmoothIter"])
 
     return warp_params, str(fit_mode), int(edge_smooth_iter)
+
+
+def _snapshot_tuned_params_into_job(
+    outputs_dir: Path,
+    *,
+    project_root: Path | None = None,
+    resolved: tuple[dict, str, int] | None = None,
+) -> Path | None:
+    """Freeze the currently-resolved tuned params into the job's outputs dir.
+
+    Rationale: once a job has started we want its truth-export behavior
+    pinned to whatever calibration was live at launch, even if a later UI
+    "Learn" run rewrites the shared JSON mid-flight. Writing a job-local
+    snapshot makes the resolution order (local > shared) deterministic.
+
+    Returns the snapshot path (or None if snapshotting was skipped because a
+    local snapshot already exists).
+    """
+    local = Path(outputs_dir) / "trainset_tuned_params.json"
+    if local.exists():
+        return None
+    if resolved is None:
+        resolved = _load_tuned_overlay_params(outputs_dir, project_root=project_root)
+    warp_params, fit_mode, edge = resolved
+    if not warp_params and fit_mode == "cover" and edge == 1:
+        # Nothing learned yet; no snapshot needed.
+        return None
+    payload = {
+        "warpParams": dict(warp_params),
+        "fitMode": str(fit_mode),
+        "edgeSmoothIter": int(edge),
+        "_source": "snapshot_of_shared_calibration_at_job_start",
+    }
+    try:
+        local.parent.mkdir(parents=True, exist_ok=True)
+        local.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        return local
+    except OSError:
+        return None
 
 
 def _resolve_channel_index(cfg: dict) -> int:
@@ -555,6 +617,26 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
             reg_cfg = dict(cfg.get("registration", {}) or {})
             reg_cfg["reuse_from_dir"] = _reuse_env
             cfg["registration"] = reg_cfg
+        # Task 2 — resolve learned calibration BEFORE the whole-brain return.
+        # Previously this only ran for the non-whole-brain branch further
+        # below, meaning the default shipped whole-brain path ignored
+        # UI-triggered calibration learns. Now the three tuned fields are
+        # injected into cfg.truth_export so run_whole_brain_3d can thread
+        # them through to export_registered_truth_slices.
+        _warp_params, _fit_mode, _edge = _load_tuned_overlay_params(
+            outputs_dir, project_root=project_root
+        )
+        # Snapshot the resolved tuned JSON into job outputs for reproducibility
+        # (so a later shared re-learn doesn't retroactively change this job's
+        # behavior). See Task 2 Step 4 in the remediation plan.
+        _snapshot_tuned_params_into_job(
+            outputs_dir, project_root=project_root, resolved=(_warp_params, _fit_mode, _edge)
+        )
+        cfg["truth_export"] = {
+            "warp_params": dict(_warp_params),
+            "fit_mode": _fit_mode,
+            "edge_smooth_iter": int(_edge),
+        }
         return run_whole_brain_3d(
             cfg=cfg,
             input_dir=input_dir,
@@ -585,7 +667,9 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
     neighbor = _validated_int(cfg, "dedup.neighbor_slices")
     rxy = _validated_float(cfg, "dedup.r_xy_um")
     structure_csv = _resolve_structure_source(project_root)
-    warp_params, fit_mode, edge_smooth_iter = _load_tuned_overlay_params(outputs_dir)
+    warp_params, fit_mode, edge_smooth_iter = _load_tuned_overlay_params(
+        outputs_dir, project_root=project_root
+    )
     reg_cfg = cfg.get("registration", {})
     # Force hemisphere if specified in config (for half-brain samples where auto-detection fails)
     atlas_hemisphere = str(reg_cfg.get("atlas_hemisphere", "")).lower().strip()

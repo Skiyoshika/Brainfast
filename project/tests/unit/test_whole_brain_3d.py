@@ -140,6 +140,96 @@ def test_run_whole_brain_3d_emits_expected_stage_sequence(tmp_path, monkeypatch)
     assert result["truth_source"] == "3d_registered_volume"
 
 
+def test_run_whole_brain_3d_passes_tuned_params_to_truth_export(tmp_path, monkeypatch):
+    """Task 2 — the default whole-brain path must carry learned
+    ``warp_params`` / ``fit_mode`` / ``edge_smooth_iter`` through to
+    ``export_registered_truth_slices`` so the UI-triggered calibration
+    learn result actually changes the exported rasters.
+    """
+    input_dir = tmp_path / "input"
+    outputs_dir = tmp_path / "outputs"
+    input_dir.mkdir()
+    outputs_dir.mkdir()
+    for i in range(3):
+        (input_dir / f"z{i:04d}.tif").write_bytes(b"")
+
+    # Stub every stage except Truth Export so we can assert on its kwargs
+    for fn, ret in (
+        ("build_volume_from_tiffs", {"volume_path": outputs_dir / "v.nii.gz", "shape": [2, 3, 4]}),
+        ("prepare_half_template_inputs", {
+            "template_path": outputs_dir / "t.nii.gz",
+            "annotation_path": outputs_dir / "a.nii.gz",
+        }),
+        ("run_ants_registration", {
+            "registered_volume": outputs_dir / "ants.nii.gz",
+            "metrics_csv": outputs_dir / "m.csv",
+            "summary_txt": outputs_dir / "s.txt",
+        }),
+        ("refine_registered_volume", {
+            "final_registered_path": outputs_dir / "final.nii.gz",
+            "field_path": outputs_dir / "f.npy",
+            "metrics_csv": outputs_dir / "rm.csv",
+        }),
+    ):
+        monkeypatch.setattr(
+            f"project.scripts.whole_brain_3d.{fn}", lambda _ret=ret, **kw: _ret
+        )
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d._apply_refinement_field_to_annotation_volume",
+        lambda **kw: outputs_dir / "annotation_refined.nii.gz",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d._warp_annotation_volume_to_input_space",
+        lambda **kw: outputs_dir / "annotation_registered.nii.gz",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d._extrapolate_annotation_to_tissue",
+        lambda **kw: kw.get("annotation_path", outputs_dir / "annotation_registered.nii.gz"),
+        raising=False,
+    )
+    export_calls: list[dict] = []
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d.export_registered_truth_slices",
+        lambda **kw: export_calls.append(kw) or [],
+    )
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d.run_quantification_from_truth",
+        lambda **kw: {"leaf_csv": "ignored.csv"},
+    )
+
+    learned_warp = {"custom_knob": 0.42}
+    run_whole_brain_3d(
+        cfg={
+            "input": {
+                "pixel_size_um_xy": 5.0,
+                "slice_spacing_um": 25.0,
+                "slicing_plane": "coronal",
+            },
+            "quantify_fn": lambda **kw: {},
+            "registration": {"atlas_hemisphere": "left", "ml_flip": False},
+            # Learned calibration fields — these must land in truth export kwargs
+            "truth_export": {
+                "warp_params": learned_warp,
+                "fit_mode": "contain",
+                "edge_smooth_iter": 3,
+            },
+        },
+        input_dir=input_dir,
+        outputs_dir=outputs_dir,
+        merged_slice_paths=[],
+    )
+
+    assert len(export_calls) == 1
+    kw = export_calls[0]
+    # Truth export must have received the learned parameters, not the old
+    # hard-coded "cover" + 0 defaults.
+    assert kw.get("fit_mode") == "contain"
+    assert kw.get("edge_smooth_iter") == 3
+    assert kw.get("warp_params", {}).get("custom_knob") == 0.42
+
+
 def test_run_whole_brain_3d_reuses_registration_from_prior_dir(tmp_path, monkeypatch):
     """When ``registration.reuse_from_dir`` points at a prior channel's
     outputs_dir with all required artifacts, stages 1–5 are skipped and only

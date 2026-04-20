@@ -317,6 +317,94 @@ class TestDefaultRuntimePath:
         progress_file = outputs_dir / "pipeline_progress.json"
         assert progress_file.exists(), "pipeline_progress.json must be written"
 
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
+    def test_learned_calibration_reaches_default_whole_brain_path(self, tmp_path: Path) -> None:
+        """Task 2 regression — a learned calibration artifact must change the
+        exported registered-label contract on the default (whole-brain) path.
+        The shipped combo ``scope=whole + whole_brain_backend=miki_3d`` used
+        to silently bypass ``_load_tuned_overlay_params``; this test guards
+        against that regression by asserting the tuned ``fit_mode`` +
+        ``edge_smooth_iter`` end up at ``export_registered_truth_slices``.
+        """
+        slice_dir = tmp_path / "slices"
+        slice_paths = _make_synthetic_slices(slice_dir)
+        outputs_dir = tmp_path / "outputs"
+        outputs_dir.mkdir()
+
+        atlas_dir = tmp_path / "atlas"
+        tpl_path, ann_path = _make_fake_atlas(atlas_dir, shape=(_NZ + 4, _HW, _HW))
+
+        cfg = {
+            "input": {
+                "pixel_size_um_xy": 25.0,
+                "slice_spacing_um": 25.0,
+                "slicing_plane": "coronal",
+            },
+            "registration": {
+                "template_path": str(tpl_path),
+                "annotation_path": str(ann_path),
+                "atlas_hemisphere": "left",
+                "ap_start": 0,
+                "ap_end": _NZ + 4,
+                "ants_transform": "SyN",
+                "random_seed": 42,
+                "skip_laplacian_refinement": True,
+            },
+            "detection": {"primary_model": "cpsam"},
+            "dedup": {"neighbor_slices": 1, "r_xy_um": 6.0},
+            "quantify_fn": _fake_quantify,
+            # Simulate the shape main.py injects after reading tuned JSON
+            "truth_export": {
+                "warp_params": {"learned_marker": 99},
+                "fit_mode": "contain",
+                "edge_smooth_iter": 4,
+            },
+        }
+
+        export_calls: list[dict] = []
+
+        def _spy_export(**kwargs):
+            export_calls.append(kwargs)
+            from scripts.truth_export_3d import (
+                export_registered_truth_slices as _real,
+            )
+
+            return _real(**kwargs)
+
+        _real_import_module = importlib.import_module
+
+        def _selective_import(name, *args, **kwargs):
+            if name == "ants":
+                raise ImportError("mocked: ants not available")
+            return _real_import_module(name, *args, **kwargs)
+
+        with (
+            mock.patch(
+                "scripts.whole_brain_3d.run_ants_registration",
+                side_effect=_build_mock_ants_result,
+            ),
+            mock.patch(
+                "scripts.whole_brain_3d.importlib.import_module",
+                side_effect=_selective_import,
+            ),
+            mock.patch(
+                "scripts.whole_brain_3d.export_registered_truth_slices",
+                side_effect=_spy_export,
+            ),
+        ):
+            run_whole_brain_3d(
+                cfg=cfg,
+                input_dir=slice_dir,
+                outputs_dir=outputs_dir,
+                merged_slice_paths=slice_paths,
+            )
+
+        assert export_calls, "export_registered_truth_slices must be invoked"
+        kw = export_calls[0]
+        assert kw.get("fit_mode") == "contain"
+        assert kw.get("edge_smooth_iter") == 4
+        assert kw.get("warp_params", {}).get("learned_marker") == 99
+
     def test_default_runtime_path_detect_import(self) -> None:
         """detect.py resolves cpsam model type correctly (no actual model load)."""
         from scripts.detect import _is_cellpose_model, _resolve_model_type

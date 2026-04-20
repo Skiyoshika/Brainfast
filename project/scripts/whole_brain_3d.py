@@ -789,9 +789,7 @@ def run_whole_brain_3d(
         )
         volume_meta["intensity_adapted_path"] = adapted_path
         volume_meta["volume_path"] = adapted_path
-        print(
-            f"[intensity-adapt] mode={intensity_adapt_mode} written to {adapted_path}"
-        )
+        print(f"[intensity-adapt] mode={intensity_adapt_mode} written to {adapted_path}")
 
     # Optional axis alignment stage — vendored from UCI-XuLab-RegTools.
     # Detects the longitudinal fissure in moving + template, fits plane
@@ -835,8 +833,8 @@ def run_whole_brain_3d(
             _moving_scaled = _scale_to_align_range(_moving_raw)
             _template_scaled = _scale_to_align_range(_template_raw)
 
-            affine4x4, _mcoef, _tcoef, _mpts, _tpts = (
-                compute_longitudinal_fissure_alignment(_moving_scaled, _template_scaled)
+            affine4x4, _mcoef, _tcoef, _mpts, _tpts = compute_longitudinal_fissure_alignment(
+                _moving_scaled, _template_scaled
             )
             np.save(str(axis_align_dir / "axisAlignA.npy"), affine4x4)
 
@@ -969,6 +967,14 @@ def run_whole_brain_3d(
     )
 
     atlas_hemisphere = str(reg_cfg.get("atlas_hemisphere", "")).lower().strip()
+    # Task 2 — consume learned calibration (fit_mode / edge_smooth_iter /
+    # warp_params). Callers inject these via cfg["truth_export"] after
+    # resolving the shared tuned JSON; we also accept per-field registration
+    # overrides so a config can still pin a choice explicitly.
+    truth_cfg = dict(cfg.get("truth_export", {}) or {})
+    te_warp_params = dict(truth_cfg.get("warp_params", {}) or {})
+    te_fit_mode = str(truth_cfg.get("fit_mode", "cover")).strip() or "cover"
+    te_edge = int(truth_cfg.get("edge_smooth_iter", 0) or 0)
     truth_rows = export_registered_truth_slices(
         real_slice_paths=list(merged_slice_paths),
         annotation_volume_path=annotation_registered_path,
@@ -976,6 +982,9 @@ def run_whole_brain_3d(
         pixel_size_um=pixel_size_um_xy,
         slicing_plane=slicing_plane,
         atlas_hemisphere=atlas_hemisphere,
+        warp_params=te_warp_params,
+        fit_mode=te_fit_mode,
+        edge_smooth_iter=te_edge,
     )
 
     quant_meta = run_quantification_from_truth(

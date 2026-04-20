@@ -58,6 +58,9 @@ def finalize_liquify_to_cell_counts(
     structure_csv: Path | str | None = None,
     slicing_plane: str = "coronal",
     atlas_hemisphere: str = "",
+    warp_params: dict | None = None,
+    fit_mode: str = "cover",
+    edge_smooth_iter: int = 0,
     progress_cb=None,
 ) -> dict:
     """Re-run cell→region mapping + aggregation against the refined annotation.
@@ -130,6 +133,9 @@ def finalize_liquify_to_cell_counts(
         pixel_size_um=float(pixel_size_um),
         slicing_plane=slicing_plane,
         atlas_hemisphere=atlas_hemisphere,
+        warp_params=dict(warp_params or {}),
+        fit_mode=str(fit_mode),
+        edge_smooth_iter=int(edge_smooth_iter),
     )
 
     # Build a slice_id → registered_label_path lookup so we can map each cell
@@ -179,14 +185,20 @@ def finalize_liquify_to_cell_counts(
                 g["mapping_status"] = "missing_refined_label"
                 per_slice_mapped.append(g)
                 continue
-            mapped_group = map_cells_with_registered_label_slice(
-                group,
-                registered_label_tif=label_path,
-                structure_csv=Path(structure_csv) if structure_csv else Path("/nonexistent.csv"),
-                atlas_slice_index=int(sid),
-                slicing_plane=slicing_plane,
-                registration_method="liquify3d_finalize",
-            ) if structure_csv else _map_without_structure(group, label_path, sid)
+            mapped_group = (
+                map_cells_with_registered_label_slice(
+                    group,
+                    registered_label_tif=label_path,
+                    structure_csv=Path(structure_csv)
+                    if structure_csv
+                    else Path("/nonexistent.csv"),
+                    atlas_slice_index=int(sid),
+                    slicing_plane=slicing_plane,
+                    registration_method="liquify3d_finalize",
+                )
+                if structure_csv
+                else _map_without_structure(group, label_path, sid)
+            )
             per_slice_mapped.append(mapped_group)
         mapped = pd.concat(per_slice_mapped, ignore_index=True)
 
@@ -213,9 +225,7 @@ def finalize_liquify_to_cell_counts(
     }
 
 
-def _map_without_structure(
-    cells: pd.DataFrame, label_path: Path, slice_id: int
-) -> pd.DataFrame:
+def _map_without_structure(cells: pd.DataFrame, label_path: Path, slice_id: int) -> pd.DataFrame:
     """Minimal region-id lookup when no structure CSV is available.
 
     Used by tests and by pipelines that haven't shipped the Allen structure

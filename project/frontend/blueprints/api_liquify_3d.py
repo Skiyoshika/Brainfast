@@ -68,18 +68,43 @@ def _progress_cb_for_job(job_id: str):
             percent=int(max(0, min(100, percent))),
             message=str(message),
         )
+
     return _cb
+
+
+_legacy_class_priors_warned = False
 
 
 def _class_priors_root() -> Path:
     """On-disk location for per-class aggregated priors.
 
-    Lives beside the per-sample ``train_data_set`` tree so backups/exports
-    catch both. Call-sites should not import PROJECT_ROOT directly; this
-    helper keeps the path resolvable at import time without reading ctx
-    before server.py has populated it.
+    Lives under the shared runtime-state root (``outputs/state/class_priors``)
+    so mutable data stays out of the git-tracked source tree. If the new
+    location doesn't yet contain anything but a legacy
+    ``train_data_set/class_priors`` dir exists on disk, we migrate it in
+    place (rename) so prior local data isn't lost. All new writes land in
+    the shared state path regardless.
     """
-    return ctx.PROJECT_ROOT / "train_data_set" / "class_priors"
+    from project.scripts.paths import class_priors_dir
+
+    global _legacy_class_priors_warned
+    new_root = class_priors_dir(ctx.PROJECT_ROOT)
+    legacy_root = ctx.PROJECT_ROOT / "train_data_set" / "class_priors"
+    if not new_root.exists() and legacy_root.exists() and any(legacy_root.iterdir()):
+        try:
+            new_root.parent.mkdir(parents=True, exist_ok=True)
+            legacy_root.rename(new_root)
+            print(f"[class-prior] migrated legacy priors {legacy_root} -> {new_root}")
+        except OSError as exc:  # best-effort: fall back to copy-then-use
+            if not _legacy_class_priors_warned:
+                print(
+                    f"[class-prior] could not rename legacy dir ({exc}); "
+                    f"reading from {legacy_root} but new writes go to {new_root}"
+                )
+                _legacy_class_priors_warned = True
+            return legacy_root
+    new_root.mkdir(parents=True, exist_ok=True)
+    return new_root
 
 
 def _resolve_job_dir(job_id: str) -> Path:
@@ -113,6 +138,7 @@ def _resolve_job_dir(job_id: str) -> Path:
 def _job_file_for(job_id: str, filename: str) -> Path:
     """Like ctx._job_file but honours both jobs/<id>/ and <id>/ conventions."""
     return _resolve_job_dir(job_id) / filename
+
 
 bp = Blueprint("api_liquify_3d", __name__, url_prefix="/api")
 
@@ -172,6 +198,7 @@ def liquify_3d_state():
     if source_available:
         try:
             import nibabel as _nib
+
             annotation_shape = list(_nib.load(str(annotation_path)).shape)
         except Exception:  # noqa: BLE001 — surface only when we can read header
             annotation_shape = None
@@ -307,7 +334,8 @@ def liquify_3d_qc_done():
                             "qc_done_ts": record["timestamp"],
                         },
                         ensure_ascii=False,
-                    ) + "\n"
+                    )
+                    + "\n"
                 )
 
     return jsonify({"ok": True, "jobId": job_id, "marker_path": str(marker_path)})
@@ -396,6 +424,7 @@ def liquify_3d_add_pair():
         ann_path = _resolve_annotation_path(job_id)
         if ann_path is not None and img_h > 0 and img_w > 0:
             import nibabel as nib  # local import — only needed on this path
+
             ann_img = nib.load(str(ann_path))
             _d, ann_h, ann_w = ann_img.shape
             sy = ann_h / img_h
@@ -742,9 +771,7 @@ def liquify_3d_finalize():
             jsonify(
                 {
                     "ok": False,
-                    "error": (
-                        "annotation_refined_liquify3d.nii.gz not found — run /apply first"
-                    ),
+                    "error": ("annotation_refined_liquify3d.nii.gz not found — run /apply first"),
                     "error_code": ERR_NOT_FOUND,
                 }
             ),

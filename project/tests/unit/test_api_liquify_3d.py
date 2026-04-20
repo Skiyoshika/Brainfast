@@ -340,7 +340,7 @@ def test_class_registry_list_returns_known_classes(client, tmp_path, monkeypatch
         _json.dumps({"patterns": [{"match": r"^pv", "class": "PVe3"}]}),
         encoding="utf-8",
     )
-    pri = tmp_path / "train_data_set" / "class_priors" / "ChATe27"
+    pri = tmp_path / "outputs" / "state" / "class_priors" / "ChATe27"
     pri.mkdir(parents=True)
     (pri / "landmark_prior.csv").write_text(
         "z,atlas_y,atlas_x,sum_dy,sum_dx,sum_sq_dy,sum_sq_dx,n\n",
@@ -442,7 +442,7 @@ def test_qc_done_appends_to_class_prior_sample_log_when_class_provided(
         ),
         content_type="application/json",
     )
-    log_path = tmp_path / "train_data_set" / "class_priors" / cls / "sample_log.jsonl"
+    log_path = tmp_path / "outputs" / "state" / "class_priors" / cls / "sample_log.jsonl"
     assert log_path.exists()
     lines = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     # Two records: one from class-prior/save (no metrics) + one from qc-done

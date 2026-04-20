@@ -62,6 +62,53 @@ def ensure_runtime_cache_dirs(project_root: Path) -> Path:
     return runtime_cache_dir
 
 
+# ---------------------------------------------------------------------------
+# Shared runtime-state layout — survives across jobs and lives OUTSIDE the
+# git-tracked source tree. Calibration samples, class priors, and Cellpose
+# training pairs all root here. Can be overridden via BRAINFAST_STATE_DIR
+# so a deployment can put mutable state on a separate disk.
+# ---------------------------------------------------------------------------
+
+STATE_ROOT_ENV: str = "BRAINFAST_STATE_DIR"
+
+
+def resolve_state_root(project_root: Path) -> Path:
+    """Return the canonical shared-state root for learned artifacts.
+
+    Default: ``<project_root>/outputs/state``. Override via the env var
+    ``BRAINFAST_STATE_DIR`` (absolute path). Never returns a location inside
+    the git-tracked source tree (``train_data_set/``, ``cellpose_training/``).
+    """
+    override = os.environ.get(STATE_ROOT_ENV, "").strip()
+    if override:
+        return Path(override).expanduser()
+    return Path(project_root) / "outputs" / "state"
+
+
+def calibration_samples_dir(project_root: Path) -> Path:
+    """Per-sample manual-corrected training pairs (ori/show/label triples).
+
+    Previously lived at ``<project_root>/train_data_set/``. Moved under
+    ``outputs/state/calibration/samples/`` so the source tree stays clean.
+    """
+    return resolve_state_root(project_root) / "calibration" / "samples"
+
+
+def calibration_tuned_json(project_root: Path) -> Path:
+    """Output of ``learn_from_trainset.py`` consumed by truth-export."""
+    return resolve_state_root(project_root) / "calibration" / "trainset_tuned_params.json"
+
+
+def class_priors_dir(project_root: Path) -> Path:
+    """Per-class running-mean landmark priors aggregated across jobs."""
+    return resolve_state_root(project_root) / "class_priors"
+
+
+def cellpose_training_dir(project_root: Path) -> Path:
+    """Detector retraining samples (image + corrected mask pairs)."""
+    return resolve_state_root(project_root) / "cellpose_training"
+
+
 @dataclass
 class RunPaths:
     """All file/directory paths for a single pipeline run."""
@@ -91,6 +138,13 @@ class RunPaths:
     # ── Tuning / training ─────────────────────────────────────────────────────
     tuned_params: Path
     trainset_tuned_params: Path
+
+    # ── Shared state (survives across jobs; NOT under source tree) ────────────
+    state_root: Path
+    calibration_samples_dir: Path
+    calibration_tuned_json: Path
+    class_priors_dir: Path
+    cellpose_training_dir: Path
 
     @classmethod
     def from_project_root(
@@ -123,6 +177,7 @@ class RunPaths:
             if fallback_structure is not None:
                 structure_csv = fallback_structure
 
+        state_root = resolve_state_root(project_root)
         return cls(
             project_root=project_root,
             outputs=outputs,
@@ -140,6 +195,11 @@ class RunPaths:
             slice_qc=outputs / "slice_qc.csv",
             tuned_params=outputs / "tuned_params.json",
             trainset_tuned_params=outputs / "trainset_tuned_params.json",
+            state_root=state_root,
+            calibration_samples_dir=state_root / "calibration" / "samples",
+            calibration_tuned_json=state_root / "calibration" / "trainset_tuned_params.json",
+            class_priors_dir=state_root / "class_priors",
+            cellpose_training_dir=state_root / "cellpose_training",
         )
 
     def ensure_dirs(self) -> None:

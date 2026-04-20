@@ -256,6 +256,68 @@ def test_runpaths_accepts_custom_outputs_dir(tmp_path: Path) -> None:
     assert paths.registered_slices == custom_root / "registered_slices"
 
 
+# ---------------------------------------------------------------------------
+# Task 1 — Shared runtime-state path contract
+# ---------------------------------------------------------------------------
+
+
+def test_runpaths_exposes_shared_state_root_under_outputs(tmp_path: Path) -> None:
+    """Calibration, class priors, and Cellpose training samples must all live
+    under a shared state root (``outputs/state/``) rather than dirtying the
+    tracked source tree (``train_data_set/``, ``cellpose_training/``).
+    """
+    cfg = _minimal_cfg(tmp_path / "input")
+    job_out = tmp_path / "jobs" / "job_alpha"
+    paths = RunPaths.from_project_root(tmp_path, cfg, outputs_dir=job_out)
+
+    # Canonical shared state layout — not under job_out (must survive jobs)
+    expected_root = tmp_path / "outputs" / "state"
+    assert paths.state_root == expected_root
+    assert paths.calibration_samples_dir == expected_root / "calibration" / "samples"
+    assert (
+        paths.calibration_tuned_json
+        == expected_root / "calibration" / "trainset_tuned_params.json"
+    )
+    assert paths.class_priors_dir == expected_root / "class_priors"
+    assert paths.cellpose_training_dir == expected_root / "cellpose_training"
+
+
+def test_runpaths_state_paths_never_point_inside_source_tree(tmp_path: Path) -> None:
+    """Regression guard: these paths used to write under
+    ``PROJECT_ROOT / 'train_data_set'`` and ``PROJECT_ROOT / 'cellpose_training'``,
+    which polluted the git-tracked source tree. They must now live under
+    ``outputs/state/``.
+    """
+    cfg = _minimal_cfg(tmp_path / "input")
+    paths = RunPaths.from_project_root(tmp_path, cfg)
+
+    forbidden = {tmp_path / "train_data_set", tmp_path / "cellpose_training"}
+    for p in (
+        paths.state_root,
+        paths.calibration_samples_dir,
+        paths.calibration_tuned_json,
+        paths.class_priors_dir,
+        paths.cellpose_training_dir,
+    ):
+        for fb in forbidden:
+            assert fb not in p.parents, f"{p} unexpectedly lives inside {fb}"
+
+
+def test_runpaths_state_root_overridable_via_env(tmp_path: Path, monkeypatch) -> None:
+    """A deployment might want state on a separate disk. Setting
+    BRAINFAST_STATE_DIR should redirect every state subpath accordingly.
+    """
+    alt_root = tmp_path / "alt_state_disk"
+    monkeypatch.setenv("BRAINFAST_STATE_DIR", str(alt_root))
+    cfg = _minimal_cfg(tmp_path / "input")
+    paths = RunPaths.from_project_root(tmp_path, cfg)
+
+    assert paths.state_root == alt_root
+    assert paths.calibration_samples_dir == alt_root / "calibration" / "samples"
+    assert paths.class_priors_dir == alt_root / "class_priors"
+    assert paths.cellpose_training_dir == alt_root / "cellpose_training"
+
+
 def test_info_reads_version_json() -> None:
     # Ensure PROJECT_ROOT points to the real project dir so version.json is found
     import project.frontend.server_context as ctx

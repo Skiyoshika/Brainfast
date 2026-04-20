@@ -6854,8 +6854,59 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
     }
   }
 
-  classInput?.addEventListener('change', refreshPriorBanner);
+  classInput?.addEventListener('change', async () => {
+    await refreshPriorBanner();
+    _autoWarmStartIfEmpty();
+  });
   priorStatusBtn?.addEventListener('click', refreshPriorBanner);
+
+  // Task 3 — one automatic warm-start hook: when a class is set, the prior
+  // is ready, and the job has ZERO existing landmark pairs, apply the
+  // warm-start automatically. Never force-overwrites; a job with any manual
+  // pairs routes to the explicit button path (which still supports force=true
+  // via the confirm() flow below).
+  let _autoWarmStartTried = false;
+  async function _autoWarmStartIfEmpty() {
+    const cls = currentClassName();
+    if (!cls) return;
+    if (_autoWarmStartTried) return;
+    // Only trigger when liquify state has been loaded (state.pairs is an array)
+    if (!Array.isArray(state.pairs)) return;
+    if (state.pairs.length > 0) {
+      // Manual work present — banner is informative only.
+      priorBanner.textContent += ' · manual overwrite required (click "Warm-start from prior")';
+      return;
+    }
+    let statusData;
+    try {
+      const r = await fetch(
+        `/api/liquify-3d/class-prior/status?class=${encodeURIComponent(cls)}`
+      );
+      statusData = await r.json();
+    } catch (_) { return; }
+    if (!statusData?.ok || !statusData.ready_for_warm_start) return;
+    _autoWarmStartTried = true;
+    try {
+      const resp = await fetch('/api/liquify-3d/class-prior/apply-warm-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: currentJobId(), class: cls, force: false }),
+      });
+      if (resp.status === 409) {
+        priorBanner.textContent +=
+          ' · manual overwrite required (job already has pairs)';
+        return;
+      }
+      const data = await resp.json();
+      if (!data?.ok) return;
+      priorBanner.textContent =
+        `✓ ${cls}: auto-applied ${data.pair_count} prior landmark(s) to this empty job.`;
+      await refreshState();
+      redraw();
+    } catch (_) {
+      // Best-effort: auto-apply failures never block the UI.
+    }
+  }
 
   // ----- #8 class-prior coverage heatmap -----
   const priorHeatBtn = el('liq3dPriorHeatBtn');
@@ -6971,15 +7022,21 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   });
 
   // Auto-load the first time the tab is shown
-  document.querySelector('.nav-btn[data-tab="liquify3d"]')?.addEventListener('click', () => {
+  document.querySelector('.nav-btn[data-tab="liquify3d"]')?.addEventListener('click', async () => {
     if (!state.sliceFiles.length) {
       reloadSliceList();
-      refreshState();
+      await refreshState();
+    } else {
+      await refreshState();
     }
-    refreshPriorBanner();
     refreshClassList();
-    autoDetectClass();
+    await autoDetectClass();
+    await refreshPriorBanner();
     refreshQcStatus();
+    // Task 3 — attempt a single auto warm-start once liquify state + class
+    // have both been resolved. Safe-guarded by _autoWarmStartTried +
+    // the empty-pair check inside the helper.
+    _autoWarmStartIfEmpty();
   });
 })();
 

@@ -31,6 +31,26 @@ def _pairs_from(tuples):
 # ---------------------------------------------------------------------------
 
 
+def test_update_accepts_iterator_and_preserves_pair_count(tmp_path):
+    """Task 3 — ``ClassPriorStore.update`` was logging ``len(list(pairs))``
+    *after* already iterating once, so iterator inputs recorded pair_count=0
+    in sample_log.jsonl even though the pairs were consumed normally. The
+    fix converts ``pairs`` to a list once at the top.
+    """
+    from project.scripts.class_prior import ClassPriorStore
+
+    store = ClassPriorStore(class_name="ChATe27", priors_root=tmp_path)
+    pair_tuples = [(10, 100.0, 100.0, 103.0, 99.0), (10, 200.0, 200.0, 205.0, 198.0)]
+    # Pass as a GENERATOR, not a list — regression trigger.
+    store.update(
+        sample_id="iter_sample",
+        pairs=(p for p in _pairs_from(pair_tuples)),
+    )
+    log_path = tmp_path / "ChATe27" / "sample_log.jsonl"
+    record = json.loads(log_path.read_text(encoding="utf-8").splitlines()[0])
+    assert record["pair_count"] == 2
+
+
 def test_store_creates_class_subdir_on_update(tmp_path):
     from project.scripts.class_prior import ClassPriorStore
 

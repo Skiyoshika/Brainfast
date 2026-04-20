@@ -42,7 +42,7 @@ class LandmarkPair:
     """One human-provided (real, atlas) voxel correspondence at a given z."""
 
     z: int
-    real: tuple[float, float]   # (y, x) in annotation-grid voxels
+    real: tuple[float, float]  # (y, x) in annotation-grid voxels
     atlas: tuple[float, float]  # (y, x) in annotation-grid voxels
 
 
@@ -94,9 +94,7 @@ class LandmarkStore:
             writer = csv.writer(fh)
             if is_new:
                 writer.writerow(self._COLUMNS)
-            writer.writerow(
-                [pair.z, pair.real[0], pair.real[1], pair.atlas[0], pair.atlas[1]]
-            )
+            writer.writerow([pair.z, pair.real[0], pair.real[1], pair.atlas[0], pair.atlas[1]])
         return pair
 
     def remove_pair(self, index: int) -> LandmarkPair:
@@ -121,6 +119,7 @@ class LandmarkStore:
         import os as _os
         import tempfile as _tempfile
         import time as _time
+
         self._path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = _tempfile.mkstemp(
             prefix=self._path.name + ".",
@@ -177,9 +176,7 @@ def compute_3d_displacement(
     source = np.asarray(source_pts, dtype=float).reshape(-1, 3)
     target = np.asarray(target_pts, dtype=float).reshape(-1, 3)
     if source.shape != target.shape:
-        raise ValueError(
-            f"source/target shape mismatch: {source.shape} vs {target.shape}"
-        )
+        raise ValueError(f"source/target shape mismatch: {source.shape} vs {target.shape}")
     if source.size == 0:
         return np.zeros((3, *vol_shape), dtype=np.float32)
 
@@ -255,7 +252,7 @@ def apply_3d_warp_to_annotation(
     warped = map_coordinates(
         annotation,
         coords,
-        order=0,          # nearest-neighbour — preserves discrete labels
+        order=0,  # nearest-neighbour — preserves discrete labels
         mode="constant",
         cval=0.0,
         prefilter=False,

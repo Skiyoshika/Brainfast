@@ -142,6 +142,38 @@ def test_app_js_wires_manual_count_viewer():
     assert "palette: manualCountState.palette" in js
 
 
+def test_app_js_has_auto_warm_start_flow_for_empty_jobs():
+    """Task 3 — app.js must implement a single automatic warm-start flow
+    that triggers only when:
+      - a class is auto-detected or manually selected
+      - liquify state has been refreshed (state.pairs is an array)
+      - the job has zero existing landmark pairs
+    It must never force-overwrite; jobs with existing pairs get a clear
+    "manual overwrite required" banner pointing them at the explicit button.
+    """
+    js = (_FRONTEND_DIR / "app.js").read_text(encoding="utf-8", errors="replace")
+
+    assert "_autoWarmStartIfEmpty" in js, (
+        "expected an _autoWarmStartIfEmpty helper driving Task 3 auto-apply"
+    )
+    # Guard: the auto-apply call MUST use force:false (never clobber)
+    auto_fn_start = js.index("async function _autoWarmStartIfEmpty")
+    auto_fn_end = js.index("\n  }", auto_fn_start)
+    auto_body = js[auto_fn_start:auto_fn_end]
+    assert "force: false" in auto_body, "auto warm-start must never force-overwrite"
+    assert "state.pairs.length > 0" in auto_body, (
+        "auto warm-start must skip jobs that already have manual pairs"
+    )
+    assert "auto-applied" in auto_body.lower() or "auto-applied" in js, (
+        "banner must distinguish the auto-applied state"
+    )
+    assert "manual overwrite required" in js, (
+        "banner must explain why auto-apply was skipped"
+    )
+    # Fire-once guard: flag prevents repeated applies if the user re-enters tab
+    assert "_autoWarmStartTried" in js
+
+
 def test_app_js_has_readable_manual_tiff_translations():
     js = (_FRONTEND_DIR / "app.js").read_text(encoding="utf-8", errors="replace")
 

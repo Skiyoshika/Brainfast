@@ -145,8 +145,12 @@ class ClassPriorStore:
             (e.g. post-registration NCC/Dice from the run).
         """
         self._class_dir.mkdir(parents=True, exist_ok=True)
+        # Iterator-safe: materialize once. The sample_log count at the end
+        # previously read ``len(list(pairs))`` AFTER the merge loop had
+        # already exhausted a generator input, logging 0 instead of N.
+        pair_list = list(pairs)
         raw_entries = self._load_raw_entries()
-        for pair in pairs:
+        for pair in pair_list:
             dy = pair.real[0] - pair.atlas[0]
             dx = pair.real[1] - pair.atlas[1]
             idx = self._find_merge_target(
@@ -173,7 +177,7 @@ class ClassPriorStore:
                 e["sum_sq_dx"] += dx * dx
                 e["n"] += 1
         self._write_raw_entries(raw_entries)
-        self._append_sample_log(sample_id=sample_id, pair_count=len(list(pairs)), metrics=metrics)
+        self._append_sample_log(sample_id=sample_id, pair_count=len(pair_list), metrics=metrics)
 
     # ----- Warm-start application -----
 

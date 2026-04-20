@@ -174,6 +174,71 @@ def test_error_log_and_status_expose_structured_progress(tmp_path: Path, monkeyp
         assert status_data["slicesTotal"] == 12
 
 
+def test_status_exposes_eta_when_pipeline_progress_file_present(tmp_path: Path, monkeypatch) -> None:
+    """When pipeline_progress.json exists for a job, /api/status should
+    include both the on-disk stage info and a non-null ``eta`` block.
+    """
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path)
+    job_id = "job_eta_check"
+    job_dir = tmp_path / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+
+    # Simulate a pipeline 30 minutes in, mid-ANTs at 45%.
+    import time as _time
+
+    from project.scripts.pipeline_progress import write_stage_progress
+
+    now = _time.time()
+    stage_started = now - 1800  # ANTs running for 30 min
+    run_started = now - 1900    # plus 100s of stages 1-2
+    progress_path = job_dir / "pipeline_progress.json"
+    # Write directly (preserves controlled timestamps)
+    progress_path.write_text(
+        '{"stageName":"ANTS Registration","stageIndex":3,"stageCount":6,'
+        '"percent":45,"message":"Running ANTs",'
+        f'"ts":{now},"stageStartedTs":{stage_started},"runStartedTs":{run_started},'
+        '"artifacts":{}}',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        ctx,
+        "_job_states",
+        {
+            ctx.DEFAULT_JOB_ID: ctx.run_state,
+            job_id: {
+                "running": True, "done": False, "error": None,
+                "logs": [], "errors": [], "channels": ["red"], "proc": None,
+                "current_channel": "red", "history": [], "config_path": None,
+                "startEpoch": int(run_started), "job_id": job_id,
+                "outputs_dir": str(job_dir),
+                "progress": {"phase": "registration", "stepCurrent": 3, "stepTotal": 6,
+                             "slicesDone": 0, "slicesTotal": 111, "message": ""},
+            },
+        },
+    )
+
+    with app.test_client() as client:
+        status_resp = client.get(f"/api/status?job={job_id}")
+        assert status_resp.status_code == 200
+        data = status_resp.get_json()
+
+        # On-disk progress fields are now exposed
+        assert data["progress"]["stageName"] == "ANTS Registration"
+        assert data["progress"]["stageIndex"] == 3
+        assert data["progress"]["stagePercent"] == 45
+
+        # ETA block is populated
+        assert data["eta"] is not None
+        assert data["eta"]["etr_total_s"] > 0
+        assert data["eta"]["method"] in {"baseline_only", "linear_in_stage", "linear_corrected"}
+        # ANTs at 45% with 1800s elapsed → roughly 2200s remaining in stage,
+        # plus Lap 30s + Truth 7×111=777s + Quant 16.5×111=1832s = 4839s total
+        # (with self-correction baseline-through-current ≈ (60+60+2000×0.45) = 1020s,
+        # actual elapsed 1900s → correction ≈ 1.86×, so remaining ≈ 4839 × 1.86 ≈ 9000s)
+        assert 1000 < data["eta"]["etr_total_s"] < 20000
+
+
 def test_job_output_dirs_do_not_overlap() -> None:
     left = ctx._job_output_dir("job_alpha")
     right = ctx._job_output_dir("job_beta")

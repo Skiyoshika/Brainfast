@@ -21,6 +21,10 @@ from project.frontend.api_errors import (
 from project.frontend.app_metadata import read_version_info
 from project.scripts.asset_bootstrap import atlas_asset_status
 from project.scripts.config_validation import collect_runtime_config_issues, load_config
+from project.scripts.pipeline_progress import (
+    compute_eta as _compute_pipeline_eta,
+    read_stage_progress as _read_stage_progress,
+)
 
 bp = Blueprint("api_pipeline", __name__)
 
@@ -372,6 +376,22 @@ def status():
             slices_total = merged_total
         else:
             slices_total = merged_total if merged_total > 0 else channel_total
+    # Read on-disk pipeline_progress.json (richer than in-memory progress) and
+    # compute ETA from it. Returns nothing for ETA when there's no progress
+    # file yet (e.g. the runner hasn't written stage 1 yet).
+    on_disk = _read_stage_progress(outputs_dir)
+    eta = None
+    if on_disk:
+        # Slice count is the best per-job size signal we have for per_slice
+        # cost stages. Prefer the slicesTotal already computed above; fall
+        # back to len(channel_dir) for jobs that haven't reported it.
+        eta_slice_count = max(slices_total, slices_done)
+        if eta_slice_count <= 0:
+            channel_dir = outputs_dir / "tmp_channel"
+            if channel_dir.exists():
+                eta_slice_count = len(list(channel_dir.glob("*.tif")))
+        eta = _compute_pipeline_eta(on_disk, slice_count=max(eta_slice_count, 1))
+
     return jsonify(
         {
             "jobId": job_id,
@@ -390,7 +410,14 @@ def status():
                 "stepCurrent": int(progress.get("stepCurrent", 0) or 0),
                 "stepTotal": int(progress.get("stepTotal", 0) or 0),
                 "message": str(progress.get("message", "")),
+                # On-disk stage info (richer than in-memory phase string)
+                "stageName": on_disk.get("stageName"),
+                "stageIndex": on_disk.get("stageIndex"),
+                "stageCount": on_disk.get("stageCount"),
+                "stagePercent": on_disk.get("percent"),
+                "stageMessage": on_disk.get("message"),
             },
+            "eta": eta,
         }
     )
 

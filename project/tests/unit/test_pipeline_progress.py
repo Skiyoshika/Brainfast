@@ -68,6 +68,7 @@ def test_write_stage_progress_is_safe_for_multiple_concurrent_writers(tmp_path, 
 
     progress = read_stage_progress(tmp_path)
 
+    # New ETA-supporting fields are part of every snapshot now.
     assert set(progress) == {
         "stageName",
         "stageIndex",
@@ -75,6 +76,17 @@ def test_write_stage_progress_is_safe_for_multiple_concurrent_writers(tmp_path, 
         "percent",
         "message",
         "artifacts",
+        "ts",
+        "stageStartedTs",
+        "runStartedTs",
     }
     assert len(temp_sources) == writer_count
     assert isinstance(progress["artifacts"], dict)
+    # Timestamps must be monotonically valid floats (within last 60 sec)
+    import time as _time
+
+    now = _time.time()
+    assert isinstance(progress["ts"], (int, float))
+    assert isinstance(progress["stageStartedTs"], (int, float))
+    assert isinstance(progress["runStartedTs"], (int, float))
+    assert now - progress["ts"] < 60

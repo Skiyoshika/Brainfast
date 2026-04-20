@@ -44,11 +44,21 @@ Brainfast is a local, privacy-first desktop tool that registers fluorescence mic
 
 ## Current workflow boundaries
 
-- 2D manual landmark / liquify correction is available in the browser UI.
-- The 3D whole-brain path is the default final-truth path and is still primarily automatic.
-- Cellpose-SAM (`cpsam`) is available as the default detector backend.
-- The product does not yet ship a detector-specific manual relabel / retrain workflow in the UI.
-- Region-level counts should only be trusted when registration QC is acceptable.
+The product now ships **three distinct learning loops**. They share the sidebar but
+close-the-loop on different parts of the pipeline — do not conflate them:
+
+| Loop | Trigger | What it tunes | Where artifacts live |
+|------|---------|---------------|----------------------|
+| **Calibration learn** | `Save Calibration + Learn` button (2D overlay editor) | Truth-export params (`warp_params`, `fit_mode`, `edge_smooth_iter`) so the *next* default whole-brain run's registered-label rasters match the corrected overlay. **Not** detector training; **not** ANTs training. | `outputs/state/calibration/` |
+| **Class-prior warm-start** | `Save job → class prior` (3D Liquify) | Per-class running-mean landmark corrections. When ≥ `MIN_SAMPLES_FOR_APPLY` same-class jobs have contributed, the next empty same-class job is auto-seeded with the learned pairs. | `outputs/state/class_priors/` |
+| **Cellpose retraining** | `Mask Editor` → `Save to Training Set` → `Cellpose Model Training` → `Apply Model` | A custom detector checkpoint. Runs offline from calibration and liquify. | `outputs/state/cellpose_training/` |
+
+Other boundaries:
+
+- The default runtime is `scope=whole` + `whole_brain_backend=miki_3d` + `primary_model=cpsam`. A UI-triggered `Save Calibration + Learn` now changes the truth-export rasters this path produces (regression guarded by `test_learned_calibration_reaches_default_whole_brain_path`).
+- 3D liquify is a landmark-based correction + finalize loop (it re-exports truth slices against the refined annotation and re-aggregates cell counts); it is not a registration-model training loop.
+- Region-level counts should only be trusted when the slice-QC file shows acceptable Dice / NCC for each slice.
+- Mutable learned artifacts live under `outputs/state/` (configurable via the `BRAINFAST_STATE_DIR` env var) so the git-tracked source tree stays clean.
 
 ---
 

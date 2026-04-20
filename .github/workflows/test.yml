@@ -90,6 +90,24 @@ jobs:
       - name: Run default-path integration smoke test
         run: python -m pytest project/tests/integration/test_default_path_smoke.py -v --tb=short
 
+      - name: Guard — learned calibration reaches default whole-brain path
+        # Dedicated invocation so a broken closed loop fails with an
+        # unmistakable job name in the PR checks UI (the test is already
+        # covered by the step above, but repeating it here makes the
+        # failure surface at the correct release gate line).
+        run: >
+          python -m pytest
+          project/tests/integration/test_default_path_smoke.py::TestDefaultRuntimePath::test_learned_calibration_reaches_default_whole_brain_path
+          -v --tb=short
+
+      - name: Guard — class-prior auto-apply + iterator safety
+        run: >
+          python -m pytest
+          project/tests/unit/test_class_prior.py
+          project/tests/unit/test_frontend_regressions.py
+          -k "auto_warm_start or iterator"
+          -v --tb=short
+
   # ── Integration tests (self-hosted, has atlas file) ───────────────────────
   # Requires a self-hosted runner registered with the label "brainfast"
   # that has annotation_25.nii.gz on disk.

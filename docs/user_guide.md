@@ -31,8 +31,8 @@
 ### Steps
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/<org>/Brainfast.git
+# 1. Clone the repository (fork from the upstream you were given access to)
+git clone https://github.com/Skiyoshika/Brainfast.git
 cd Brainfast
 
 # 2. Create a virtual environment
@@ -40,16 +40,15 @@ python -m venv .venv
 .venv\Scripts\activate        # Windows
 source .venv/bin/activate     # Linux/macOS
 
-# 3. Install core dependencies
-pip install -e .
+# 3. Install the default recommended runtime (miki_3d + cpsam)
+pip install -e ".[full,dev]"
+# Alternative: 2D-only minimal → pip install -e ".[dev]"
+# Alternative: build desktop EXE → pip install -e ".[full,desktop,dev]"
 
-# 4. (Optional) Install advanced dependencies — Cellpose, scipy
-pip install -e ".[advanced]"
-
-# 5. Place the atlas file
+# 4. Place the atlas file
 copy annotation_25.nii.gz project\
 
-# 6. Start the server
+# 5. Start the server
 cd project
 python frontend/server.py
 # Open: http://127.0.0.1:8787
@@ -57,7 +56,7 @@ python frontend/server.py
 
 ### Windows Quick-Start
 
-Double-click `project/frontend/StartIdleBrainTrial.bat`.
+Double-click `Start_Brainfast.bat` at the repository root.
 The browser opens automatically at `http://127.0.0.1:8787`.
 
 ---
@@ -239,7 +238,7 @@ A: Disable AP refinement: set `atlas_z_refine_range: 0` in the config.
 A: Ensure Cellpose is installed (`pip install cellpose`) and the model path is correct. LoG fallback activates automatically when Cellpose fails.
 
 **Q: The server won't start.**
-A: Check that port 8787 is not in use. Run `python frontend/server.py --port 8788` to use a different port.
+A: Check that port 8787 is not in use. Export the `BRAINFAST_PORT` environment variable (e.g. `set BRAINFAST_PORT=8788` on Windows, `export BRAINFAST_PORT=8788` on Linux) and re-run `python frontend/server.py`.
 
 **Q: Where are my results?**
 A: In the output directory you specified in Step 1. Key files:

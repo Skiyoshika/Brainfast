@@ -22,9 +22,18 @@ from project.frontend.app_metadata import read_version_info
 from project.scripts.asset_bootstrap import atlas_asset_status
 from project.scripts.config_validation import collect_runtime_config_issues, load_config
 from project.scripts.pipeline_progress import (
+    compute_baselines_from_history as _compute_eta_baselines,
     compute_eta as _compute_pipeline_eta,
+    maybe_record_run_completion as _record_run_completion_to_history,
     read_stage_progress as _read_stage_progress,
 )
+
+
+def _eta_history_path() -> Path:
+    """Per-project ETA history file. Lives next to outputs so it travels with
+    the project and reflects this user's hardware.
+    """
+    return ctx.OUTPUT_DIR / "eta_history.jsonl"
 
 bp = Blueprint("api_pipeline", __name__)
 
@@ -390,7 +399,25 @@ def status():
             channel_dir = outputs_dir / "tmp_channel"
             if channel_dir.exists():
                 eta_slice_count = len(list(channel_dir.glob("*.tif")))
-        eta = _compute_pipeline_eta(on_disk, slice_count=max(eta_slice_count, 1))
+        # Use historical baselines when available — they reflect this user's
+        # hardware and prior completed runs better than the hardcoded defaults.
+        history_baselines = _compute_eta_baselines(_eta_history_path())
+        eta = _compute_pipeline_eta(
+            on_disk,
+            slice_count=max(eta_slice_count, 1),
+            baselines=history_baselines,
+        )
+        # Side effect: if this is a freshly-completed run, append it to history
+        # so the next run benefits. Idempotent — see maybe_record_run_completion.
+        try:
+            _record_run_completion_to_history(
+                outputs_dir,
+                history_path=_eta_history_path(),
+                run_id=str(job_id),
+                slice_count=max(eta_slice_count, 1),
+            )
+        except Exception:  # noqa: BLE001 — never fail /api/status on history I/O
+            pass
 
     return jsonify(
         {

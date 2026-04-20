@@ -79,6 +79,7 @@ def test_write_stage_progress_is_safe_for_multiple_concurrent_writers(tmp_path, 
         "ts",
         "stageStartedTs",
         "runStartedTs",
+        "stageCompletions",
     }
     assert len(temp_sources) == writer_count
     assert isinstance(progress["artifacts"], dict)

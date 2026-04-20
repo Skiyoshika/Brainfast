@@ -13,13 +13,17 @@ Covers:
 
 from __future__ import annotations
 
+import json
 import time
 
 from project.scripts.pipeline_progress import (
     DEFAULT_PIPELINE_STAGES,
+    DEFAULT_STAGE_BASELINES,
+    append_run_to_history,
+    compute_baselines_from_history,
     compute_eta,
-    write_stage_progress,
     read_stage_progress,
+    write_stage_progress,
 )
 
 
@@ -239,3 +243,229 @@ def test_write_stage_progress_resets_started_ts_on_stage_change(tmp_path):
 def test_default_pipeline_stages_match_count():
     """Sanity: the canonical stage list has 6 entries matching stageCount=6."""
     assert len(DEFAULT_PIPELINE_STAGES) == 6
+
+
+# ---------------------------------------------------------------------------
+# History persistence + baseline derivation
+# ---------------------------------------------------------------------------
+
+
+def test_write_stage_progress_records_stage_completion_on_transition(tmp_path):
+    """When stageIndex changes, the previous stage's elapsed time should be
+    captured in stageCompletions on the new payload.
+    """
+    write_stage_progress(
+        outputs_dir=tmp_path,
+        stage_name="ANTS Registration",
+        stage_index=3,
+        stage_count=6,
+        percent=50,
+        message="...",
+    )
+    time.sleep(0.06)
+    write_stage_progress(
+        outputs_dir=tmp_path,
+        stage_name="Laplacian Refinement",
+        stage_index=4,
+        stage_count=6,
+        percent=0,
+        message="...",
+    )
+    progress = read_stage_progress(tmp_path)
+
+    completions = progress.get("stageCompletions", {})
+    assert "ANTS Registration" in completions
+    assert completions["ANTS Registration"] >= 0.05  # at least our 60ms sleep
+
+
+def test_write_stage_progress_records_completion_for_final_stage_when_100(tmp_path):
+    """Reaching stageIndex == stageCount with percent=100 should also record
+    the final stage's elapsed time so the run can be saved to history.
+    """
+    write_stage_progress(
+        outputs_dir=tmp_path,
+        stage_name="Quantification",
+        stage_index=6,
+        stage_count=6,
+        percent=10,
+        message="starting",
+    )
+    time.sleep(0.05)
+    write_stage_progress(
+        outputs_dir=tmp_path,
+        stage_name="Quantification",
+        stage_index=6,
+        stage_count=6,
+        percent=100,
+        message="done",
+    )
+    progress = read_stage_progress(tmp_path)
+
+    completions = progress.get("stageCompletions", {})
+    assert "Quantification" in completions
+    assert completions["Quantification"] > 0
+
+
+def test_append_run_to_history_creates_jsonl_file(tmp_path):
+    history_path = tmp_path / "eta_history.jsonl"
+    append_run_to_history(
+        history_path,
+        run_record={
+            "run_id": "demo",
+            "completed_at": 1_700_000_000.0,
+            "slice_count": 111,
+            "stage_completions": {
+                "ANTS Registration": 2400.0,
+                "Truth Export": 840.0,
+            },
+        },
+    )
+    assert history_path.exists()
+    line = history_path.read_text(encoding="utf-8").strip()
+    record = json.loads(line)
+    assert record["run_id"] == "demo"
+    assert record["slice_count"] == 111
+    assert record["stage_completions"]["ANTS Registration"] == 2400.0
+
+
+def test_append_run_to_history_appends_multiple_lines(tmp_path):
+    history_path = tmp_path / "eta_history.jsonl"
+    for i in range(3):
+        append_run_to_history(
+            history_path,
+            run_record={
+                "run_id": f"run{i}",
+                "completed_at": 1_700_000_000.0 + i * 100,
+                "slice_count": 111 * (i + 1),
+                "stage_completions": {"ANTS Registration": 2000.0 + i * 100},
+            },
+        )
+    lines = history_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 3
+
+
+def test_compute_baselines_falls_back_to_defaults_when_history_empty(tmp_path):
+    history_path = tmp_path / "eta_history.jsonl"
+    baselines = compute_baselines_from_history(history_path)
+    # Should return a dict equivalent to DEFAULT_STAGE_BASELINES
+    assert baselines["ANTS Registration"] == DEFAULT_STAGE_BASELINES["ANTS Registration"]
+    assert baselines["Truth Export"] == DEFAULT_STAGE_BASELINES["Truth Export"]
+
+
+def test_compute_baselines_uses_historical_means_for_constant_stages(tmp_path):
+    """ANTS is a constant-time stage; baseline should be the mean of past runs."""
+    history_path = tmp_path / "eta_history.jsonl"
+    for elapsed in (1800.0, 2000.0, 2200.0):
+        append_run_to_history(
+            history_path,
+            run_record={
+                "run_id": "x",
+                "completed_at": 1_700_000_000.0,
+                "slice_count": 111,
+                "stage_completions": {"ANTS Registration": elapsed},
+            },
+        )
+    baselines = compute_baselines_from_history(history_path)
+    kind, factor = baselines["ANTS Registration"]
+    assert kind == "constant"
+    assert 1800 <= factor <= 2200  # mean of (1800, 2000, 2200) = 2000
+    assert abs(factor - 2000.0) < 1.0
+
+
+def test_compute_baselines_uses_per_slice_means_for_per_slice_stages(tmp_path):
+    """Truth Export scales with slice count; baseline factor should be the
+    mean of (elapsed_s / slice_count) across runs.
+    """
+    history_path = tmp_path / "eta_history.jsonl"
+    # Two runs: 111 slices @ 7.0 s/slice = 777s, 646 slices @ 7.0 s/slice = 4522s
+    append_run_to_history(history_path, run_record={
+        "run_id": "demo", "completed_at": 0, "slice_count": 111,
+        "stage_completions": {"Truth Export": 777.0},
+    })
+    append_run_to_history(history_path, run_record={
+        "run_id": "real", "completed_at": 0, "slice_count": 646,
+        "stage_completions": {"Truth Export": 4522.0},
+    })
+    baselines = compute_baselines_from_history(history_path)
+    kind, factor = baselines["Truth Export"]
+    assert kind == "per_slice"
+    assert abs(factor - 7.0) < 0.5
+
+
+def test_compute_baselines_falls_back_to_default_when_too_few_samples(tmp_path):
+    """Stage with <2 history samples should still use the hardcoded default."""
+    history_path = tmp_path / "eta_history.jsonl"
+    append_run_to_history(history_path, run_record={
+        "run_id": "single", "completed_at": 0, "slice_count": 111,
+        "stage_completions": {"Volume Build": 50.0},
+    })
+    baselines = compute_baselines_from_history(history_path)
+    # Default for Volume Build is per_slice 0.6
+    assert baselines["Volume Build"] == DEFAULT_STAGE_BASELINES["Volume Build"]
+
+
+def test_compute_eta_uses_history_baselines_when_provided(tmp_path):
+    """When history overrides default ANTs baseline from 2000s to 1500s,
+    ETA should reflect the smaller estimate.
+    """
+    now = 1_700_000_000.0
+    progress = {
+        "stageName": "ANTS Registration",
+        "stageIndex": 3,
+        "stageCount": 6,
+        "percent": 0,
+        "stageStartedTs": now,
+        "runStartedTs": now,
+    }
+    default_eta = compute_eta(progress, slice_count=111, now=now)
+    history_baselines = dict(DEFAULT_STAGE_BASELINES)
+    history_baselines["ANTS Registration"] = ("constant", 1500.0)
+    custom_eta = compute_eta(progress, slice_count=111, now=now, baselines=history_baselines)
+
+    # Custom should predict ~500s LESS in current stage
+    assert default_eta["etr_in_stage_s"] - custom_eta["etr_in_stage_s"] >= 400
+
+
+def test_full_round_trip_history_then_eta(tmp_path):
+    """Simulate two completed runs; load history; compute_eta on a third
+    in-progress run uses derived baselines.
+    """
+    history_path = tmp_path / "eta_history.jsonl"
+    # Two runs at known timings:
+    append_run_to_history(history_path, run_record={
+        "run_id": "demo", "completed_at": 0, "slice_count": 111,
+        "stage_completions": {
+            "ANTS Registration": 2400.0,    # 40 min
+            "Truth Export": 840.0,           # 14 min @ 7.6 s/slice
+            "Quantification": 1440.0,        # 24 min @ 13 s/slice
+        },
+    })
+    append_run_to_history(history_path, run_record={
+        "run_id": "real", "completed_at": 0, "slice_count": 646,
+        "stage_completions": {
+            "ANTS Registration": 1670.0,    # 27.8 min
+            "Truth Export": 4440.0,          # 74 min @ 6.87 s/slice
+            "Quantification": 10680.0,       # 178 min @ 16.5 s/slice
+        },
+    })
+
+    baselines = compute_baselines_from_history(history_path)
+    # ANTs mean: (2400+1670)/2 = 2035s
+    assert abs(baselines["ANTS Registration"][1] - 2035.0) < 5.0
+    # Truth: (7.57 + 6.87)/2 = 7.22 s/slice
+    assert abs(baselines["Truth Export"][1] - 7.22) < 0.5
+
+    # Now use baselines for ETA on a fresh 200-slice run
+    now = 1_700_000_000.0
+    progress = {
+        "stageName": "ANTS Registration",
+        "stageIndex": 3,
+        "stageCount": 6,
+        "percent": 0,
+        "stageStartedTs": now,
+        "runStartedTs": now,
+    }
+    result = compute_eta(progress, slice_count=200, now=now, baselines=baselines)
+    # Total = ANTs ~2035 + Lap 30 + Truth 200×7.22 + Quant 200×14.75 + leading 2 stages
+    # The total should be in a reasonable mouse-brain range
+    assert 1500 < result["etr_total_s"] < 8000

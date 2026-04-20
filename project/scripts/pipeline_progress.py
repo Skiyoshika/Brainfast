@@ -95,6 +95,23 @@ def write_stage_progress(
     # without re-walking artifact mtimes.
     run_started_ts = float(existing.get("runStartedTs", now))
 
+    # Carry forward + accumulate per-stage completion times. Two trigger paths:
+    # (a) on stage transition: record the *previous* stage's elapsed; (b) on
+    # final-stage 100%: record the current stage's elapsed before declaring
+    # the run complete (so callers can append the whole record to history).
+    stage_completions: dict[str, float] = dict(
+        existing.get("stageCompletions", {}) or {}
+    )
+    if prev_index is not None and prev_index != int(stage_index):
+        prev_name = existing.get("stageName")
+        prev_started = float(existing.get("stageStartedTs", now))
+        if prev_name and prev_name not in stage_completions:
+            stage_completions[prev_name] = max(0.0, now - prev_started)
+    if int(stage_index) == int(stage_count) and int(percent) >= 100:
+        # Final write — make sure the closing stage is captured too
+        if str(stage_name) not in stage_completions:
+            stage_completions[str(stage_name)] = max(0.0, now - stage_started_ts)
+
     payload = {
         "stageName": str(stage_name),
         "stageIndex": int(stage_index),
@@ -105,6 +122,7 @@ def write_stage_progress(
         "ts": now,
         "stageStartedTs": stage_started_ts,
         "runStartedTs": run_started_ts,
+        "stageCompletions": stage_completions,
     }
     progress_path = _progress_path(outputs_dir)
     fd, tmp_name = tempfile.mkstemp(
@@ -270,3 +288,170 @@ def compute_eta(
         "elapsed_total_s": int(elapsed_total),
         "elapsed_in_stage_s": int(elapsed_in_stage),
     }
+
+
+# ---------------------------------------------------------------------------
+# History persistence + per-stage baseline learning
+# ---------------------------------------------------------------------------
+#
+# Each completed run appends one JSON line to ``eta_history.jsonl`` with its
+# slice_count and the per-stage elapsed seconds it observed. Future runs can
+# load this history and, for stages with ≥ ``MIN_HISTORY_SAMPLES`` recordings,
+# replace the hardcoded ``DEFAULT_STAGE_BASELINES`` entries with means derived
+# from real local hardware. This makes ETA self-calibrating without ever
+# needing to ship baselines to the user.
+
+MIN_HISTORY_SAMPLES: int = 2
+
+
+def append_run_to_history(history_path: Path | str, run_record: dict) -> None:
+    """Append a completed run's per-stage timings to the history JSONL file.
+
+    ``run_record`` should contain at least:
+    * ``run_id`` — string identifier (the job id is fine)
+    * ``completed_at`` — UNIX seconds when the run finished
+    * ``slice_count`` — input slice count, for per_slice baseline derivation
+    * ``stage_completions`` — ``{stage_name: elapsed_seconds}`` mapping
+
+    The file is opened in append-binary mode + line-buffered, so concurrent
+    writers from sibling jobs don't trample each other (each writes one
+    self-contained line).
+    """
+    history_path = Path(history_path)
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(run_record, ensure_ascii=False) + "\n"
+    # Use 'a' mode for atomic-ish line append on POSIX + Windows
+    with history_path.open("a", encoding="utf-8") as fh:
+        fh.write(line)
+
+
+def _load_history_records(history_path: Path) -> list[dict]:
+    if not history_path.exists():
+        return []
+    records: list[dict] = []
+    with history_path.open("r", encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                # Skip a corrupt line rather than nuking the entire learner
+                continue
+    return records
+
+
+def compute_baselines_from_history(
+    history_path: Path | str,
+    *,
+    defaults: dict[str, tuple[str, float]] | None = None,
+    min_samples: int = MIN_HISTORY_SAMPLES,
+) -> dict[str, tuple[str, float]]:
+    """Read the history file and return a baselines dict keyed by stage name.
+
+    For each stage we know the *kind* (``constant`` or ``per_slice``) from the
+    defaults table. Aggregation strategy depends on kind:
+
+    * ``constant`` — average ``elapsed_seconds`` directly across runs.
+    * ``per_slice`` — average ``elapsed_seconds / slice_count`` across runs.
+
+    A stage with fewer than ``min_samples`` observations keeps its hardcoded
+    default; this prevents a single-run outlier from polluting the model.
+    """
+    history_path = Path(history_path)
+    table = dict(defaults or DEFAULT_STAGE_BASELINES)
+
+    records = _load_history_records(history_path)
+    if not records:
+        return table
+
+    # Collect per-stage observations
+    observations: dict[str, list[tuple[float, int]]] = {}
+    for rec in records:
+        slice_count = int(rec.get("slice_count") or 0)
+        completions = rec.get("stage_completions") or {}
+        if not isinstance(completions, dict):
+            continue
+        for stage_name, elapsed in completions.items():
+            try:
+                elapsed_f = float(elapsed)
+            except (TypeError, ValueError):
+                continue
+            if elapsed_f <= 0:
+                continue
+            observations.setdefault(str(stage_name), []).append((elapsed_f, slice_count))
+
+    for stage_name, obs in observations.items():
+        if len(obs) < int(min_samples):
+            continue  # not enough signal yet
+        kind, _factor = table.get(stage_name, ("constant", 60.0))
+        if kind == "per_slice":
+            # Convert each observation to s/slice, then mean
+            per_slice_rates = [
+                elapsed / max(1, slice_count) for elapsed, slice_count in obs
+            ]
+            mean_rate = sum(per_slice_rates) / len(per_slice_rates)
+            table[stage_name] = ("per_slice", mean_rate)
+        else:  # constant
+            mean_seconds = sum(elapsed for elapsed, _ in obs) / len(obs)
+            table[stage_name] = ("constant", mean_seconds)
+
+    return table
+
+
+def maybe_record_run_completion(
+    outputs_dir: Path | str,
+    *,
+    history_path: Path | str,
+    run_id: str,
+    slice_count: int,
+) -> bool:
+    """If the latest progress in ``outputs_dir`` represents a completed run
+    (final stage at 100%) and we have stageCompletions captured, append a
+    history record. Returns ``True`` when a record was written.
+
+    Idempotent: if the same run_id is already at the end of the history file,
+    we don't duplicate the record. (The simplest invariant the runner can
+    rely on without extra plumbing.)
+    """
+    progress = read_stage_progress(outputs_dir)
+    if not progress:
+        return False
+    stage_index = int(progress.get("stageIndex", 0) or 0)
+    stage_count = int(progress.get("stageCount", 0) or 0)
+    percent = int(progress.get("percent", 0) or 0)
+    if stage_index < stage_count or percent < 100 or stage_count == 0:
+        return False
+    completions = progress.get("stageCompletions") or {}
+    if not completions:
+        return False
+
+    history_path = Path(history_path)
+    # Idempotency check: peek at last line
+    if history_path.exists():
+        with history_path.open("rb") as fh:
+            try:
+                fh.seek(-2048, os.SEEK_END)
+            except OSError:
+                fh.seek(0)
+            tail = fh.read().decode("utf-8", errors="replace")
+        if tail:
+            last_line = tail.strip().splitlines()[-1] if tail.strip() else ""
+            try:
+                last_rec = json.loads(last_line)
+                if last_rec.get("run_id") == run_id:
+                    return False
+            except (json.JSONDecodeError, AttributeError):
+                pass
+
+    append_run_to_history(
+        history_path,
+        run_record={
+            "run_id": str(run_id),
+            "completed_at": time.time(),
+            "slice_count": int(slice_count),
+            "stage_completions": dict(completions),
+        },
+    )
+    return True

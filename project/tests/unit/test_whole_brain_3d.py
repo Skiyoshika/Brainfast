@@ -249,14 +249,19 @@ def test_run_whole_brain_3d_reuses_registration_from_prior_dir(tmp_path, monkeyp
     (prior_dir / "ants_registration" / "annotation_registered.nii.gz").write_bytes(b"\x00")
     (prior_dir / "laplacian_refinement" / "annotation_refined.nii.gz").write_bytes(b"\x00")
     (prior_dir / "laplacian_refinement" / "laplacian_deformation_field.npy").write_bytes(b"\x00")
-    # Fake 3 truth rows by leaving the dir empty; we monkeypatch the loader
+    # truth_export now MUST contain one label per slice (review finding 1)
+    for i in range(3):
+        (prior_dir / "truth_export" / f"slice_{i:04d}_registered_label.tif").write_bytes(b"\x00")
 
     input_dir = tmp_path / "input_c1"
     outputs_dir = tmp_path / "outputs_c1"
     input_dir.mkdir()
     outputs_dir.mkdir()
+    merged_slice_paths = []
     for i in range(3):
-        (input_dir / f"z{i:04d}.tif").write_bytes(b"")
+        p = input_dir / f"z{i:04d}.tif"
+        p.write_bytes(b"")
+        merged_slice_paths.append(p)
 
     # Fail the test if any stage-1-to-5 function is called. Quantification
     # must be the ONLY stage that runs.
@@ -314,7 +319,7 @@ def test_run_whole_brain_3d_reuses_registration_from_prior_dir(tmp_path, monkeyp
         },
         input_dir=input_dir,
         outputs_dir=outputs_dir,
-        merged_slice_paths=[],
+        merged_slice_paths=merged_slice_paths,
         progress_cb=_progress,
     )
 
@@ -334,6 +339,81 @@ def test_run_whole_brain_3d_reuses_registration_from_prior_dir(tmp_path, monkeyp
     reused_ants = quant_calls[0]["ants_meta"]
     assert Path(reused_ants["registered_volume"]).parent == (prior_dir / "ants_registration")
     assert result["truth_source"] == "3d_registered_volume"
+
+
+def test_run_whole_brain_3d_reuse_requires_truth_export_dir_and_labels(tmp_path):
+    """Review finding 1 — reuse_from_dir must refuse to run if the prior's
+    truth_export/ dir is missing or empty. Previously the builder would
+    silently fall through with truth_rows=[] and quantification would see
+    zero cells (empty output, no error).
+    """
+    prior = tmp_path / "prior"
+    prior.mkdir()
+    (prior / "ants_registration").mkdir()
+    (prior / "ants_registration" / "annotation_registered.nii.gz").write_bytes(b"\x00")
+    (prior / "laplacian_refinement").mkdir()
+    (prior / "laplacian_refinement" / "annotation_refined.nii.gz").write_bytes(b"\x00")
+    (prior / "laplacian_refinement" / "laplacian_deformation_field.npy").write_bytes(b"\x00")
+    # Intentionally NO truth_export/ — prior channel never completed truth slices
+
+    input_dir = tmp_path / "c1"
+    outputs = tmp_path / "out_c1"
+    input_dir.mkdir()
+    outputs.mkdir()
+    (input_dir / "z0000.tif").write_bytes(b"")
+
+    with pytest.raises(FileNotFoundError, match="truth_export"):
+        run_whole_brain_3d(
+            cfg={
+                "input": {"pixel_size_um_xy": 5.0, "slice_spacing_um": 25.0},
+                "quantify_fn": lambda **kw: {},
+                "registration": {"reuse_from_dir": str(prior)},
+            },
+            input_dir=input_dir,
+            outputs_dir=outputs,
+            merged_slice_paths=[],
+        )
+
+
+def test_run_whole_brain_3d_reuse_rejects_slice_count_mismatch(tmp_path, monkeypatch):
+    """Review finding 1 — if the current channel's merged_slice_paths count
+    doesn't match the prior's truth_export slice count, refuse rather than
+    silently truncating to min(len(a), len(b)) and producing per-slice
+    results against wrong slice indices.
+    """
+    prior = tmp_path / "prior"
+    prior.mkdir()
+    for sub in ("ants_registration", "laplacian_refinement", "truth_export"):
+        (prior / sub).mkdir()
+    (prior / "ants_registration" / "annotation_registered.nii.gz").write_bytes(b"\x00")
+    (prior / "laplacian_refinement" / "annotation_refined.nii.gz").write_bytes(b"\x00")
+    (prior / "laplacian_refinement" / "laplacian_deformation_field.npy").write_bytes(b"\x00")
+    # Prior exported truth for 4 slices
+    for i in range(4):
+        (prior / "truth_export" / f"slice_{i:04d}_registered_label.tif").write_bytes(b"\x00")
+
+    input_dir = tmp_path / "c1"
+    outputs = tmp_path / "out_c1"
+    input_dir.mkdir()
+    outputs.mkdir()
+    # But the current channel only has 2 slices — mismatch
+    merged = []
+    for i in range(2):
+        p = input_dir / f"z{i:04d}.tif"
+        p.write_bytes(b"")
+        merged.append(p)
+
+    with pytest.raises(ValueError, match="slice count"):
+        run_whole_brain_3d(
+            cfg={
+                "input": {"pixel_size_um_xy": 5.0, "slice_spacing_um": 25.0},
+                "quantify_fn": lambda **kw: {},
+                "registration": {"reuse_from_dir": str(prior)},
+            },
+            input_dir=input_dir,
+            outputs_dir=outputs,
+            merged_slice_paths=merged,
+        )
 
 
 def test_run_whole_brain_3d_reuse_requires_core_artifacts(tmp_path):

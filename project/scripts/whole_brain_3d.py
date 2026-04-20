@@ -428,6 +428,35 @@ def _reuse_prior_registration_and_quantify(
             f"reuse_from_dir {prior_dir} is missing required artifacts: {missing}"
         )
 
+    # Review finding 1 — truth_export/ is the other mandatory artifact. Without
+    # it the current channel's cell detection has no per-slice atlas rasters
+    # to map against and we'd silently produce an empty quantification.
+    prior_truth_dir = prior_dir / "truth_export"
+    if not prior_truth_dir.exists():
+        raise FileNotFoundError(
+            f"reuse_from_dir {prior_dir} has no truth_export/ directory. "
+            "The prior channel must have completed the full 6-stage pipeline "
+            "so its per-slice registered_label TIFs are on disk."
+        )
+    prior_labels = sorted(prior_truth_dir.glob("slice_*_registered_label.tif"))
+    if not prior_labels:
+        raise FileNotFoundError(
+            f"reuse_from_dir {prior_dir}/truth_export/ contains no "
+            "slice_*_registered_label.tif files; truth export must have run "
+            "successfully on the prior channel."
+        )
+    # Mismatch between prior's slice count and the current channel's
+    # merged_slice_paths means one side is a different sampling — refuse
+    # instead of truncating to min(len(a), len(b)) and producing per-slice
+    # results against wrong indices.
+    if merged_slice_paths and len(prior_labels) != len(merged_slice_paths):
+        raise ValueError(
+            f"slice count mismatch between reuse_from_dir truth_export "
+            f"({len(prior_labels)} labels) and current channel "
+            f"({len(merged_slice_paths)} slices). Re-extract the current "
+            "channel with the same sampling as the prior run."
+        )
+
     emit(
         "Quantification",
         6,
@@ -438,7 +467,6 @@ def _reuse_prior_registration_and_quantify(
 
     prior_ants_dir = prior_dir / "ants_registration"
     prior_refine_dir = prior_dir / "laplacian_refinement"
-    prior_truth_dir = prior_dir / "truth_export"
 
     # Reconstruct meta dicts the quantifier expects. We only populate the
     # fields that are actually read downstream.
@@ -462,27 +490,29 @@ def _reuse_prior_registration_and_quantify(
         "annotation_path": prior_dir / "template_prep" / "annotation_half.nii.gz",
     }
 
-    # Build truth_rows by walking prior truth_export/ and pairing each
-    # registered_label.tif with the matching CURRENT-channel slice path so
-    # cell detection runs on the new channel's fluorescence. slice_id is the
-    # integer index derived from the filename.
+    # Build truth_rows by pairing each prior registered_label.tif with the
+    # matching CURRENT-channel slice path so cell detection runs on the new
+    # channel's fluorescence. slice counts are pre-validated above so we can
+    # safely iterate to the full length without truncation.
     truth_rows = []
-    if prior_truth_dir.exists() and merged_slice_paths:
-        prior_labels = sorted(prior_truth_dir.glob("slice_*_registered_label.tif"))
-        for i, label_path in enumerate(prior_labels):
-            if i >= len(merged_slice_paths):
-                break
-            overlay_path = prior_truth_dir / label_path.name.replace(
-                "_registered_label.tif", "_overlay.png"
-            )
-            truth_rows.append(
-                {
-                    "slice_id": i,
-                    "real_slice_path": str(merged_slice_paths[i]),
-                    "registered_label_path": str(label_path),
-                    "overlay_path": str(overlay_path) if overlay_path.exists() else "",
-                }
-            )
+    for i, label_path in enumerate(prior_labels):
+        # When the caller passes an empty merged_slice_paths (e.g. detection
+        # scans the input dir directly), real_slice_path falls back to empty.
+        # Otherwise one-to-one pairing is enforced by the guard above.
+        real_slice_path = (
+            str(merged_slice_paths[i]) if merged_slice_paths else ""
+        )
+        overlay_path = prior_truth_dir / label_path.name.replace(
+            "_registered_label.tif", "_overlay.png"
+        )
+        truth_rows.append(
+            {
+                "slice_id": i,
+                "real_slice_path": real_slice_path,
+                "registered_label_path": str(label_path),
+                "overlay_path": str(overlay_path) if overlay_path.exists() else "",
+            }
+        )
 
     refined_annotation_path = prior_refine_dir / "annotation_refined.nii.gz"
     registered_annotation_path = prior_ants_dir / "annotation_registered.nii.gz"

@@ -6637,8 +6637,14 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId: currentJobId() }),
       });
-      refreshState();
+      // Review finding 3 — invalidate the current (job, class) auto-warm-start
+      // signature so the next refreshState sees this as a fresh empty job
+      // and re-attempts auto-apply. Otherwise a user who clears their own
+      // manual pairs would never see the class prior auto-seed.
+      try { _autoWarmStartTried.delete(_autoWarmStartSignature()); } catch (_) {}
+      await refreshState();
       redraw();
+      _autoWarmStartIfEmpty();
     } catch (err) { applyStatus.textContent = 'Clear failed: ' + err.message; }
   });
 
@@ -6859,17 +6865,33 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
     _autoWarmStartIfEmpty();
   });
   priorStatusBtn?.addEventListener('click', refreshPriorBanner);
+  // Review finding 3 — jobInput change must retrigger too; switching jobs
+  // without clearing the tried-set would otherwise leave the new job stuck
+  // on the first job's auto-apply decision.
+  jobInput?.addEventListener('change', async () => {
+    await refreshState();
+    await refreshPriorBanner();
+    _autoWarmStartIfEmpty();
+  });
 
   // Task 3 — one automatic warm-start hook: when a class is set, the prior
   // is ready, and the job has ZERO existing landmark pairs, apply the
   // warm-start automatically. Never force-overwrites; a job with any manual
   // pairs routes to the explicit button path (which still supports force=true
   // via the confirm() flow below).
-  let _autoWarmStartTried = false;
+  //
+  // Review finding 3 — the guard is scoped by (jobId|className) signature
+  // rather than a lifetime-of-page boolean, so switching jobs or classes
+  // (or clearing pairs, see clearBtn handler) triggers a fresh attempt.
+  const _autoWarmStartTried = new Set();
+  function _autoWarmStartSignature() {
+    return `${currentJobId()}|${currentClassName()}`;
+  }
   async function _autoWarmStartIfEmpty() {
     const cls = currentClassName();
     if (!cls) return;
-    if (_autoWarmStartTried) return;
+    const sig = _autoWarmStartSignature();
+    if (_autoWarmStartTried.has(sig)) return;
     // Only trigger when liquify state has been loaded (state.pairs is an array)
     if (!Array.isArray(state.pairs)) return;
     if (state.pairs.length > 0) {
@@ -6885,7 +6907,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       statusData = await r.json();
     } catch (_) { return; }
     if (!statusData?.ok || !statusData.ready_for_warm_start) return;
-    _autoWarmStartTried = true;
+    _autoWarmStartTried.add(sig);
     try {
       const resp = await fetch('/api/liquify-3d/class-prior/apply-warm-start', {
         method: 'POST',

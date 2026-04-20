@@ -19,6 +19,7 @@ Provides functions for detecting the longitudinal fissure,
 fitting rotation/flip transforms via SVD, and aligning brain
 volumes to the Allen CCF orientation.
 """
+
 import math
 import os
 import numpy as np
@@ -36,8 +37,12 @@ def preprocess(img: np.ndarray, min_val: float = None, max_val: float = 400) -> 
     if min_val:
         data[data < min_val] = min_val
     data = cv2.normalize(
-        src=data, dst=None, alpha=0, beta=255,
-        norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC1,
+        src=data,
+        dst=None,
+        alpha=0,
+        beta=255,
+        norm_type=cv2.NORM_MINMAX,
+        dtype=cv2.CV_8UC1,
     )
     return data
 
@@ -49,8 +54,8 @@ def show(img, title=""):
     plt.title(title)
     plt.show()
     plt.close()
-    
-    
+
+
 def bbox(img, ratio=0.15, debug=False):
     """
     Computes a bounding box around a given image.
@@ -60,8 +65,8 @@ def bbox(img, ratio=0.15, debug=False):
     """
     # Otsu threshold the image.
     thresh = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    #kernel = np.ones((6, 6), np.uint8)
-    #thresh = cv2.erode(thresh, kernel)
+    # kernel = np.ones((6, 6), np.uint8)
+    # thresh = cv2.erode(thresh, kernel)
     if debug:
         show(thresh, "Thresholded")
 
@@ -70,10 +75,12 @@ def bbox(img, ratio=0.15, debug=False):
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
     if debug:
         print("Num of bounding boxes:", len(cnts))
-    
-    # Left and right boundaries for x-values. 
+
+    # Left and right boundaries for x-values.
     # Line segments that fall within these left/right boundaries are valid.
-    left = -1; right = -1; midpoint = -1
+    left = -1
+    right = -1
+    midpoint = -1
     largest_area = -1
     boundary = img
     for c in cnts:
@@ -82,7 +89,7 @@ def bbox(img, ratio=0.15, debug=False):
         # Assume the largest bounding box is what we want to work with.
         if w * h > largest_area:
             largest_area = w * h
-            midpoint = x + (w/2)
+            midpoint = x + (w / 2)
             left = midpoint - ratio * w
             right = midpoint + ratio * w
             img_copy = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
@@ -94,8 +101,8 @@ def bbox(img, ratio=0.15, debug=False):
         print("right:", right)
         show(boundary, "Bounding box")
     return left, midpoint, right
-    
-    
+
+
 def bbox_vert(img, up_ratio=0.05, bottom_ratio=0.35, debug=False):
     """
     Computes a bounding box around a given image. Vertical version of bbox function.
@@ -115,10 +122,12 @@ def bbox_vert(img, up_ratio=0.05, bottom_ratio=0.35, debug=False):
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
     if debug:
         print("Num of bounding boxes:", len(cnts))
-    
-    # Up and bottom boundaries for x-values. 
+
+    # Up and bottom boundaries for x-values.
     # Line segments that fall within these up/bottom boundaries are valid.
-    up = -1; bottom = -1; midpoint = -1
+    up = -1
+    bottom = -1
+    midpoint = -1
     largest_area = -1
     boundary = img
     for c in cnts:
@@ -127,7 +136,7 @@ def bbox_vert(img, up_ratio=0.05, bottom_ratio=0.35, debug=False):
         # Assume the largest bounding box is what we want to work with.
         if w * h > largest_area:
             largest_area = w * h
-            midpoint = y + (h/2)
+            midpoint = y + (h / 2)
             up = midpoint - up_ratio * h
             bottom = midpoint + bottom_ratio * h
             img_copy = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
@@ -140,29 +149,39 @@ def bbox_vert(img, up_ratio=0.05, bottom_ratio=0.35, debug=False):
         show(boundary, "Bounding box")
     return up, midpoint, bottom
 
-    
-def find_lines(img, min_thresh=150, max_thresh=250, blur_kernel_size=5,
-               rho=1, theta=np.pi/180, line_thresh=15, min_line_length=30, max_line_gap=20,
-               debug=False):
+
+def find_lines(
+    img,
+    min_thresh=150,
+    max_thresh=250,
+    blur_kernel_size=5,
+    rho=1,
+    theta=np.pi / 180,
+    line_thresh=15,
+    min_line_length=30,
+    max_line_gap=20,
+    debug=False,
+):
     """
     Given an normalized input image, run line detection to retrieve salient lines from the
-    image. 
+    image.
     """
     # Find canny edges
     img_copy = img.copy()
     # Blur the kernel only if size > 0. Blur may be counterproductive for horizontal line
-    # detection casees. 
+    # detection casees.
     if blur_kernel_size:
         img_copy = cv2.GaussianBlur(img_copy, (blur_kernel_size, blur_kernel_size), 0)
     edge_img = cv2.Canny(img_copy, min_thresh, max_thresh, None, 3)
     if debug:
         show(edge_img, "Edge")
-    
+
     # Find Hough lines and return a list of lines.
-    lines = cv2.HoughLinesP(edge_img, rho, theta, line_thresh, np.array([]), 
-                            min_line_length, max_line_gap)
+    lines = cv2.HoughLinesP(
+        edge_img, rho, theta, line_thresh, np.array([]), min_line_length, max_line_gap
+    )
     return lines
-    
+
 
 def process_lines(lines, left, right, min_angle=80, max_angle=100, debug=False):
     """
@@ -174,12 +193,14 @@ def process_lines(lines, left, right, min_angle=80, max_angle=100, debug=False):
         for i in range(0, len(lines)):
             l = lines[i][0]
             # Here l contains x1,y1,x2,y2  of your line
-            # so you can compute the orientation of the line 
-            x1 = l[0]; y1 = l[1]
-            x2 = l[2]; y2 = l[3]
+            # so you can compute the orientation of the line
+            x1 = l[0]
+            y1 = l[1]
+            x2 = l[2]
+            y2 = l[3]
             p1 = np.array([x1, y1])
             p2 = np.array([x2, y2])
-            p3 = np.subtract( p2, p1 ) # Translate p2 by p1
+            p3 = np.subtract(p2, p1)  # Translate p2 by p1
             # Compute line segment angle properties.
             angle_radians = math.atan2(p3[1], p3[0])
             angle_degree = angle_radians * 180 / math.pi
@@ -190,7 +211,7 @@ def process_lines(lines, left, right, min_angle=80, max_angle=100, debug=False):
             in_bounds = x1 >= left and x1 <= right and x2 >= left and x2 <= right
             if abs(angle_degree) > min_angle and abs(angle_degree) < max_angle and in_bounds:
                 curr_line = lines[i]
-                # Switch the coordinates if the angle computation is negative to 
+                # Switch the coordinates if the angle computation is negative to
                 # avoid issues with averaging lines.
                 if angle_degree < 0:
                     curr_line = [[x2, y2, x1, y1]]
@@ -200,7 +221,7 @@ def process_lines(lines, left, right, min_angle=80, max_angle=100, debug=False):
         print("valid lines:")
         print(valid_lines)
     averaged_line = valid_lines
-    # If multiple lines have been retrieved from the computation, 
+    # If multiple lines have been retrieved from the computation,
     # find the average line of the set.
     if len(valid_lines) > 1:
         v = np.array(valid_lines)
@@ -220,12 +241,14 @@ def process_lines_vert(lines, up, bottom, min_angle=-30, max_angle=30, debug=Fal
         for i in range(0, len(lines)):
             l = lines[i][0]
             # Here l contains x1,y1,x2,y2  of your line
-            # so you can compute the orientation of the line 
-            x1 = l[0]; y1 = l[1]
-            x2 = l[2]; y2 = l[3]
+            # so you can compute the orientation of the line
+            x1 = l[0]
+            y1 = l[1]
+            x2 = l[2]
+            y2 = l[3]
             p1 = np.array([x1, y1])
             p2 = np.array([x2, y2])
-            p3 = np.subtract( p2, p1 ) # Translate p2 by p1
+            p3 = np.subtract(p2, p1)  # Translate p2 by p1
             # Compute line segment angle properties.
             angle_radians = math.atan2(p3[1], p3[0])
             angle_degree = angle_radians * 180 / math.pi
@@ -236,7 +259,7 @@ def process_lines_vert(lines, up, bottom, min_angle=-30, max_angle=30, debug=Fal
             in_bounds = y1 >= up and y1 <= bottom and y2 >= up and y2 <= bottom
             if abs(angle_degree) > min_angle and abs(angle_degree) < max_angle and in_bounds:
                 curr_line = lines[i]
-                # Switch the coordinates if the angle computation is negative to 
+                # Switch the coordinates if the angle computation is negative to
                 # avoid issues with averaging lines.
                 if angle_degree < 0:
                     curr_line = [[x2, y2, x1, y1]]
@@ -246,7 +269,7 @@ def process_lines_vert(lines, up, bottom, min_angle=-30, max_angle=30, debug=Fal
         print("valid lines:")
         print(valid_lines)
     averaged_line = valid_lines
-    # If multiple lines have been retrieved from the computation, 
+    # If multiple lines have been retrieved from the computation,
     # find the average line of the set.
     if len(valid_lines) > 1:
         v = np.array(valid_lines)
@@ -265,8 +288,8 @@ def create_line_img(img, lines):
     line_image = np.copy(img_copy) * 0  # creating a blank to draw lines on
     if lines is not None:
         for line in lines:
-            for x1,y1,x2,y2 in line:
-                cv2.line(line_image,(x1,y1),(x2,y2),(0,255,0),5)
+            for x1, y1, x2, y2 in line:
+                cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 0), 5)
     # Draw the lines on the image
     return cv2.addWeighted(img_copy, 0.8, line_image, 1, 0)
 
@@ -287,7 +310,7 @@ def svd_fit(filepath="output/fissure_pts.npy", debug=True):
     # Perform Singular Value Decomposition
     centroid = np.mean(points, axis=0)
     if debug:
-        print('centroid:', centroid)
+        print("centroid:", centroid)
     centered_points = points - centroid
     covariance_matrix = centered_points.T @ centered_points
     _, _, vh = np.linalg.svd(covariance_matrix)
@@ -297,7 +320,7 @@ def svd_fit(filepath="output/fissure_pts.npy", debug=True):
 
     # Normalize the normal vector
     normal /= np.linalg.norm(normal)
-    
+
     # Now you have the normal vector and a point on the plane
     # The plane's equation can be represented as ax + by + cz = d
     a, b, c = normal
@@ -308,7 +331,7 @@ def svd_fit(filepath="output/fissure_pts.npy", debug=True):
         print(f"Plane equation: {a}x + {b}y + {c}z = {d}")
         print(f"{a}, {b}, {c}, {d}")
         print("d * normal:", np.array([a, b, c]) * d)
-    
+
     # Create a meshgrid of x, y, z values
     x_vals = np.linspace(min(x), max(x), 50)
     y_vals = np.linspace(min(y), max(y), 50)
@@ -318,19 +341,26 @@ def svd_fit(filepath="output/fissure_pts.npy", debug=True):
     # Create a 3D plot
     if debug:
         fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
+        ax = fig.add_subplot(111, projection="3d")
         # Plot the points
-        ax.scatter(x, y, z, c='r', marker='o', label='Points')
+        ax.scatter(x, y, z, c="r", marker="o", label="Points")
         # Plot the fitted plane
-        plane_surface = ax.plot_surface(x_grid, y_grid, z_grid, alpha=0.5, color='b')
-        custom_legend_entry = plt.Line2D([0], [0], linestyle="none", c='b', 
-                                         marker='o', markersize=10, markerfacecolor='b', 
-                                         label='Fitted Plane')
+        plane_surface = ax.plot_surface(x_grid, y_grid, z_grid, alpha=0.5, color="b")
+        custom_legend_entry = plt.Line2D(
+            [0],
+            [0],
+            linestyle="none",
+            c="b",
+            marker="o",
+            markersize=10,
+            markerfacecolor="b",
+            label="Fitted Plane",
+        )
         ax.legend(handles=[custom_legend_entry])  # Explicitly create legend with custom entry
         # Set labels for the axes
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
         plt.show()
         plt.close()
     return np.array([a, b, c, d])
@@ -343,9 +373,9 @@ def align_rotation(v, v_target, debug=False):
     v = v / np.linalg.norm(v)
     v_target = v_target / np.linalg.norm(v_target)
 
-    # Calculate the rotation axis and angle needed to align the 
-    # source normal vector n with the target normal vector n_target. 
-    # You can use the cross product to find the rotation axis and 
+    # Calculate the rotation axis and angle needed to align the
+    # source normal vector n with the target normal vector n_target.
+    # You can use the cross product to find the rotation axis and
     # the dot product to find the angle between the vectors.
     rotation_axis = np.cross(v, v_target)
     rotation_axis /= np.linalg.norm(rotation_axis)
@@ -354,41 +384,39 @@ def align_rotation(v, v_target, debug=False):
     # Create rotation transformation matrix
     rotation = R.from_rotvec(rotation_angle * rotation_axis)
     rot_matrix = rotation.as_matrix()
-    
-    
-    
-    if debug:
-        print('input:', v)
-        print('v_target_norm:', v_target)
-        print('rot_axis:', rotation_axis)
-        print('rot_angle:', rotation_angle * 180/np.pi)
-        print('rot_matrix:')
-        print(rot_matrix)
-        
-    return rot_matrix
-    #rot_matrix = np.identity(3)
-    # Apply shear transformations to match shear factors
-    # Calculate the shear factors needed to align the source plane with the target plane. 
-    # You can determine the shear factors by comparing the components of the source and 
-    # target normal vectors that are not aligned with the plane.
-    #shear_factors = (n_target - np.dot(n_target, n) * n) / np.dot(n, n)
 
-    #print('shear_factors:', shear_factors)
-    #shear_matrix = np.identity(3) + shear_factors[:, np.newaxis] * n
-    #shear_matrix = np.identity(3)
+    if debug:
+        print("input:", v)
+        print("v_target_norm:", v_target)
+        print("rot_axis:", rotation_axis)
+        print("rot_angle:", rotation_angle * 180 / np.pi)
+        print("rot_matrix:")
+        print(rot_matrix)
+
+    return rot_matrix
+    # rot_matrix = np.identity(3)
+    # Apply shear transformations to match shear factors
+    # Calculate the shear factors needed to align the source plane with the target plane.
+    # You can determine the shear factors by comparing the components of the source and
+    # target normal vectors that are not aligned with the plane.
+    # shear_factors = (n_target - np.dot(n_target, n) * n) / np.dot(n, n)
+
+    # print('shear_factors:', shear_factors)
+    # shear_matrix = np.identity(3) + shear_factors[:, np.newaxis] * n
+    # shear_matrix = np.identity(3)
 
     # Apply shear matrix and rotation matrix to your plane's normal vector
-    #transformed_normal = np.dot(rot_matrix, np.dot(shear_matrix, n))
+    # transformed_normal = np.dot(rot_matrix, np.dot(shear_matrix, n))
 
     # Now, 'transformed_normal' should be aligned with 'n_target'
 
-    #print("transformed:", transformed_normal)
-    #print("transformed norm:", transformed_normal / np.linalg.norm(transformed_normal))
-    
-    
+    # print("transformed:", transformed_normal)
+    # print("transformed norm:", transformed_normal / np.linalg.norm(transformed_normal))
+
+
 def get_affine(v, v_target, pivot=(0, 0, 0)):
     """
-    Get affine matrix from two normal vectors. 
+    Get affine matrix from two normal vectors.
     Constructs a rotation around a pivot point (x, y, z).
     """
     # Make a 4x4 rotation matrix.
@@ -397,17 +425,16 @@ def get_affine(v, v_target, pivot=(0, 0, 0)):
     homogenous = np.array([[0, 0, 0, 1]])
     rot_matrix = np.concatenate([rot_matrix, translation], axis=1)
     rot_matrix = np.concatenate([rot_matrix, homogenous], axis=0)
-    
+
     pivot = np.array(pivot)
     # Create a translation matrix to move the pivot point back to the origin
     translation_matrix_to_origin = np.identity(4)
     translation_matrix_to_origin[:3, 3] = -pivot
-    
+
     # Create a translation matrix to move from the origin to the pivot point
     translation_matrix_from_origin = np.identity(4)
     translation_matrix_from_origin[:3, 3] = pivot
-    
+
     # Combine the matrices to form the full affine matrix
     affine_matrix = translation_matrix_to_origin @ rot_matrix @ translation_matrix_from_origin
     return affine_matrix
-

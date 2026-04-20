@@ -89,10 +89,10 @@ def build_volume_from_tiffs(
     dz_mm, dy_mm, dx_mm = voxel_mm
     affine = np.array(
         [
-            [0.0,     0.0,     dx_mm,  0.0],
-            [-dz_mm,  0.0,     0.0,    0.0],
-            [0.0,    -dy_mm,   0.0,    0.0],
-            [0.0,     0.0,     0.0,    1.0],
+            [0.0, 0.0, dx_mm, 0.0],
+            [-dz_mm, 0.0, 0.0, 0.0],
+            [0.0, -dy_mm, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
         ],
         dtype=np.float64,
     )

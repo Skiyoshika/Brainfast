@@ -39,24 +39,24 @@ from pathlib import Path
 # the larger run where the per-slice signal is cleaner.
 DEFAULT_STAGE_BASELINES: dict[str, tuple[str, float]] = {
     # stage_name        kind          factor (seconds)
-    "Volume Build":     ("per_slice", 0.6),     # I/O bound, 600ms/slice
-    "Template Prep":    ("constant",  60.0),    # ~1 min, atlas crop
-    "Intensity Adapt":  ("per_slice", 0.3),     # included in template prep stage
-    "Axis Alignment":   ("constant",  120.0),   # vendored RegTools, ~2 min
+    "Volume Build": ("per_slice", 0.6),  # I/O bound, 600ms/slice
+    "Template Prep": ("constant", 60.0),  # ~1 min, atlas crop
+    "Intensity Adapt": ("per_slice", 0.3),  # included in template prep stage
+    "Axis Alignment": ("constant", 120.0),  # vendored RegTools, ~2 min
     "ANTS Registration": ("constant", 2000.0),  # average of 27.8 + 40 min
-    "Laplacian Refinement": ("constant", 30.0), # <1 min
-    "Truth Export":     ("per_slice", 7.0),     # 7 sec/slice (consistent across runs)
-    "Quantification":   ("per_slice", 16.5),    # LoG detect dominates, 16.5s/slice
+    "Laplacian Refinement": ("constant", 30.0),  # <1 min
+    "Truth Export": ("per_slice", 7.0),  # 7 sec/slice (consistent across runs)
+    "Quantification": ("per_slice", 16.5),  # LoG detect dominates, 16.5s/slice
 }
 
 # Stage index → name mapping (Brainfast 6-stage pipeline)
 DEFAULT_PIPELINE_STAGES: list[str] = [
-    "Volume Build",         # 1
-    "Template Prep",        # 2
-    "ANTS Registration",    # 3
-    "Laplacian Refinement", # 4
-    "Truth Export",         # 5
-    "Quantification",       # 6
+    "Volume Build",  # 1
+    "Template Prep",  # 2
+    "ANTS Registration",  # 3
+    "Laplacian Refinement",  # 4
+    "Truth Export",  # 5
+    "Quantification",  # 6
 ]
 
 
@@ -99,9 +99,7 @@ def write_stage_progress(
     # (a) on stage transition: record the *previous* stage's elapsed; (b) on
     # final-stage 100%: record the current stage's elapsed before declaring
     # the run complete (so callers can append the whole record to history).
-    stage_completions: dict[str, float] = dict(
-        existing.get("stageCompletions", {}) or {}
-    )
+    stage_completions: dict[str, float] = dict(existing.get("stageCompletions", {}) or {})
     if prev_index is not None and prev_index != int(stage_index):
         prev_name = existing.get("stageName")
         prev_started = float(existing.get("stageStartedTs", now))
@@ -230,9 +228,7 @@ def compute_eta(
         stages[stage_index - 1] if 0 < stage_index <= len(stages) else "Unknown"
     )
 
-    current_baseline = _stage_baseline_seconds(
-        current_stage_name, slice_count, table
-    )
+    current_baseline = _stage_baseline_seconds(current_stage_name, slice_count, table)
     elapsed_in_stage = max(0.0, now_ts - stage_started_ts)
 
     # Within-stage ETR
@@ -253,10 +249,9 @@ def compute_eta(
     # Self-correction: compare actual elapsed across completed stages + current
     # stage so far against baseline-so-far. Scale remaining baselines by ratio.
     completed_stages = stages[: stage_index - 1] if stage_index > 0 else []
-    baseline_through_current = (
-        sum(_stage_baseline_seconds(n, slice_count, table) for n in completed_stages)
-        + current_baseline * (percent / 100.0)
-    )
+    baseline_through_current = sum(
+        _stage_baseline_seconds(n, slice_count, table) for n in completed_stages
+    ) + current_baseline * (percent / 100.0)
     elapsed_total = max(0.0, now_ts - run_started_ts)
 
     correction = 1.0
@@ -273,8 +268,7 @@ def compute_eta(
 
     etr_total = etr_in_stage + etr_remaining
     baseline_total = sum(
-        _stage_baseline_seconds(name, slice_count, table)
-        for name in stages[:stage_count]
+        _stage_baseline_seconds(name, slice_count, table) for name in stages[:stage_count]
     )
 
     return {
@@ -388,9 +382,7 @@ def compute_baselines_from_history(
         kind, _factor = table.get(stage_name, ("constant", 60.0))
         if kind == "per_slice":
             # Convert each observation to s/slice, then mean
-            per_slice_rates = [
-                elapsed / max(1, slice_count) for elapsed, slice_count in obs
-            ]
+            per_slice_rates = [elapsed / max(1, slice_count) for elapsed, slice_count in obs]
             mean_rate = sum(per_slice_rates) / len(per_slice_rates)
             table[stage_name] = ("per_slice", mean_rate)
         else:  # constant

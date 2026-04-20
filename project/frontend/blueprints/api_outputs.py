@@ -48,9 +48,7 @@ def _outputs_root() -> Path:
     """
     job_id = ctx._query_job_id()
     primary = ctx._job_output_dir(job_id)
-    if primary.exists() and any(
-        (primary / m).exists() for m in _PIPELINE_ARTIFACT_MARKERS
-    ):
+    if primary.exists() and any((primary / m).exists() for m in _PIPELINE_ARTIFACT_MARKERS):
         return primary
     alt = ctx.OUTPUT_DIR / job_id
     if alt.exists() and any((alt / m).exists() for m in _PIPELINE_ARTIFACT_MARKERS):
@@ -401,18 +399,22 @@ def outputs_raw_channel_slice():
 
     ch_dir = out / "tmp_channel"
     if not ch_dir.exists():
-        return jsonify({
-            "ok": False,
-            "error": f"tmp_channel/ missing under {out}",
-            "error_code": ERR_NOT_FOUND,
-        }), 404
+        return jsonify(
+            {
+                "ok": False,
+                "error": f"tmp_channel/ missing under {out}",
+                "error_code": ERR_NOT_FOUND,
+            }
+        ), 404
     fp = ch_dir / f"ch_{ch_idx}_{z:04d}.tif"
     if not fp.exists():
-        return jsonify({
-            "ok": False,
-            "error": f"slice {fp.name} not found (channel={channel}, z={z})",
-            "error_code": ERR_NOT_FOUND,
-        }), 404
+        return jsonify(
+            {
+                "ok": False,
+                "error": f"slice {fp.name} not found (channel={channel}, z={z})",
+                "error_code": ERR_NOT_FOUND,
+            }
+        ), 404
 
     try:
         arr = _tif_read(str(fp))
@@ -495,16 +497,16 @@ def outputs_channel_info():
             slice_counts[idx] = slice_counts.get(idx, 0) + 1
         except (IndexError, ValueError):
             continue
-    present_names = [
-        name for name, idx in channel_map.items() if int(idx) in present_indices
-    ]
+    present_names = [name for name, idx in channel_map.items() if int(idx) in present_indices]
     total_slices = max(slice_counts.values()) if slice_counts else 0
-    return jsonify({
-        "ok": True,
-        "channels": present_names,
-        "slice_count": total_slices,
-        "channel_map": channel_map,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "channels": present_names,
+            "slice_count": total_slices,
+            "channel_map": channel_map,
+        }
+    )
 
 
 @bp.get("/file-list")

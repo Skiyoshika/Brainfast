@@ -23,8 +23,14 @@ from project.scripts.asset_bootstrap import atlas_asset_status
 from project.scripts.config_validation import collect_runtime_config_issues, load_config
 from project.scripts.pipeline_progress import (
     compute_baselines_from_history as _compute_eta_baselines,
+)
+from project.scripts.pipeline_progress import (
     compute_eta as _compute_pipeline_eta,
+)
+from project.scripts.pipeline_progress import (
     maybe_record_run_completion as _record_run_completion_to_history,
+)
+from project.scripts.pipeline_progress import (
     read_stage_progress as _read_stage_progress,
 )
 
@@ -34,6 +40,7 @@ def _eta_history_path() -> Path:
     the project and reflects this user's hardware.
     """
     return ctx.OUTPUT_DIR / "eta_history.jsonl"
+
 
 bp = Blueprint("api_pipeline", __name__)
 

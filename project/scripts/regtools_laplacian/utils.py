@@ -105,15 +105,15 @@ def laplacianA2D(shape, boundaryIndices):
 
     # Compute row/col grid coordinates arithmetically (no meshgrid)
     ids = np.arange(N, dtype=np.int64)
-    R = ids // n1        # row coordinate
-    C = ids % n1         # col coordinate
+    R = ids // n1  # row coordinate
+    C = ids % n1  # col coordinate
 
     # Diagonal: start at 2*k = 4 for interior points
     data = np.full(N, 4.0)
     # Subtract 1 for each missing neighbour at volume edges
-    data[R == 0] -= 1       # no (r-1) neighbour
+    data[R == 0] -= 1  # no (r-1) neighbour
     data[R == n0 - 1] -= 1  # no (r+1) neighbour
-    data[C == 0] -= 1       # no (c-1) neighbour
+    data[C == 0] -= 1  # no (c-1) neighbour
     data[C == n1 - 1] -= 1  # no (c+1) neighbour
     # Dirichlet BCs: diagonal = 1
     data[boundaryIndices] = 1.0
@@ -220,14 +220,15 @@ def laplacianA3D(shape, boundaryIndices, spacing=None, dtype=None, log_fn=None):
     # single-arg logger (e.g. from solveLaplacianFromCorrespondences).
     if log_fn is not None:
         import inspect
+
         _sig = inspect.signature(log_fn)
         if len(_sig.parameters) < 2:
-            _log = lambda msg, level='info': log_fn(msg)
+            _log = lambda msg, level="info": log_fn(msg)
         else:
             _log = log_fn
     else:
-        _log = lambda msg, level='info': print(msg)
-    _log("Building data for Laplacian Sparse Matrix A (optimized)", 'info')
+        _log = lambda msg, level="info": print(msg)
+    _log("Building data for Laplacian Sparse Matrix A (optimized)", "info")
 
     # Diagonal: sum of axis weights for present neighbours, set to 1 at
     # Dirichlet points
@@ -249,35 +250,54 @@ def laplacianA3D(shape, boundaryIndices, spacing=None, dtype=None, log_fn=None):
 
     # (i-1, j, k)
     mask = (I0 > 0) & ~is_boundary
-    r_0m = ids[mask];  c_0m = r_0m - stride_0
-    keep = ~is_boundary[c_0m]; r_0m = r_0m[keep]; c_0m = c_0m[keep]
+    r_0m = ids[mask]
+    c_0m = r_0m - stride_0
+    keep = ~is_boundary[c_0m]
+    r_0m = r_0m[keep]
+    c_0m = c_0m[keep]
 
     # (i+1, j, k)
     mask = (I0 < n0 - 1) & ~is_boundary
-    r_0p = ids[mask];  c_0p = r_0p + stride_0
-    keep = ~is_boundary[c_0p]; r_0p = r_0p[keep]; c_0p = c_0p[keep]
+    r_0p = ids[mask]
+    c_0p = r_0p + stride_0
+    keep = ~is_boundary[c_0p]
+    r_0p = r_0p[keep]
+    c_0p = c_0p[keep]
 
     # (i, j-1, k)
     mask = (I1 > 0) & ~is_boundary
-    r_1m = ids[mask];  c_1m = r_1m - stride_1
-    keep = ~is_boundary[c_1m]; r_1m = r_1m[keep]; c_1m = c_1m[keep]
+    r_1m = ids[mask]
+    c_1m = r_1m - stride_1
+    keep = ~is_boundary[c_1m]
+    r_1m = r_1m[keep]
+    c_1m = c_1m[keep]
 
     # (i, j+1, k)
     mask = (I1 < n1 - 1) & ~is_boundary
-    r_1p = ids[mask];  c_1p = r_1p + stride_1
-    keep = ~is_boundary[c_1p]; r_1p = r_1p[keep]; c_1p = c_1p[keep]
+    r_1p = ids[mask]
+    c_1p = r_1p + stride_1
+    keep = ~is_boundary[c_1p]
+    r_1p = r_1p[keep]
+    c_1p = c_1p[keep]
 
     # (i, j, k-1)
     mask = (I2 > 0) & ~is_boundary
-    r_2m = ids[mask];  c_2m = r_2m - 1
-    keep = ~is_boundary[c_2m]; r_2m = r_2m[keep]; c_2m = c_2m[keep]
+    r_2m = ids[mask]
+    c_2m = r_2m - 1
+    keep = ~is_boundary[c_2m]
+    r_2m = r_2m[keep]
+    c_2m = c_2m[keep]
 
     # (i, j, k+1)
     mask = (I2 < n2 - 1) & ~is_boundary
-    r_2p = ids[mask];  c_2p = r_2p + 1
-    keep = ~is_boundary[c_2p]; r_2p = r_2p[keep]; c_2p = c_2p[keep]
+    r_2p = ids[mask]
+    c_2p = r_2p + 1
+    keep = ~is_boundary[c_2p]
+    r_2p = r_2p[keep]
+    c_2p = c_2p[keep]
 
-    del I0, I1, I2, is_boundary, mask; gc.collect()
+    del I0, I1, I2, is_boundary, mask
+    gc.collect()
 
     # Build off-diagonal weight arrays per axis direction
     w_0m = np.full(len(r_0m), -w0, dtype=dtype)
@@ -296,7 +316,7 @@ def laplacianA3D(shape, boundaryIndices, spacing=None, dtype=None, log_fn=None):
     del w_0m, w_0p, w_1m, w_1p, w_2m, w_2p
     gc.collect()
 
-    _log("Creating Laplacian Sparse Matrix A", 'info')
+    _log("Creating Laplacian Sparse Matrix A", "info")
     A = scipy.sparse.csr_matrix((val, (row, col)), shape=(N, N))
 
     del row, col, val
@@ -350,12 +370,12 @@ def propagate_dirichlet_rhs(shape, boundary_indices, *rhs_arrays, spacing=None):
     bI2 = boundary_indices % stride_1
 
     directions = [
-        (stride_0,  bI0 < n0 - 1, w0),   # axis-0 forward
-        (-stride_0, bI0 > 0,      w0),   # axis-0 backward
-        (stride_1,  bI1 < n1 - 1, w1),   # axis-1 forward
-        (-stride_1, bI1 > 0,      w1),   # axis-1 backward
-        (1,         bI2 < n2 - 1, w2),   # axis-2 forward
-        (-1,        bI2 > 0,      w2),   # axis-2 backward
+        (stride_0, bI0 < n0 - 1, w0),  # axis-0 forward
+        (-stride_0, bI0 > 0, w0),  # axis-0 backward
+        (stride_1, bI1 < n1 - 1, w1),  # axis-1 forward
+        (-stride_1, bI1 > 0, w1),  # axis-1 backward
+        (1, bI2 < n2 - 1, w2),  # axis-2 forward
+        (-1, bI2 > 0, w2),  # axis-2 backward
     ]
 
     for offset, valid_mask, weight in directions:

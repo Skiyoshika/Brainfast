@@ -45,6 +45,7 @@ dev = [
     "pytest>=8.0",
     "pytest-cov",
     "pytest-mock",
+    "pytest-timeout",
     "pre-commit",
     "ruff",
     "jsonschema>=4.21",
@@ -75,7 +76,7 @@ markers = [
     "integration: tests that require annotation_25.nii.gz or real slice data",
     "slow: tests that take >10s",
 ]
-addopts = "-v"
+addopts = "-v --timeout=60 --timeout-method=thread"
 
 [tool.ruff]
 # Settings kept in ruff.toml at repo root

@@ -92,6 +92,12 @@ def test_ensure_port_available_raises_runtime_error_when_bind_fails(monkeypatch)
 
 
 def test_server_main_checks_port_before_running_app(monkeypatch):
+    """Order invariant: port-guard runs before the WSGI handoff.
+
+    Uses BRAINFAST_DEV=1 to force the Flask dev path (app.run). The default
+    production path is Waitress — covered separately in test_server.py. The
+    point of THIS test is just: port check happens before we hand off.
+    """
     from project.frontend import server
 
     calls = []
@@ -107,6 +113,7 @@ def test_server_main_checks_port_before_running_app(monkeypatch):
         lambda **kwargs: calls.append(("run", kwargs["host"], kwargs["port"])),
     )
     monkeypatch.setenv("BRAINFAST_PORT", "9001")
+    monkeypatch.setenv("BRAINFAST_DEV", "1")
 
     server.main()
 

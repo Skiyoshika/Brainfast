@@ -376,6 +376,180 @@ def _direct_z_mapping_fallback(
     return True
 
 
+# ---------------------------------------------------------------------------
+# Dual-channel fast path — reuse registration artifacts from a prior channel
+# ---------------------------------------------------------------------------
+# A typical dual-channel sample has C0 (e.g. 560nm reporter) and C1 (e.g. 640nm
+# co-label). Because ANTs registration aligns the *tissue silhouette* (shared
+# between channels) to the Allen atlas, running the full 4-hour pipeline a
+# second time for C1 is wasted work — the registration, Laplacian refinement,
+# and atlas-back-warp are all identical. Only cell detection on the C1 slice
+# stack produces channel-specific output.
+#
+# When ``registration.reuse_from_dir`` points at a completed C0 run's
+# outputs_dir, we short-circuit stages 1-5 and run only Quantification (stage 6)
+# with C1's merged_slice_paths as the detection source. Net cost for C1 drops
+# from ~4h to ~15-30min (pure detection + aggregation).
+#
+# Required artifacts in the prior dir:
+#   ants_registration/annotation_registered.nii.gz
+#   ants_registration/fwd_transform_0.nii.gz + fwd_transform_1.mat
+#   ants_registration/inv_transform_0.mat + inv_transform_1.nii.gz
+#   laplacian_refinement/annotation_refined.nii.gz
+#   laplacian_refinement/laplacian_deformation_field.npy
+#   truth_export/slice_XXXX_registered_label.tif (one per slice)
+
+
+_REUSE_REQUIRED_FILES = (
+    "ants_registration/annotation_registered.nii.gz",
+    "laplacian_refinement/annotation_refined.nii.gz",
+    "laplacian_refinement/laplacian_deformation_field.npy",
+)
+
+
+def _reuse_prior_registration_and_quantify(
+    prior_dir: Path,
+    input_dir: Path,
+    outputs_dir: Path,
+    merged_slice_paths: list[Path],
+    cfg: dict,
+    quantify_fn,
+    emit,
+) -> dict:
+    """Reuse a prior channel's registration artifacts and only re-run
+    quantification on the current channel's merged_slice_paths.
+    """
+    prior_dir = Path(prior_dir)
+    if not prior_dir.exists():
+        raise FileNotFoundError(f"reuse_from_dir does not exist: {prior_dir}")
+    missing = [f for f in _REUSE_REQUIRED_FILES if not (prior_dir / f).exists()]
+    if missing:
+        raise FileNotFoundError(
+            f"reuse_from_dir {prior_dir} is missing required artifacts: {missing}"
+        )
+
+    # Review finding 1 — truth_export/ is the other mandatory artifact. Without
+    # it the current channel's cell detection has no per-slice atlas rasters
+    # to map against and we'd silently produce an empty quantification.
+    prior_truth_dir = prior_dir / "truth_export"
+    if not prior_truth_dir.exists():
+        raise FileNotFoundError(
+            f"reuse_from_dir {prior_dir} has no truth_export/ directory. "
+            "The prior channel must have completed the full 6-stage pipeline "
+            "so its per-slice registered_label TIFs are on disk."
+        )
+    prior_labels = sorted(prior_truth_dir.glob("slice_*_registered_label.tif"))
+    if not prior_labels:
+        raise FileNotFoundError(
+            f"reuse_from_dir {prior_dir}/truth_export/ contains no "
+            "slice_*_registered_label.tif files; truth export must have run "
+            "successfully on the prior channel."
+        )
+    # Mismatch between prior's slice count and the current channel's
+    # merged_slice_paths means one side is a different sampling — refuse
+    # instead of truncating to min(len(a), len(b)) and producing per-slice
+    # results against wrong indices.
+    if merged_slice_paths and len(prior_labels) != len(merged_slice_paths):
+        raise ValueError(
+            f"slice count mismatch between reuse_from_dir truth_export "
+            f"({len(prior_labels)} labels) and current channel "
+            f"({len(merged_slice_paths)} slices). Re-extract the current "
+            "channel with the same sampling as the prior run."
+        )
+
+    emit(
+        "Quantification",
+        6,
+        10,
+        f"Reusing registration artifacts from {prior_dir.name}; detecting current channel cells",
+        {"reused_from": str(prior_dir)},
+    )
+
+    prior_ants_dir = prior_dir / "ants_registration"
+    prior_refine_dir = prior_dir / "laplacian_refinement"
+
+    # Reconstruct meta dicts the quantifier expects. We only populate the
+    # fields that are actually read downstream.
+    ants_meta = {
+        "registered_volume": prior_ants_dir / "ants_result.nii.gz",
+        "forward_transforms": sorted(prior_ants_dir.glob("fwd_transform_*")),
+        "inverse_transforms": sorted(prior_ants_dir.glob("inv_transform_*")),
+        "metrics_csv": prior_ants_dir / "registration_metrics.csv",
+    }
+    refine_meta = {
+        "final_registered_path": prior_refine_dir / "final_registered.nii.gz",
+        "field_path": prior_refine_dir / "laplacian_deformation_field.npy",
+        "metrics_csv": prior_refine_dir / "refinement_metrics.csv",
+    }
+    volume_meta = {
+        "volume_path": prior_dir / "volume" / "input_volume.nii.gz",
+        "ml_flipped": False,
+    }
+    template_meta = {
+        "template_path": prior_dir / "template_prep" / "template_half.nii.gz",
+        "annotation_path": prior_dir / "template_prep" / "annotation_half.nii.gz",
+    }
+
+    # Build truth_rows by pairing each prior registered_label.tif with the
+    # matching CURRENT-channel slice path so cell detection runs on the new
+    # channel's fluorescence. slice counts are pre-validated above so we can
+    # safely iterate to the full length without truncation.
+    truth_rows = []
+    for i, label_path in enumerate(prior_labels):
+        # When the caller passes an empty merged_slice_paths (e.g. detection
+        # scans the input dir directly), real_slice_path falls back to empty.
+        # Otherwise one-to-one pairing is enforced by the guard above.
+        real_slice_path = str(merged_slice_paths[i]) if merged_slice_paths else ""
+        overlay_path = prior_truth_dir / label_path.name.replace(
+            "_registered_label.tif", "_overlay.png"
+        )
+        truth_rows.append(
+            {
+                "slice_id": i,
+                "real_slice_path": real_slice_path,
+                "registered_label_path": str(label_path),
+                "overlay_path": str(overlay_path) if overlay_path.exists() else "",
+            }
+        )
+
+    refined_annotation_path = prior_refine_dir / "annotation_refined.nii.gz"
+    registered_annotation_path = prior_ants_dir / "annotation_registered.nii.gz"
+
+    quant_meta = run_quantification_from_truth(
+        cfg=cfg,
+        quantify_fn=quantify_fn,
+        input_dir=Path(input_dir),
+        outputs_dir=outputs_dir,
+        merged_slice_paths=list(merged_slice_paths),
+        truth_rows=truth_rows,
+        truth_source="3d_registered_volume",
+        volume_meta=volume_meta,
+        template_meta=template_meta,
+        ants_meta=ants_meta,
+        refine_meta=refine_meta,
+    )
+    emit(
+        "Quantification",
+        6,
+        100,
+        "Quantification (reused registration) completed",
+        {"cells_mapped_csv": str(quant_meta.get("cells_mapped_csv", ""))},
+    )
+
+    return {
+        "truth_source": "3d_registered_volume",
+        "volume_meta": volume_meta,
+        "template_meta": template_meta,
+        "ants_meta": ants_meta,
+        "refine_meta": refine_meta,
+        "truth_rows": truth_rows,
+        "quant_meta": quant_meta,
+        "refined_annotation_path": refined_annotation_path,
+        "annotation_registered_path": registered_annotation_path,
+        "reused_from": str(prior_dir),
+    }
+
+
 def run_whole_brain_3d(
     cfg: dict,
     input_dir: Path,
@@ -482,8 +656,13 @@ def run_whole_brain_3d(
 
         z_scale = float(reg_cfg.get("atlas_z_z_scale", 0.2))
         z_offset = int(reg_cfg.get("atlas_z_offset", 0))
-        _s_dir = Path(merged_slice_paths[0]).parent if merged_slice_paths else Path(input_dir)
-        _s_glob = "*.tif" if merged_slice_paths else str(input_cfg.get("slice_glob", "z*.tif"))
+        # Always read z-numbers from the ORIGINAL source directory — merged
+        # files are renamed to merged_####.tif during staging and no longer
+        # carry the "z<digits>" token that the regex below needs. Using the
+        # source dir keeps AP auto-compute working for both direct and merged
+        # pipeline invocations.
+        _s_dir = Path(input_dir)
+        _s_glob = str(input_cfg.get("slice_glob", "z*.tif"))
         _s_paths = sorted(_s_dir.glob(_s_glob))
         if _s_paths and reg_cfg.get("atlas_z_from_filename", False):
             _z_nums = []
@@ -519,6 +698,24 @@ def run_whole_brain_3d(
     refined_annotation_path = refine_dir / "annotation_refined.nii.gz"
     registered_annotation_path = ants_dir / "annotation_registered.nii.gz"
 
+    # -----------------------------------------------------------------
+    # Dual-channel fast path: reuse registration artifacts from a prior
+    # channel's outputs_dir and skip stages 1-5. Only the quantification
+    # stage runs, using the *current* channel's slice paths for detection.
+    # -----------------------------------------------------------------
+    reuse_from_dir = reg_cfg.get("reuse_from_dir")
+    if reuse_from_dir:
+        reuse_result = _reuse_prior_registration_and_quantify(
+            prior_dir=Path(str(reuse_from_dir)),
+            input_dir=Path(input_dir),
+            outputs_dir=outputs_dir,
+            merged_slice_paths=list(merged_slice_paths),
+            cfg=cfg,
+            quantify_fn=quantify_fn,
+            emit=_emit,
+        )
+        return reuse_result
+
     _emit(
         "Volume Build",
         1,
@@ -532,6 +729,7 @@ def run_whole_brain_3d(
         pixel_um_xy=pixel_size_um_xy,
         z_spacing_um=slice_spacing_um,
         glob_pattern=volume_glob,
+        xy_downsample_cap=reg_cfg.get("xy_downsample_cap"),
     )
     # Trust the actual path returned by the builder, not the requested path.
     volume_path = Path(volume_meta["volume_path"])
@@ -578,6 +776,125 @@ def run_whole_brain_3d(
         ap_end=ap_end,
         out_dir=template_dir,
     )
+
+    # Optional intensity adaptation stage (Phase α of closed-loop plan).
+    # Pre-aligns the moving volume's histogram + local contrast to the
+    # template so ANTs MI/CC has a stronger cross-modality signal. Opt in
+    # via `registration.intensity_adapt.mode`: off|hist_match|clahe|
+    # hist_match+clahe. Default off → identity, bit-for-bit backwards
+    # compatible. See docs/.../2026-04-16-internal-alignment-closed-loop-plan.md.
+    intensity_adapt_cfg = reg_cfg.get("intensity_adapt") or {}
+    intensity_adapt_mode = str(intensity_adapt_cfg.get("mode", "off")).strip()
+    if intensity_adapt_mode and intensity_adapt_mode != "off":
+        try:
+            from scripts.intensity_adapter import adapt_intensity
+        except ImportError:
+            from intensity_adapter import adapt_intensity
+
+        _emit(
+            "Intensity Adapt",
+            2,
+            20,
+            f"Applying intensity adaptation (mode={intensity_adapt_mode})",
+            {"mode": intensity_adapt_mode},
+        )
+        _moving_vol_img = nib.load(str(volume_meta["volume_path"]))
+        _template_vol_img = nib.load(str(template_meta["template_path"]))
+        _moving_arr = np.asarray(_moving_vol_img.dataobj)
+        _template_arr = np.asarray(_template_vol_img.dataobj)
+        _adapted = adapt_intensity(
+            _moving_arr,
+            _template_arr,
+            mode=intensity_adapt_mode,
+            clahe_kernel_size=int(intensity_adapt_cfg.get("clahe_kernel_size", 32)),
+            clahe_clip_limit=float(intensity_adapt_cfg.get("clahe_clip_limit", 0.01)),
+        )
+        adapted_path = outputs_dir / "volume" / "input_volume_adapted.nii.gz"
+        adapted_path.parent.mkdir(parents=True, exist_ok=True)
+        nib.save(
+            nib.Nifti1Image(_adapted, _moving_vol_img.affine, _moving_vol_img.header),
+            str(adapted_path),
+        )
+        volume_meta["intensity_adapted_path"] = adapted_path
+        volume_meta["volume_path"] = adapted_path
+        print(f"[intensity-adapt] mode={intensity_adapt_mode} written to {adapted_path}")
+
+    # Optional axis alignment stage — vendored from UCI-XuLab-RegTools.
+    # Detects the longitudinal fissure in moving + template, fits plane
+    # normals via SVD, and pre-rotates the moving volume so ANTs SyN does
+    # not waste capacity on global roll/pitch correction. Off by default
+    # to stay bit-for-bit compatible with older runs; opt in via
+    # `registration.axis_alignment_enabled: true`.
+    axis_alignment_enabled = bool(reg_cfg.get("axis_alignment_enabled", False))
+    axis_align_dir = outputs_dir / "axis_alignment"
+    if axis_alignment_enabled:
+        from scipy.ndimage import affine_transform as _scipy_affine_transform
+
+        try:
+            from scripts.regtools_align import compute_longitudinal_fissure_alignment
+        except ImportError:
+            from regtools_align import compute_longitudinal_fissure_alignment
+
+        _emit(
+            "Axis Alignment",
+            2,
+            18,
+            "Longitudinal-fissure axis alignment (vendored from RegTools)",
+            {"axis_alignment_dir": str(axis_align_dir)},
+        )
+        axis_align_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            _moving_vol_img = nib.load(str(volume_meta["volume_path"]))
+            _template_vol_img = nib.load(str(template_meta["template_path"]))
+            _moving_raw = np.asarray(_moving_vol_img.dataobj).astype(np.float32)
+            _template_raw = np.asarray(_template_vol_img.dataobj).astype(np.float32)
+
+            # RegTools' preprocess() clips at max_val=400 (tuned for CCF
+            # intensity range). Brainfast volumes are 0–65535 uint16, so
+            # rescale to the expected range before handing off.
+            def _scale_to_align_range(vol: np.ndarray) -> np.ndarray:
+                p99 = float(np.percentile(vol, 99))
+                if p99 <= 0:
+                    return vol.astype(np.float32)
+                return np.clip(vol, 0, p99).astype(np.float32) / p99 * 400.0
+
+            _moving_scaled = _scale_to_align_range(_moving_raw)
+            _template_scaled = _scale_to_align_range(_template_raw)
+
+            affine4x4, _mcoef, _tcoef, _mpts, _tpts = compute_longitudinal_fissure_alignment(
+                _moving_scaled, _template_scaled
+            )
+            np.save(str(axis_align_dir / "axisAlignA.npy"), affine4x4)
+
+            # Apply affine (rotation only, pivot at origin) to the original
+            # uint16 moving volume so ANTs sees a globally-aligned input.
+            rot3x3 = affine4x4[:3, :3]
+            offset = affine4x4[:3, 3]
+            aligned = _scipy_affine_transform(
+                _moving_raw,
+                matrix=rot3x3,
+                offset=offset,
+                order=1,
+                mode="constant",
+                cval=0.0,
+            )
+            aligned_u16 = np.clip(aligned, 0, 65535).astype(np.uint16)
+            aligned_path = axis_align_dir / "input_volume_aligned.nii.gz"
+            nib.save(
+                nib.Nifti1Image(aligned_u16, _moving_vol_img.affine, _moving_vol_img.header),
+                str(aligned_path),
+            )
+            volume_meta["axis_aligned_volume_path"] = aligned_path
+            volume_meta["volume_path"] = aligned_path  # ANTs consumes the pre-aligned volume
+            print(
+                f"[axis-align] Applied fissure-based rotation (saved {aligned_path}). "
+                f"Moving normal: {_mcoef}; template normal: {_tcoef}."
+            )
+        except Exception as _ax_err:  # noqa: BLE001 — axis alignment is best-effort
+            print(
+                f"[axis-align] Skipped: {_ax_err}. Continuing with unaligned volume. "
+                "Set registration.axis_alignment_enabled=false to silence this attempt."
+            )
 
     _emit(
         "ANTS Registration",
@@ -678,6 +995,14 @@ def run_whole_brain_3d(
     )
 
     atlas_hemisphere = str(reg_cfg.get("atlas_hemisphere", "")).lower().strip()
+    # Task 2 — consume learned calibration (fit_mode / edge_smooth_iter /
+    # warp_params). Callers inject these via cfg["truth_export"] after
+    # resolving the shared tuned JSON; we also accept per-field registration
+    # overrides so a config can still pin a choice explicitly.
+    truth_cfg = dict(cfg.get("truth_export", {}) or {})
+    te_warp_params = dict(truth_cfg.get("warp_params", {}) or {})
+    te_fit_mode = str(truth_cfg.get("fit_mode", "cover")).strip() or "cover"
+    te_edge = int(truth_cfg.get("edge_smooth_iter", 0) or 0)
     truth_rows = export_registered_truth_slices(
         real_slice_paths=list(merged_slice_paths),
         annotation_volume_path=annotation_registered_path,
@@ -685,6 +1010,9 @@ def run_whole_brain_3d(
         pixel_size_um=pixel_size_um_xy,
         slicing_plane=slicing_plane,
         atlas_hemisphere=atlas_hemisphere,
+        warp_params=te_warp_params,
+        fit_mode=te_fit_mode,
+        edge_smooth_iter=te_edge,
     )
 
     quant_meta = run_quantification_from_truth(

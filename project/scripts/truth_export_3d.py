@@ -37,7 +37,15 @@ def export_registered_truth_slices(
     warp_params: dict | None = None,
     atlas_hemisphere: str = "",
     overlay_alpha: float = 0.72,
+    fit_mode: str = "cover",
+    edge_smooth_iter: int = 0,
 ) -> list[dict]:
+    """Export per-slice registered-label rasters + overlays.
+
+    ``fit_mode`` and ``edge_smooth_iter`` are caller-controlled so a UI-learned
+    calibration can reach the default whole-brain path. Previously these were
+    hard-coded to ``"cover"`` / ``0`` which silently bypassed calibration.
+    """
     annotation_img = nib.load(str(annotation_volume_path))
     volume = np.asarray(annotation_img.dataobj, dtype=np.int32)
     expected_slice_count = _volume_slice_count(volume, slicing_plane)
@@ -98,8 +106,8 @@ def export_registered_truth_slices(
             mode="fill",
             pixel_size_um=float(pixel_size_um),
             major_top_k=28,
-            fit_mode="cover",
-            edge_smooth_iter=0,
+            fit_mode=str(fit_mode),
+            edge_smooth_iter=int(edge_smooth_iter),
             warp_params=dict(warp_params or {}),
             return_meta=True,
             prewarped_label=True,

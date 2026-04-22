@@ -21,6 +21,26 @@ from project.frontend.api_errors import (
 from project.frontend.app_metadata import read_version_info
 from project.scripts.asset_bootstrap import atlas_asset_status
 from project.scripts.config_validation import collect_runtime_config_issues, load_config
+from project.scripts.pipeline_progress import (
+    compute_baselines_from_history as _compute_eta_baselines,
+)
+from project.scripts.pipeline_progress import (
+    compute_eta as _compute_pipeline_eta,
+)
+from project.scripts.pipeline_progress import (
+    maybe_record_run_completion as _record_run_completion_to_history,
+)
+from project.scripts.pipeline_progress import (
+    read_stage_progress as _read_stage_progress,
+)
+
+
+def _eta_history_path() -> Path:
+    """Per-project ETA history file. Lives next to outputs so it travels with
+    the project and reflects this user's hardware.
+    """
+    return ctx.OUTPUT_DIR / "eta_history.jsonl"
+
 
 bp = Blueprint("api_pipeline", __name__)
 
@@ -372,6 +392,40 @@ def status():
             slices_total = merged_total
         else:
             slices_total = merged_total if merged_total > 0 else channel_total
+    # Read on-disk pipeline_progress.json (richer than in-memory progress) and
+    # compute ETA from it. Returns nothing for ETA when there's no progress
+    # file yet (e.g. the runner hasn't written stage 1 yet).
+    on_disk = _read_stage_progress(outputs_dir)
+    eta = None
+    if on_disk:
+        # Slice count is the best per-job size signal we have for per_slice
+        # cost stages. Prefer the slicesTotal already computed above; fall
+        # back to len(channel_dir) for jobs that haven't reported it.
+        eta_slice_count = max(slices_total, slices_done)
+        if eta_slice_count <= 0:
+            channel_dir = outputs_dir / "tmp_channel"
+            if channel_dir.exists():
+                eta_slice_count = len(list(channel_dir.glob("*.tif")))
+        # Use historical baselines when available — they reflect this user's
+        # hardware and prior completed runs better than the hardcoded defaults.
+        history_baselines = _compute_eta_baselines(_eta_history_path())
+        eta = _compute_pipeline_eta(
+            on_disk,
+            slice_count=max(eta_slice_count, 1),
+            baselines=history_baselines,
+        )
+        # Side effect: if this is a freshly-completed run, append it to history
+        # so the next run benefits. Idempotent — see maybe_record_run_completion.
+        try:
+            _record_run_completion_to_history(
+                outputs_dir,
+                history_path=_eta_history_path(),
+                run_id=str(job_id),
+                slice_count=max(eta_slice_count, 1),
+            )
+        except Exception:  # noqa: BLE001 — never fail /api/status on history I/O
+            pass
+
     return jsonify(
         {
             "jobId": job_id,
@@ -390,7 +444,14 @@ def status():
                 "stepCurrent": int(progress.get("stepCurrent", 0) or 0),
                 "stepTotal": int(progress.get("stepTotal", 0) or 0),
                 "message": str(progress.get("message", "")),
+                # On-disk stage info (richer than in-memory phase string)
+                "stageName": on_disk.get("stageName"),
+                "stageIndex": on_disk.get("stageIndex"),
+                "stageCount": on_disk.get("stageCount"),
+                "stagePercent": on_disk.get("percent"),
+                "stageMessage": on_disk.get("message"),
             },
+            "eta": eta,
         }
     )
 

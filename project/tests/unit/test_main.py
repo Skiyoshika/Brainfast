@@ -125,6 +125,145 @@ def test_run_real_input_routes_whole_brain_mode_to_3d_orchestrator(tmp_path, mon
     assert route_hit["quantify_kwargs"]["outputs_dir"].name == "outputs"
 
 
+def test_load_tuned_overlay_params_falls_back_to_shared_state(tmp_path, monkeypatch):
+    """Task 2 — when the job's outputs_dir has no ``trainset_tuned_params.json``
+    but the shared-state calibration JSON exists under
+    ``outputs/state/calibration/trainset_tuned_params.json``, the loader must
+    return the shared values (so a UI-triggered learn survives across jobs).
+    """
+    import json
+
+    from project.scripts import paths as paths_mod
+    from project.scripts.main import _load_tuned_overlay_params
+
+    # Point the shared-state root at tmp for this test
+    monkeypatch.setenv("BRAINFAST_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setattr(paths_mod, "resolve_state_root", lambda _pr: tmp_path / "state")
+
+    # Project root + empty per-job outputs — no local tuned JSON
+    project_root = tmp_path / "proj"
+    project_root.mkdir()
+    job_outputs = tmp_path / "jobs" / "job_a"
+    job_outputs.mkdir(parents=True)
+
+    # Seed the SHARED tuned JSON with a distinctive payload
+    shared = tmp_path / "state" / "calibration" / "trainset_tuned_params.json"
+    shared.parent.mkdir(parents=True, exist_ok=True)
+    shared.write_text(
+        json.dumps(
+            {
+                "warpParams": {"shared_marker": 7},
+                "fitMode": "contain",
+                "edgeSmoothIter": 2,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    warp, fit, edge = _load_tuned_overlay_params(job_outputs, project_root=project_root)
+    assert warp.get("shared_marker") == 7
+    assert fit == "contain"
+    assert edge == 2
+
+
+def test_load_tuned_overlay_params_prefers_job_local_over_shared(tmp_path, monkeypatch):
+    """Task 2 — when a job-local tuned JSON exists it wins over the shared
+    one so a per-job snapshot pins behavior across later global learns.
+    """
+    import json as _json
+
+    from project.scripts import paths as paths_mod
+    from project.scripts.main import _load_tuned_overlay_params
+
+    monkeypatch.setenv("BRAINFAST_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setattr(paths_mod, "resolve_state_root", lambda _pr: tmp_path / "state")
+
+    project_root = tmp_path / "proj"
+    project_root.mkdir()
+    job_outputs = tmp_path / "jobs" / "job_b"
+    job_outputs.mkdir(parents=True)
+
+    # Shared — should be IGNORED because job-local is present
+    shared = tmp_path / "state" / "calibration" / "trainset_tuned_params.json"
+    shared.parent.mkdir(parents=True, exist_ok=True)
+    shared.write_text(
+        _json.dumps({"warpParams": {"src": "shared"}, "fitMode": "contain", "edgeSmoothIter": 5}),
+        encoding="utf-8",
+    )
+    (job_outputs / "trainset_tuned_params.json").write_text(
+        _json.dumps({"warpParams": {"src": "local"}, "fitMode": "cover", "edgeSmoothIter": 1}),
+        encoding="utf-8",
+    )
+
+    warp, fit, edge = _load_tuned_overlay_params(job_outputs, project_root=project_root)
+    assert warp.get("src") == "local"
+    assert fit == "cover"
+    assert edge == 1
+
+
+def test_extract_channel_preserves_other_channels_in_tmp_dir(tmp_path):
+    """Calling _extract_channel_to_tmp for a second channel must not wipe the
+    first channel's files — otherwise dual-channel UI overlay breaks.
+    """
+    import numpy as np
+    from tifffile import imwrite
+
+    from project.scripts.main import _extract_channel_to_tmp
+
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    for i in range(2):
+        arr = np.zeros((4, 4), dtype=np.uint16)
+        imwrite(str(src_dir / f"z{i:04d}_C0.tif"), arr)
+        imwrite(str(src_dir / f"z{i:04d}_C1.tif"), arr + 100)
+
+    tmp_dir = tmp_path / "tmp_channel"
+    src_c0 = sorted(src_dir.glob("*_C0.tif"))
+    src_c1 = sorted(src_dir.glob("*_C1.tif"))
+
+    _extract_channel_to_tmp(src_c0, tmp_dir, ch_idx=0)
+    assert sorted(p.name for p in tmp_dir.glob("ch_0_*.tif")) == [
+        "ch_0_0000.tif",
+        "ch_0_0001.tif",
+    ]
+
+    _extract_channel_to_tmp(src_c1, tmp_dir, ch_idx=1)
+    names = sorted(p.name for p in tmp_dir.glob("*.tif"))
+    assert "ch_0_0000.tif" in names
+    assert "ch_0_0001.tif" in names
+    assert "ch_1_0000.tif" in names
+    assert "ch_1_0001.tif" in names
+
+
+def test_extract_channel_replaces_only_same_channel_on_rerun(tmp_path):
+    import numpy as np
+    from tifffile import imwrite
+
+    from project.scripts.main import _extract_channel_to_tmp
+
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    for i in range(3):
+        arr = np.zeros((4, 4), dtype=np.uint16)
+        imwrite(str(src_dir / f"z{i:04d}_C0.tif"), arr)
+        imwrite(str(src_dir / f"z{i:04d}_C1.tif"), arr + 100)
+
+    tmp_dir = tmp_path / "tmp_channel"
+    _extract_channel_to_tmp(sorted(src_dir.glob("*_C0.tif")), tmp_dir, ch_idx=0)
+    _extract_channel_to_tmp(sorted(src_dir.glob("*_C1.tif")), tmp_dir, ch_idx=1)
+    _extract_channel_to_tmp(sorted(src_dir.glob("*_C0.tif"))[:2], tmp_dir, ch_idx=0)
+    names = sorted(p.name for p in tmp_dir.glob("*.tif"))
+    assert sorted(n for n in names if n.startswith("ch_0_")) == [
+        "ch_0_0000.tif",
+        "ch_0_0001.tif",
+    ]
+    assert sorted(n for n in names if n.startswith("ch_1_")) == [
+        "ch_1_0000.tif",
+        "ch_1_0001.tif",
+        "ch_1_0002.tif",
+    ]
+
+
 def test_run_config_defaults_anchor_whole_brain_3d_contract():
     _project = Path(__file__).resolve().parents[2]
     template = (_project / "configs" / "run_config.template.json").read_text(

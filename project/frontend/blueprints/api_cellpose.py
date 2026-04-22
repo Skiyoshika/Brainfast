@@ -51,11 +51,44 @@ def list_models():
     return jsonify({"ok": True, "models": models})
 
 
+_legacy_cellpose_training_warned = False
+
+
 def _training_dir() -> Path:
-    """Return the Cellpose training data directory, creating it if needed."""
-    d = ctx.PROJECT_ROOT / "cellpose_training"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    """Return the Cellpose training data directory, creating it if needed.
+
+    Lives under the shared runtime-state root
+    (``outputs/state/cellpose_training/``) so mutable training samples stay
+    out of the git-tracked source tree. If a legacy
+    ``<project_root>/cellpose_training`` dir exists with prior samples, we
+    migrate it in place via ``rename`` so no training data is lost.
+    """
+    from project.scripts.paths import cellpose_training_dir
+
+    global _legacy_cellpose_training_warned
+    new_root = cellpose_training_dir(ctx.PROJECT_ROOT)
+    legacy_root = ctx.PROJECT_ROOT / "cellpose_training"
+    if (
+        not new_root.exists()
+        and legacy_root.exists()
+        and legacy_root.is_dir()
+        and any(legacy_root.iterdir())
+    ):
+        try:
+            new_root.parent.mkdir(parents=True, exist_ok=True)
+            legacy_root.rename(new_root)
+            print(f"[cellpose-training] migrated legacy samples {legacy_root} -> {new_root}")
+        except OSError as exc:
+            if not _legacy_cellpose_training_warned:
+                print(
+                    f"[cellpose-training] could not rename legacy dir ({exc}); "
+                    f"reading {legacy_root} but new writes go to {new_root}"
+                )
+                _legacy_cellpose_training_warned = True
+            legacy_root.mkdir(parents=True, exist_ok=True)
+            return legacy_root
+    new_root.mkdir(parents=True, exist_ok=True)
+    return new_root
 
 
 def _training_set_stats(training_dir: Path) -> dict:

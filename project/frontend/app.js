@@ -509,6 +509,59 @@ const LANGS = {
     'training.apply': 'Apply Model',
     'toast.runDetailsFailed': 'Failed to open run details.',
     'outputs.previewDesc': 'Text preview for the selected output file.',
+    // ----- Pre-existing i18n gaps (index.html refs without LANGS entries) -----
+    'label.pixelSizeQuick': 'Pixel size not auto-detected:',
+    'hint.pixelSizeQuick': '(Cleared tissue: ~5 µm, thin sections: ~0.65 µm)',
+    'label.configPath': 'Run Config JSON (optional, defaults to template)',
+    'label.runName': 'Output Run Name (defaults to input folder name)',
+    'btn.exportExcel': '📊 Export Excel',
+    // ----- New Sample wizard -----
+    'nav.newsample': 'New Sample',
+    'newsample.title': 'New Sample — Onboarding Wizard',
+    'newsample.hint': 'Point at a folder of TIFF slices (or a multi-page TIFF), let Brainfast read the metadata, then launch the registration pipeline without editing any config files.',
+    'newsample.sourcePath': 'Step 1. Source path (directory of slice TIFFs, or a multi-page TIFF)',
+    'newsample.inspect': 'Inspect',
+    'newsample.step2': 'Step 2.',
+    'newsample.step2hint': 'Configure (defaults auto-filled from inspection)',
+    'newsample.sampleId': 'Sample ID',
+    'newsample.pixelUm': 'XY pixel (µm)',
+    'newsample.zUm': 'Z spacing (µm)',
+    'newsample.hemi': 'Atlas hemisphere',
+    'newsample.channel': 'Channel',
+    'newsample.launch': 'Step 3. Generate config & start pipeline',
+    'newsample.addSecondChannel': 'Add second channel',
+    'newsample.secondChannelHint': 'Runs only detection (~15 min) on the 2nd channel — reuses the first channel\'s registration. Both channels become overlay-able in 3D Liquify.',
+    'newsample.secondSource': '2nd source path (directory or multi-page TIFF)',
+    'newsample.secondChannel': '2nd channel',
+    // ----- 3D Liquify -----
+    'nav.liquify3d': '3D Liquify',
+    'liquify3d.title': '3D Landmark Liquify',
+    'liquify3d.hint': 'Click on the overlay: first click marks where the atlas region currently sits, second click marks where the real anatomy actually is.',
+    'liquify3d.jobLabel': 'Job ID',
+    'liquify3d.reload': 'Reload slice list',
+    'liquify3d.noSlices': 'No slices loaded',
+    'liquify3d.z': 'z =',
+    'liquify3d.modeLabel': 'Next click:',
+    'liquify3d.modeAtlas': 'Atlas (where region currently is)',
+    'liquify3d.modeReal': 'Real (where it should be)',
+    'liquify3d.apply': 'Apply 3D warp (Laplacian)',
+    'liquify3d.undo': 'Undo last (Ctrl+Z)',
+    'liquify3d.clear': 'Clear all pairs',
+    'liquify3d.pairsTitle': 'Landmark pairs',
+    'liquify3d.atlasHdr': 'Atlas (y, x)',
+    'liquify3d.realHdr': 'Real (y, x)',
+    'liquify3d.finalize': 'Finalize & re-export cell counts',
+    'liquify3d.qcDone': 'Mark QC done',
+    'liquify3d.classLabel': 'Class',
+    'liquify3d.priorStatus': 'Prior status',
+    'liquify3d.saveToPrior': 'Save job → class prior',
+    'liquify3d.loadFromPrior': 'Warm-start from prior',
+    'liquify3d.priorHeat': 'Coverage heatmap',
+    'liquify3d.priorHeatHint': 'Class-prior landmark density across z (taller bar = more contributing samples at that z):',
+    'liquify3d.overlay2ndChannel': 'Overlay 2nd channel',
+    'liquify3d.overlayChannel': 'Channel:',
+    'liquify3d.overlayColor': 'Tint:',
+    'liquify3d.overlayOpacity': 'Opacity:',
   },
   zh: {
     'nav.workflow': '配准工作流',
@@ -1006,6 +1059,59 @@ const LANGS = {
     'training.apply': '应用模型',
     'toast.runDetailsFailed': '打开运行详情失败。',
     'outputs.previewDesc': '所选输出文件的文本预览。',
+    // ----- 补充老版 UI 缺失的 i18n 键 -----
+    'label.pixelSizeQuick': '像素尺寸未自动检测：',
+    'hint.pixelSizeQuick': '（清脑组织：约 5 µm；薄切片：约 0.65 µm）',
+    'label.configPath': '运行配置 JSON（可选，默认使用模板）',
+    'label.runName': '输出运行名称（默认使用输入文件夹名称）',
+    'btn.exportExcel': '📊 导出 Excel',
+    // ----- 新样本向导 -----
+    'nav.newsample': '新样本',
+    'newsample.title': '新样本 — 引导向导',
+    'newsample.hint': '指向一个 TIFF 切片文件夹（或多页 TIFF），让 Brainfast 读取元数据，无需编辑配置文件即可启动配准管线。',
+    'newsample.sourcePath': '步骤 1。源路径（切片 TIFF 文件夹，或多页 TIFF）',
+    'newsample.inspect': '检查',
+    'newsample.step2': '步骤 2。',
+    'newsample.step2hint': '配置（默认值已根据检查结果自动填充）',
+    'newsample.sampleId': '样本 ID',
+    'newsample.pixelUm': 'XY 像素 (µm)',
+    'newsample.zUm': 'Z 间距 (µm)',
+    'newsample.hemi': '图谱半球',
+    'newsample.channel': '通道',
+    'newsample.launch': '步骤 3。生成配置并启动管线',
+    'newsample.addSecondChannel': '添加第二通道',
+    'newsample.secondChannelHint': '仅对第二通道跑检测（约 15 分钟）— 复用第一通道的配准结果。两个通道都能在 3D Liquify 里叠加查看。',
+    'newsample.secondSource': '第二通道源路径（目录或多页 TIFF）',
+    'newsample.secondChannel': '第二通道',
+    // ----- 3D 液化 -----
+    'nav.liquify3d': '3D 液化',
+    'liquify3d.title': '3D 地标液化',
+    'liquify3d.hint': '在叠图上点击：第一次标记图谱区域当前位置，第二次标记实际解剖位置。',
+    'liquify3d.jobLabel': '作业 ID',
+    'liquify3d.reload': '重新加载切片列表',
+    'liquify3d.noSlices': '尚未加载切片',
+    'liquify3d.z': 'z =',
+    'liquify3d.modeLabel': '下一次点击：',
+    'liquify3d.modeAtlas': '图谱（区域当前所在）',
+    'liquify3d.modeReal': '实际（应该在的位置）',
+    'liquify3d.apply': '应用 3D 形变（Laplacian）',
+    'liquify3d.undo': '撤销最近一对（Ctrl+Z）',
+    'liquify3d.clear': '清除所有点对',
+    'liquify3d.pairsTitle': '地标点对',
+    'liquify3d.atlasHdr': '图谱 (y, x)',
+    'liquify3d.realHdr': '实际 (y, x)',
+    'liquify3d.finalize': '完成并重新导出细胞计数',
+    'liquify3d.qcDone': '标记 QC 完成',
+    'liquify3d.classLabel': '类别',
+    'liquify3d.priorStatus': '先验状态',
+    'liquify3d.saveToPrior': '把作业存入类别先验',
+    'liquify3d.loadFromPrior': '用先验热启动',
+    'liquify3d.priorHeat': '覆盖热力图',
+    'liquify3d.priorHeatHint': '类先验地标在 z 方向的密度分布（柱越高 = 该 z 位置贡献样本越多）：',
+    'liquify3d.overlay2ndChannel': '叠加第二通道',
+    'liquify3d.overlayChannel': '通道:',
+    'liquify3d.overlayColor': '颜色:',
+    'liquify3d.overlayOpacity': '透明度:',
   },
 };
 
@@ -1508,6 +1614,14 @@ function formatEtaSeconds(seconds) {
   return remMins ? `${hours}h ${remMins}m` : `${hours}h`;
 }
 function getRunEtaSeconds(status) {
+  // Prefer backend ETA (per-stage baselines + self-correction). It works
+  // throughout the entire pipeline including ANTs where slicesDone is 0.
+  const backendEta = status?.eta?.etr_total_s;
+  if (Number.isFinite(backendEta) && backendEta > 0) {
+    return Math.round(backendEta);
+  }
+  // Fallback: naive (total - done) × per-slice elapsed. Only useful during
+  // slice-iterating phases (Truth Export, Detection) where slicesDone > 0.
   const done = Number(status?.slicesDone || 0);
   const total = Number(status?.slicesTotal || 0);
   const startEpoch = Number(status?.startEpoch || 0);
@@ -2383,6 +2497,7 @@ function _applyPollResponse(p) {
 
   // Slice progress bar
   state.startEpoch = Number(p.startEpoch || state.startEpoch || 0) || null;
+  state.lastBackendEta = p?.eta || null;
   _updateSliceProgressBar(p.slicesDone || 0, p.slicesTotal || 0);
 
   // Running state divergence detection
@@ -3600,7 +3715,15 @@ function _updateSliceProgressBar(done, total) {
   if (!wrap) return;
   if (done === 0 && total === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
-  const etaSeconds = getRunEtaSeconds({ running: state.running, slicesDone: done, slicesTotal: total, startEpoch: state.startEpoch });
+  // Prefer the backend ETA captured by the latest /api/status poll —
+  // works during ANTs etc. when slicesDone is still 0.
+  const etaSeconds = getRunEtaSeconds({
+    running: state.running,
+    slicesDone: done,
+    slicesTotal: total,
+    startEpoch: state.startEpoch,
+    eta: state.lastBackendEta,
+  });
   txt.textContent = etaSeconds != null
     ? `${done} / ${total || '?'} · ${t('progress.eta', { eta: formatEtaSeconds(etaSeconds) })}`
     : `${done} / ${total || '?'}`;
@@ -6088,4 +6211,1064 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
 
   // "?" button in sidebar
   document.getElementById('startTourBtn')?.addEventListener('click', startTour);
+})();
+
+// ==========================================================================
+// Phase β — 3D Landmark Liquify tab
+// ==========================================================================
+// Self-contained IIFE so it does not collide with the 2D manual-landmark
+// state. Backend: /api/liquify-3d/* (see api_liquify_3d.py).
+(function () {
+  const tabEl = document.getElementById('tab-liquify3d');
+  if (!tabEl) return; // HTML not present — defensive guard
+
+  const el = (id) => document.getElementById(id);
+  const state = {
+    jobId: '',
+    sliceFiles: [],        // e.g. ['slice_0000_overlay.png', ...]
+    currentZ: 0,
+    pendingAtlas: null,    // { y, x } in image-native pixel coords
+    pendingReal: null,
+    clickMode: 'atlas',
+    imageNaturalSize: { h: 0, w: 0 },
+    pairs: [],
+  };
+
+  // localStorage key for tab state — survives browser reloads and tab
+  // switches so the user does not lose their place between corrections.
+  const _LS_KEY = 'liquify3d.state.v1';
+  function _saveTabState() {
+    try {
+      localStorage.setItem(
+        _LS_KEY,
+        JSON.stringify({
+          jobId: el('liq3dJobId')?.value || '',
+          className: el('liq3dClassName')?.value || '',
+          currentZ: state.currentZ,
+          clickMode: state.clickMode,
+        }),
+      );
+    } catch (_) { /* private mode etc. — ignore */ }
+  }
+  function _loadTabState() {
+    try {
+      const raw = localStorage.getItem(_LS_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s.jobId && el('liq3dJobId')) el('liq3dJobId').value = s.jobId;
+      if (s.className && el('liq3dClassName')) el('liq3dClassName').value = s.className;
+      if (typeof s.currentZ === 'number') state.currentZ = s.currentZ;
+      if (s.clickMode === 'atlas' || s.clickMode === 'real') {
+        state.clickMode = s.clickMode;
+        const r = document.querySelector(
+          `input[name="liq3dClickMode"][value="${state.clickMode}"]`,
+        );
+        if (r) r.checked = true;
+      }
+    } catch (_) { /* malformed JSON — ignore */ }
+  }
+  _loadTabState();
+
+  const jobInput   = el('liq3dJobId');
+  const reloadBtn  = el('liq3dReloadBtn');
+  const sliceStatus= el('liq3dSliceStatus');
+  const zRange     = el('liq3dZ');
+  const zNum       = el('liq3dZNum');
+  const zMax       = el('liq3dZMax');
+  const pendingStatus = el('liq3dPendingStatus');
+  const img        = el('liq3dImg');
+  const overlayImg = el('liq3dOverlayImg');
+  const canvas     = el('liq3dCanvas');
+  const ctx        = canvas.getContext('2d');
+  const applyBtn   = el('liq3dApplyBtn');
+  const clearBtn   = el('liq3dClearBtn');
+  const applyStatus= el('liq3dApplyStatus');
+  const pairsBody  = el('liq3dPairsBody');
+  const pairCountEl = el('liq3dPairCount');
+  const overlayRow      = el('liq3dOverlayRow');
+  const overlayToggle   = el('liq3dOverlayToggle');
+  const overlayChannel  = el('liq3dOverlayChannel');
+  const overlayColor    = el('liq3dOverlayColor');
+  const overlayOpacity  = el('liq3dOverlayOpacity');
+  const overlayOpacityNum = el('liq3dOverlayOpacityNum');
+
+  // ------ util: job id resolution ------
+  function currentJobId() {
+    return (jobInput.value || '').trim() || 'default';
+  }
+
+  async function refreshState() {
+    try {
+      const resp = await fetch(`/api/liquify-3d/state?job=${encodeURIComponent(currentJobId())}`);
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'state failed');
+      state.pairs = data.pairs || [];
+      state.annotationShape = data.annotation_shape || null;
+      renderPairsTable();
+      // Empty-state guidance: if the source annotation isn't available for
+      // this job, surface an actionable message instead of a blank canvas.
+      if (data.guidance) {
+        sliceStatus.textContent = data.guidance;
+        sliceStatus.style.color = 'var(--warn, #ffa726)';
+      } else {
+        sliceStatus.style.color = '';
+      }
+      _renderCoordBadge();
+    } catch (err) {
+      console.warn('[liquify3d] state fetch failed:', err);
+    }
+  }
+
+  // #12 — surface the canvas-pixel → annotation-voxel rescale that the
+  // backend silently performs on each /add-pair POST. Without this badge
+  // a user wouldn't know that their click at (1500, 800) actually became
+  // annotation-voxel (300, 160) inside Brainfast.
+  function _renderCoordBadge() {
+    const badge = el('liq3dCoordBadge');
+    if (!badge) return;
+    const ann = state.annotationShape;          // [D, H, W]
+    const img = state.imageNaturalSize;          // {h, w}
+    if (!ann || !img.h || !img.w) {
+      badge.textContent = '';
+      return;
+    }
+    const sy = (ann[1] / img.h).toFixed(3);
+    const sx = (ann[2] / img.w).toFixed(3);
+    badge.textContent =
+      `image ${img.w}×${img.h} px  →  annotation grid ${ann[2]}×${ann[1]} ` +
+      `(rescale x=${sx}, y=${sy}). Clicks are auto-rescaled before storage.`;
+  }
+
+  // Poll /api/liquify-3d/progress every 2s while a long op is running.
+  // Returns a cancel function.
+  function startProgressPoll(onUpdate) {
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const resp = await fetch(`/api/liquify-3d/progress?job=${encodeURIComponent(currentJobId())}`);
+        const data = await resp.json();
+        if (data && typeof data.percent === 'number') {
+          onUpdate(data);
+        }
+      } catch (e) { /* ignore transient errors */ }
+      if (!cancelled) setTimeout(tick, 2000);
+    };
+    tick();
+    return () => { cancelled = true; };
+  }
+
+  function renderPairsTable() {
+    pairsBody.innerHTML = '';
+    state.pairs.forEach((p, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="padding:4px;">${i + 1}</td>
+        <td style="padding:4px;">${p.z}</td>
+        <td style="padding:4px;">(${p.atlas_y.toFixed(1)}, ${p.atlas_x.toFixed(1)})</td>
+        <td style="padding:4px;">(${p.real_y.toFixed(1)}, ${p.real_x.toFixed(1)})</td>
+        <td style="padding:4px;">
+          <button type="button" data-idx="${i}" class="liq3d-remove-btn"
+            style="background:transparent;color:var(--danger,#f55);border:none;cursor:pointer;">&times;</button>
+        </td>`;
+      pairsBody.appendChild(tr);
+    });
+    pairCountEl.textContent = String(state.pairs.length);
+    applyBtn.disabled = state.pairs.length === 0;
+    clearBtn.disabled = state.pairs.length === 0;
+    pairsBody.querySelectorAll('.liq3d-remove-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const idx = parseInt(btn.getAttribute('data-idx'), 10);
+        try {
+          await fetch(`/api/liquify-3d/pair/${idx}?job=${encodeURIComponent(currentJobId())}`, {
+            method: 'DELETE',
+          });
+          refreshState();
+          redraw();
+        } catch (e) { console.error(e); }
+      });
+    });
+  }
+
+  // ------ slice list ------
+  async function reloadSliceList() {
+    try {
+      // Pass the Job ID from the liquify panel's own input so the slice
+      // overlay list matches the job the user just typed. Previously the
+      // fetch had no ?job= param and always returned the default job's
+      // slices, making the panel claim "No registered slices" even after
+      // the user filled a valid completed job id.
+      const jid = currentJobId();
+      const url = jid && jid !== 'default'
+        ? `/api/outputs/reg-slice-list?job=${encodeURIComponent(jid)}`
+        : '/api/outputs/reg-slice-list';
+      const resp = await fetch(url);
+      const data = await resp.json();
+      state.sliceFiles = data.files || [];
+      if (!state.sliceFiles.length) {
+        sliceStatus.textContent = 'No registered slices available — run pipeline through ANTs first.';
+        return;
+      }
+      sliceStatus.textContent = `${state.sliceFiles.length} slice overlays available`;
+      const n = state.sliceFiles.length - 1;
+      zRange.max = n;
+      zNum.max = n;
+      zMax.textContent = `/ ${n}`;
+      // Default to middle
+      state.currentZ = Math.floor(state.sliceFiles.length / 2);
+      zRange.value = state.currentZ;
+      zNum.value = state.currentZ;
+      loadSliceImage();
+    } catch (err) {
+      sliceStatus.textContent = 'Slice list fetch failed: ' + err.message;
+    }
+  }
+
+  function _sliceImgUrl(fname) {
+    // Same dual-source logic as reloadSliceList so the slice PNG comes from
+    // the job we just typed rather than the default job.
+    const jid = currentJobId();
+    const base = `/api/outputs/reg-slice/${fname}`;
+    const suffix = `ts=${Date.now()}`;
+    if (jid && jid !== 'default') {
+      return `${base}?job=${encodeURIComponent(jid)}&${suffix}`;
+    }
+    return `${base}?${suffix}`;
+  }
+
+  function loadSliceImage() {
+    if (!state.sliceFiles.length) return;
+    const fname = state.sliceFiles[state.currentZ];
+    if (!fname) return;
+    img.src = _sliceImgUrl(fname);
+    img.style.display = '';
+    img.onload = () => {
+      state.imageNaturalSize = { h: img.naturalHeight, w: img.naturalWidth };
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.style.width = img.clientWidth + 'px';
+      canvas.style.height = img.clientHeight + 'px';
+      redraw();
+      _renderCoordBadge();
+      _refreshOverlayImage();
+    };
+  }
+
+  // ------ Dual-channel overlay (Phase 4) --------------------------------
+  // Pull ch_<N>_<z>.tif for the selected second channel, render it tinted,
+  // and stack on top of the main overlay via CSS mix-blend-mode:screen.
+  // Completely passive: when the toggle is off, the overlay img is hidden.
+  function _refreshOverlayImage() {
+    if (!overlayImg || !overlayToggle) return;
+    if (!overlayToggle.checked) {
+      overlayImg.style.display = 'none';
+      overlayImg.src = '';
+      return;
+    }
+    const ch = (overlayChannel?.value || '').trim();
+    if (!ch || !state.sliceFiles.length) {
+      overlayImg.style.display = 'none';
+      return;
+    }
+    const tint = (overlayColor?.value || 'ffffff').trim();
+    const opacity = Math.max(0, Math.min(100, Number(overlayOpacity?.value || 60))) / 100;
+    const jid = currentJobId();
+    const url = `/api/outputs/raw-channel-slice?job=${encodeURIComponent(jid)}`
+              + `&z=${state.currentZ}&channel=${encodeURIComponent(ch)}&tint=${encodeURIComponent(tint)}`
+              + `&ts=${Date.now()}`;
+    overlayImg.onload = () => {
+      overlayImg.style.display = '';
+      overlayImg.style.opacity = String(opacity);
+      // Match the main image's rendered size so the two overlays line up.
+      overlayImg.style.width = img.clientWidth + 'px';
+    };
+    overlayImg.onerror = () => {
+      overlayImg.style.display = 'none';
+    };
+    overlayImg.src = url;
+  }
+
+  async function _refreshChannelOptions() {
+    if (!overlayChannel || !overlayRow) return;
+    try {
+      const resp = await fetch(
+        `/api/outputs/channel-info?job=${encodeURIComponent(currentJobId())}`
+      );
+      const data = await resp.json();
+      const list = (data && Array.isArray(data.channels)) ? data.channels : [];
+      overlayChannel.innerHTML = '';
+      for (const name of list) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        overlayChannel.appendChild(opt);
+      }
+      // Only show the whole row if the job has ≥2 distinct channels so the
+      // control stays out of the way for single-channel runs.
+      overlayRow.style.display = list.length >= 2 ? '' : 'none';
+      // Default to the 2nd channel in the list (first one is usually the
+      // reporter C0 which is already the base image).
+      if (list.length >= 2) overlayChannel.value = list[1];
+    } catch (_) {
+      overlayRow.style.display = 'none';
+    }
+  }
+
+  overlayToggle?.addEventListener('change', _refreshOverlayImage);
+  overlayChannel?.addEventListener('change', _refreshOverlayImage);
+  overlayColor?.addEventListener('change', _refreshOverlayImage);
+  overlayOpacity?.addEventListener('input', () => {
+    if (overlayOpacityNum) overlayOpacityNum.textContent = overlayOpacity.value + '%';
+    _refreshOverlayImage();
+  });
+
+  // ------ canvas interaction ------
+  function canvasToImageCoords(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) * canvas.width) / rect.width,
+      y: ((e.clientY - rect.top) * canvas.height) / rect.height,
+    };
+  }
+
+  canvas.addEventListener('click', async (e) => {
+    if (!state.sliceFiles.length) return;
+    const { x, y } = canvasToImageCoords(e);
+    if (state.clickMode === 'atlas') {
+      state.pendingAtlas = { x, y };
+      state.clickMode = 'real';
+      document.querySelector('input[name="liq3dClickMode"][value="real"]').checked = true;
+      pendingStatus.textContent = `Atlas @ (${y.toFixed(0)}, ${x.toFixed(0)}). Now click real target.`;
+    } else {
+      state.pendingReal = { x, y };
+      pendingStatus.textContent = `Pair ready — posting…`;
+      const atlas = state.pendingAtlas;
+      const real = state.pendingReal;
+      state.pendingAtlas = null;
+      state.pendingReal = null;
+      try {
+        const resp = await fetch('/api/liquify-3d/add-pair', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jobId: currentJobId(),
+            z: state.currentZ,
+            atlas: [atlas.y, atlas.x],
+            real: [real.y, real.x],
+            image_dims_yx: [state.imageNaturalSize.h, state.imageNaturalSize.w],
+          }),
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || 'add failed');
+        pendingStatus.textContent = `Pair added (${data.pair_count} total).`;
+        state.clickMode = 'atlas';
+        document.querySelector('input[name="liq3dClickMode"][value="atlas"]').checked = true;
+        refreshState();
+      } catch (err) {
+        pendingStatus.textContent = 'Add failed: ' + err.message;
+      }
+    }
+    redraw();
+  });
+
+  function redraw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const DOT = 8;
+    // Existing pairs in current z (± 0 window for now; could widen later)
+    state.pairs.forEach((p, i) => {
+      if (p.z !== state.currentZ) return;
+      // atlas dot (orange)
+      ctx.fillStyle = '#ffcc00'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p.atlas_x, p.atlas_y, DOT, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      // real dot (green)
+      ctx.fillStyle = '#00ff88';
+      ctx.beginPath(); ctx.arc(p.real_x, p.real_y, DOT, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      // arrow atlas→real
+      ctx.strokeStyle = '#ffffff';
+      ctx.beginPath(); ctx.moveTo(p.atlas_x, p.atlas_y); ctx.lineTo(p.real_x, p.real_y); ctx.stroke();
+      // label
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(String(i + 1), (p.atlas_x + p.real_x) / 2, (p.atlas_y + p.real_y) / 2 - 10);
+    });
+    if (state.pendingAtlas) {
+      ctx.fillStyle = '#ff8800'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(state.pendingAtlas.x, state.pendingAtlas.y, DOT, 0, 2 * Math.PI);
+      ctx.fill(); ctx.stroke();
+    }
+  }
+
+  // ------ z slider ------
+  function onZChange(newZ) {
+    const n = state.sliceFiles.length;
+    if (!n) return;
+    newZ = Math.max(0, Math.min(n - 1, parseInt(newZ, 10) || 0));
+    state.currentZ = newZ;
+    zRange.value = newZ;
+    zNum.value = newZ;
+    loadSliceImage();
+  }
+  zRange.addEventListener('input', (e) => { onZChange(e.target.value); _saveTabState(); });
+  zNum.addEventListener('change', (e) => { onZChange(e.target.value); _saveTabState(); });
+
+  // ------ click mode toggle ------
+  document.querySelectorAll('input[name="liq3dClickMode"]').forEach((r) => {
+    r.addEventListener('change', (e) => {
+      state.clickMode = e.target.value;
+      _saveTabState();
+    });
+  });
+
+  // Persist job/class on change so reloads / tab switches don't wipe them.
+  el('liq3dJobId')?.addEventListener('change', _saveTabState);
+  el('liq3dClassName')?.addEventListener('change', _saveTabState);
+
+  // ------ buttons ------
+  reloadBtn.addEventListener('click', () => {
+    reloadSliceList();
+    refreshState();
+    _refreshChannelOptions();
+  });
+
+  clearBtn.addEventListener('click', async () => {
+    if (!confirm('Clear all landmark pairs for this job?')) return;
+    try {
+      await fetch('/api/liquify-3d/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: currentJobId() }),
+      });
+      // Review finding 3 — invalidate the current (job, class) auto-warm-start
+      // signature so the next refreshState sees this as a fresh empty job
+      // and re-attempts auto-apply. Otherwise a user who clears their own
+      // manual pairs would never see the class prior auto-seed.
+      try { _autoWarmStartTried.delete(_autoWarmStartSignature()); } catch (_) {}
+      await refreshState();
+      redraw();
+      _autoWarmStartIfEmpty();
+    } catch (err) { applyStatus.textContent = 'Clear failed: ' + err.message; }
+  });
+
+  // Undo: remove the most recently added pair via DELETE /pair/<index>.
+  // Triggered by either the toolbar button or Ctrl+Z while the tab is focused.
+  async function undoLastPair() {
+    if (state.pairs.length === 0) {
+      pendingStatus.textContent = 'Nothing to undo.';
+      return;
+    }
+    const lastIdx = state.pairs.length - 1;
+    try {
+      const resp = await fetch(
+        `/api/liquify-3d/pair/${lastIdx}?job=${encodeURIComponent(currentJobId())}`,
+        { method: 'DELETE' },
+      );
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'undo failed');
+      pendingStatus.textContent = `Undid pair #${lastIdx + 1}.`;
+      refreshState();
+      redraw();
+    } catch (err) {
+      pendingStatus.textContent = 'Undo failed: ' + err.message;
+    }
+  }
+
+  el('liq3dUndoBtn')?.addEventListener('click', undoLastPair);
+
+  document.addEventListener('keydown', (e) => {
+    // Only react when the 3D Liquify tab is the visible one — avoid stealing
+    // Ctrl+Z from inputs in other tabs.
+    if (!tabEl.classList.contains('active')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+      // Don't hijack Ctrl+Z while the user is editing a text input.
+      const tag = (document.activeElement?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      e.preventDefault();
+      undoLastPair();
+    }
+  });
+
+  applyBtn.addEventListener('click', async () => {
+    applyStatus.textContent = 'Starting Laplacian warp…';
+    applyBtn.disabled = true;
+    const cancelPoll = startProgressPoll((p) => {
+      applyStatus.textContent =
+        `[${p.percent}%] ${p.stage || ''}: ${p.message || ''}`.trim();
+    });
+    try {
+      const resp = await fetch('/api/liquify-3d/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: currentJobId() }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'apply failed');
+      applyStatus.textContent =
+        `Done. ${data.pair_count} pairs → max displacement ${data.displacement_max_voxels.toFixed(2)} voxels. ` +
+        `Refined annotation saved at ${data.output_path}`;
+    } catch (err) {
+      applyStatus.textContent = 'Apply failed: ' + err.message;
+    } finally {
+      cancelPoll();
+      applyBtn.disabled = state.pairs.length === 0;
+    }
+  });
+
+  // ------------- Close the loop: finalize → cell counts -------------
+  const finalizeBtn = el('liq3dFinalizeBtn');
+  const finalizeStatus = el('liq3dFinalizeStatus');
+
+  finalizeBtn?.addEventListener('click', async () => {
+    finalizeBtn.disabled = true;
+    finalizeStatus.textContent = 'Starting finalize…';
+    const cancelPoll = startProgressPoll((p) => {
+      finalizeStatus.textContent =
+        `[${p.percent}%] ${p.stage || ''}: ${p.message || ''}`.trim();
+    });
+    try {
+      const resp = await fetch('/api/liquify-3d/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: currentJobId() }),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        finalizeStatus.textContent = 'Finalize failed: ' + (data.error || resp.status);
+        return;
+      }
+      finalizeStatus.textContent =
+        `Done. ${data.mapped_count} cells re-mapped → ` +
+        `cell_counts_hierarchy_liquify3d.csv. Results tab will now prefer the refined counts.`;
+    } catch (err) {
+      finalizeStatus.textContent = 'Finalize failed: ' + err.message;
+    } finally {
+      cancelPoll();
+      finalizeBtn.disabled = false;
+    }
+  });
+
+  // ------------- #11 QC done -------------
+  const qcDoneBtn = el('liq3dQcDoneBtn');
+  const qcStatus  = el('liq3dQcStatus');
+
+  async function refreshQcStatus() {
+    if (!qcStatus) return;
+    try {
+      const resp = await fetch(`/api/liquify-3d/qc-status?job=${encodeURIComponent(currentJobId())}`);
+      const data = await resp.json();
+      if (data.done) {
+        const ts = data.timestamp ? new Date(data.timestamp * 1000).toLocaleString() : '';
+        const m = data.metrics || {};
+        const summary = ['NCC', 'Dice', 'SSIM']
+          .filter((k) => typeof m[k] === 'number')
+          .map((k) => `${k}=${m[k].toFixed(3)}`)
+          .join(' ');
+        qcStatus.textContent = `✓ QC done @ ${ts}${summary ? ' · ' + summary : ''}`;
+        qcStatus.style.color = 'var(--success,#4caf50)';
+      } else {
+        qcStatus.textContent = 'Not yet signed off.';
+        qcStatus.style.color = '';
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  qcDoneBtn?.addEventListener('click', async () => {
+    const note = prompt('Optional note for this QC sign-off (press Enter to skip):', '') || '';
+    qcDoneBtn.disabled = true;
+    qcStatus.textContent = 'Recording sign-off…';
+    try {
+      // Best-effort: include class name + last known liquify metrics if available.
+      const className = el('liq3dClassName')?.value?.trim() || null;
+      const resp = await fetch('/api/liquify-3d/qc-done', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: currentJobId(),
+          className,
+          note,
+          metrics: {},  // wire to live metrics in a future iteration
+        }),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        qcStatus.textContent = 'QC done failed: ' + (data.error || resp.status);
+        return;
+      }
+      await refreshQcStatus();
+    } catch (err) {
+      qcStatus.textContent = 'QC done failed: ' + err.message;
+    } finally {
+      qcDoneBtn.disabled = false;
+    }
+  });
+
+  // ------------- #6 Class dropdown + #7 auto-detect -------------
+  const classList = el('liq3dClassList');
+
+  async function refreshClassList() {
+    if (!classList) return;
+    try {
+      const resp = await fetch('/api/liquify-3d/class-registry/list');
+      const data = await resp.json();
+      classList.innerHTML = '';
+      for (const c of data.classes || []) {
+        const opt = document.createElement('option');
+        opt.value = c;
+        classList.appendChild(opt);
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  async function autoDetectClass() {
+    const cn = el('liq3dClassName');
+    const jid = currentJobId();
+    if (!cn || cn.value.trim()) return;  // user already set one
+    try {
+      const resp = await fetch(`/api/liquify-3d/class-registry/detect?sampleId=${encodeURIComponent(jid)}`);
+      const data = await resp.json();
+      if (data && data.class) {
+        cn.value = data.class;
+        cn.dispatchEvent(new Event('change'));  // triggers prior banner refresh
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  // ------------- Phase γ: class-prior controls -------------
+  const classInput       = el('liq3dClassName');
+  const priorStatusBtn   = el('liq3dPriorStatusBtn');
+  const saveToPriorBtn   = el('liq3dSaveToPriorBtn');
+  const loadFromPriorBtn = el('liq3dLoadFromPriorBtn');
+  const priorBanner      = el('liq3dPriorBanner');
+
+  function currentClassName() {
+    return (classInput.value || '').trim();
+  }
+
+  async function refreshPriorBanner() {
+    const cls = currentClassName();
+    if (!cls) { priorBanner.textContent = ''; return; }
+    try {
+      const resp = await fetch(`/api/liquify-3d/class-prior/status?class=${encodeURIComponent(cls)}`);
+      const data = await resp.json();
+      if (!data.ok) { priorBanner.textContent = data.error || 'prior status error'; return; }
+      const ready = data.ready_for_warm_start ? '✓' : '⚠';
+      priorBanner.textContent =
+        `${ready} ${cls}: ${data.sample_count} samples, ${data.entry_count} landmarks` +
+        (data.ready_for_warm_start
+          ? ' — ready to warm-start new runs'
+          : ` — needs ≥ ${data.min_samples_for_apply} samples before auto-apply`);
+    } catch (err) {
+      priorBanner.textContent = 'Prior status fetch failed: ' + err.message;
+    }
+  }
+
+  classInput?.addEventListener('change', async () => {
+    await refreshPriorBanner();
+    _autoWarmStartIfEmpty();
+  });
+  priorStatusBtn?.addEventListener('click', refreshPriorBanner);
+  // Review finding 3 — jobInput change must retrigger too; switching jobs
+  // without clearing the tried-set would otherwise leave the new job stuck
+  // on the first job's auto-apply decision.
+  jobInput?.addEventListener('change', async () => {
+    await refreshState();
+    await refreshPriorBanner();
+    _autoWarmStartIfEmpty();
+  });
+
+  // Task 3 — one automatic warm-start hook: when a class is set, the prior
+  // is ready, and the job has ZERO existing landmark pairs, apply the
+  // warm-start automatically. Never force-overwrites; a job with any manual
+  // pairs routes to the explicit button path (which still supports force=true
+  // via the confirm() flow below).
+  //
+  // Review finding 3 — the guard is scoped by (jobId|className) signature
+  // rather than a lifetime-of-page boolean, so switching jobs or classes
+  // (or clearing pairs, see clearBtn handler) triggers a fresh attempt.
+  const _autoWarmStartTried = new Set();
+  function _autoWarmStartSignature() {
+    return `${currentJobId()}|${currentClassName()}`;
+  }
+  async function _autoWarmStartIfEmpty() {
+    const cls = currentClassName();
+    if (!cls) return;
+    const sig = _autoWarmStartSignature();
+    if (_autoWarmStartTried.has(sig)) return;
+    // Only trigger when liquify state has been loaded (state.pairs is an array)
+    if (!Array.isArray(state.pairs)) return;
+    if (state.pairs.length > 0) {
+      // Manual work present — banner is informative only.
+      priorBanner.textContent += ' · manual overwrite required (click "Warm-start from prior")';
+      return;
+    }
+    let statusData;
+    try {
+      const r = await fetch(
+        `/api/liquify-3d/class-prior/status?class=${encodeURIComponent(cls)}`
+      );
+      statusData = await r.json();
+    } catch (_) { return; }
+    if (!statusData?.ok || !statusData.ready_for_warm_start) return;
+    _autoWarmStartTried.add(sig);
+    try {
+      const resp = await fetch('/api/liquify-3d/class-prior/apply-warm-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: currentJobId(), class: cls, force: false }),
+      });
+      if (resp.status === 409) {
+        priorBanner.textContent +=
+          ' · manual overwrite required (job already has pairs)';
+        return;
+      }
+      const data = await resp.json();
+      if (!data?.ok) return;
+      priorBanner.textContent =
+        `✓ ${cls}: auto-applied ${data.pair_count} prior landmark(s) to this empty job.`;
+      await refreshState();
+      redraw();
+    } catch (_) {
+      // Best-effort: auto-apply failures never block the UI.
+    }
+  }
+
+  // ----- #8 class-prior coverage heatmap -----
+  const priorHeatBtn = el('liq3dPriorHeatBtn');
+  const priorHeatRow = el('liq3dPriorHeatRow');
+  const priorHeatCanvas = el('liq3dPriorHeatCanvas');
+
+  async function renderPriorHeatmap() {
+    if (!priorHeatCanvas) return;
+    const cls = currentClassName();
+    if (!cls) {
+      priorHeatRow.style.display = 'none';
+      priorBanner.textContent = 'Enter a class name first.';
+      return;
+    }
+    let bins = [];
+    let maxZ = 0;
+    try {
+      const resp = await fetch(`/api/liquify-3d/class-prior/coverage?class=${encodeURIComponent(cls)}`);
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'coverage failed');
+      bins = data.bins || [];
+    } catch (err) {
+      priorBanner.textContent = 'Coverage fetch failed: ' + err.message;
+      return;
+    }
+    priorHeatRow.style.display = '';
+    const W = priorHeatCanvas.width;
+    const H = priorHeatCanvas.height;
+    const ctx2 = priorHeatCanvas.getContext('2d');
+    ctx2.clearRect(0, 0, W, H);
+
+    if (bins.length === 0) {
+      ctx2.fillStyle = '#888';
+      ctx2.font = '12px sans-serif';
+      ctx2.fillText('No landmarks in this class prior yet.', 10, H / 2 + 4);
+      return;
+    }
+    // Use the upper bound of available z; pad to current sliceFiles count if known.
+    maxZ = Math.max(state.sliceFiles.length || 1, ...bins.map((b) => b.z + 1));
+    const maxN = Math.max(1, ...bins.map((b) => b.count));
+    // Build a per-z count array so visualization shows gaps as gaps.
+    const counts = new Array(maxZ).fill(0);
+    bins.forEach((b) => { counts[b.z] = b.count; });
+
+    // Each pixel column is one bar; map z 0…maxZ-1 to canvas x 0…W
+    for (let x = 0; x < W; x++) {
+      const z = Math.floor((x / W) * maxZ);
+      const c = counts[z];
+      if (!c) continue;
+      const h = Math.round((c / maxN) * (H - 4));
+      // Greener for denser; semitransparent so overlap is visible
+      ctx2.fillStyle = `rgba(76, 175, 80, ${0.35 + 0.65 * (c / maxN)})`;
+      ctx2.fillRect(x, H - h - 2, 1, h);
+    }
+    // Legend
+    ctx2.fillStyle = '#bbb';
+    ctx2.font = '10px sans-serif';
+    ctx2.fillText(`${cls} · ${bins.length} entries · max samples/voxel = ${maxN}`, 6, 12);
+  }
+
+  priorHeatBtn?.addEventListener('click', renderPriorHeatmap);
+
+  saveToPriorBtn?.addEventListener('click', async () => {
+    const cls = currentClassName();
+    if (!cls) { priorBanner.textContent = 'Enter a class name first (e.g. ChATe27)'; return; }
+    if (state.pairs.length === 0) {
+      priorBanner.textContent = 'No landmark pairs to contribute.';
+      return;
+    }
+    try {
+      const resp = await fetch('/api/liquify-3d/class-prior/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: currentJobId(), class: cls, sampleId: currentJobId() }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'save failed');
+      priorBanner.textContent =
+        `Saved ${data.merged_pair_count} pair(s) to ${cls}. Class prior: ${data.sample_count} sample(s) total.`;
+    } catch (err) {
+      priorBanner.textContent = 'Save to prior failed: ' + err.message;
+    }
+  });
+
+  loadFromPriorBtn?.addEventListener('click', async () => {
+    const cls = currentClassName();
+    if (!cls) { priorBanner.textContent = 'Enter a class name first (e.g. ChATe27)'; return; }
+    let force = false;
+    const run = async () => {
+      const resp = await fetch('/api/liquify-3d/class-prior/apply-warm-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: currentJobId(), class: cls, force }),
+      });
+      const data = await resp.json();
+      if (resp.status === 409 && !force) {
+        if (confirm('This job already has landmark pairs. Overwrite with class prior?')) {
+          force = true;
+          return await run();
+        }
+        priorBanner.textContent = 'Warm-start canceled (existing pairs kept).';
+        return;
+      }
+      if (!data.ok) {
+        priorBanner.textContent = 'Warm-start failed: ' + (data.error || 'unknown');
+        return;
+      }
+      priorBanner.textContent = `Warm-started job with ${data.pair_count} prior landmark(s).`;
+      refreshState();
+      redraw();
+    };
+    try { await run(); } catch (err) { priorBanner.textContent = 'Warm-start failed: ' + err.message; }
+  });
+
+  // Auto-load the first time the tab is shown
+  document.querySelector('.nav-btn[data-tab="liquify3d"]')?.addEventListener('click', async () => {
+    if (!state.sliceFiles.length) {
+      reloadSliceList();
+      await refreshState();
+    } else {
+      await refreshState();
+    }
+    refreshClassList();
+    await autoDetectClass();
+    await refreshPriorBanner();
+    refreshQcStatus();
+    // Task 3 — attempt a single auto warm-start once liquify state + class
+    // have both been resolved. Safe-guarded by _autoWarmStartTried +
+    // the empty-pair check inside the helper.
+    _autoWarmStartIfEmpty();
+  });
+})();
+
+// ==========================================================================
+// Onboarding wizard (New Sample tab) — gets a brand-new user from
+// "I have raw TIFFs" to "the pipeline is running" without CLI use.
+// ==========================================================================
+(function () {
+  const tab = document.getElementById('tab-newsample');
+  if (!tab) return;
+
+  const $ = (id) => document.getElementById(id);
+  const sourceInput = $('wizSourcePath');
+  const inspectBtn  = $('wizInspectBtn');
+  const inspectStatus = $('wizInspectStatus');
+  const sampleId   = $('wizSampleId');
+  const pixelUm    = $('wizPixelUm');
+  const zUm        = $('wizZUm');
+  const hemi       = $('wizHemi');
+  const channel    = $('wizChannel');
+  const launchBtn  = $('wizLaunchBtn');
+  const launchStatus = $('wizLaunchStatus');
+  // Dual-channel controls (Phase 5)
+  const addSecondToggle = $('wizAddSecondChannel');
+  const secondFields    = $('wizSecondChannelFields');
+  const source2Input    = $('wiz2SourcePath');
+  const inspect2Btn     = $('wiz2InspectBtn');
+  const inspect2Status  = $('wiz2InspectStatus');
+  const channel2        = $('wiz2Channel');
+
+  let lastInspect = null;
+  let lastInspect2 = null;
+
+  addSecondToggle?.addEventListener('change', () => {
+    if (secondFields) {
+      secondFields.style.display = addSecondToggle.checked ? '' : 'none';
+    }
+  });
+
+  inspect2Btn?.addEventListener('click', async () => {
+    const sp = (source2Input?.value || '').trim();
+    if (!sp) {
+      inspect2Status.textContent = 'Please enter the 2nd channel source path.';
+      inspect2Status.style.color = 'var(--warn,#ffa726)';
+      return;
+    }
+    inspect2Status.textContent = 'Inspecting 2nd channel…';
+    inspect2Status.style.color = '';
+    try {
+      const resp = await fetch('/api/wizard/inspect-source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourcePath: sp }),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        inspect2Status.textContent = '2nd inspect failed: ' + (data.error || resp.status);
+        inspect2Status.style.color = 'var(--danger,#f55)';
+        lastInspect2 = null;
+        return;
+      }
+      lastInspect2 = data;
+      const lines = [`Detected: ${data.kind}`];
+      if (data.kind === 'multipage_tiff') {
+        lines.push(`pages=${data.n_pages}`);
+        if (data.needs_extraction) {
+          lines.push('⚠ needs extract_zstack first');
+        }
+      } else {
+        lines.push(`files=${data.n_files}`);
+      }
+      if (data.sample_shape) lines.push(`shape=${JSON.stringify(data.sample_shape)}`);
+      // Consistency check against 1st channel: same shape + same page count.
+      if (lastInspect && data.sample_shape && lastInspect.sample_shape) {
+        if (JSON.stringify(data.sample_shape) !== JSON.stringify(lastInspect.sample_shape)) {
+          lines.push('⚠ shape differs from 1st channel — registration reuse may break');
+        }
+      }
+      inspect2Status.textContent = lines.join('  |  ');
+    } catch (err) {
+      inspect2Status.textContent = '2nd inspect failed: ' + err.message;
+      inspect2Status.style.color = 'var(--danger,#f55)';
+      lastInspect2 = null;
+    }
+  });
+
+  inspectBtn.addEventListener('click', async () => {
+    const sp = (sourceInput.value || '').trim();
+    if (!sp) {
+      inspectStatus.textContent = 'Please enter a source path.';
+      inspectStatus.style.color = 'var(--warn,#ffa726)';
+      return;
+    }
+    inspectStatus.textContent = 'Inspecting…';
+    inspectStatus.style.color = '';
+    try {
+      const resp = await fetch('/api/wizard/inspect-source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourcePath: sp }),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        inspectStatus.textContent = 'Inspect failed: ' + (data.error || resp.status);
+        inspectStatus.style.color = 'var(--danger,#f55)';
+        launchBtn.disabled = true;
+        return;
+      }
+      lastInspect = data;
+      // Auto-fill form fields with detected defaults
+      if (data.suggested_sample_id && !sampleId.value) sampleId.value = data.suggested_sample_id;
+      if (typeof data.suggested_pixel_um_xy === 'number') pixelUm.value = data.suggested_pixel_um_xy;
+      if (typeof data.suggested_z_spacing_um === 'number') zUm.value = data.suggested_z_spacing_um;
+
+      const lines = [];
+      lines.push(`Detected: ${data.kind}`);
+      if (data.kind === 'multipage_tiff') {
+        lines.push(`pages=${data.n_pages}`);
+        if (data.needs_extraction) {
+          lines.push('⚠ multi-page TIFF needs extraction — run `python scripts/extract_zstack.py` first');
+        }
+      } else {
+        lines.push(`files=${data.n_files}`);
+      }
+      if (data.sample_shape) lines.push(`shape=${JSON.stringify(data.sample_shape)}`);
+      if (data.dtype) lines.push(`dtype=${data.dtype}`);
+      lines.push(`px=${data.suggested_pixel_um_xy}µm, z=${data.suggested_z_spacing_um}µm`);
+      inspectStatus.textContent = lines.join('  |  ');
+      inspectStatus.style.color = '';
+
+      // Allow launch only for directory inputs (multi-page needs extract first)
+      launchBtn.disabled = data.kind !== 'directory' || (data.n_files || 0) === 0;
+      if (launchBtn.disabled) {
+        launchStatus.textContent = data.kind === 'multipage_tiff'
+          ? 'Run extract_zstack first; then re-Inspect the resulting slice directory.'
+          : 'No TIFF slices found in directory.';
+      } else {
+        launchStatus.textContent = '';
+      }
+    } catch (err) {
+      inspectStatus.textContent = 'Inspect failed: ' + err.message;
+      inspectStatus.style.color = 'var(--danger,#f55)';
+      launchBtn.disabled = true;
+    }
+  });
+
+  launchBtn.addEventListener('click', async () => {
+    if (!sampleId.value || !sourceInput.value || !pixelUm.value || !zUm.value) {
+      launchStatus.textContent = 'Fill sample id, source path, pixel + z spacing first.';
+      return;
+    }
+    // Build channel list + per-channel input dirs
+    const ch1 = channel.value;
+    const channels = [ch1];
+    const inputDirs = { [ch1]: sourceInput.value.trim() };
+    if (addSecondToggle?.checked) {
+      const ch2 = channel2.value;
+      const src2 = (source2Input.value || '').trim();
+      if (!src2) {
+        launchStatus.textContent = '2nd channel enabled but source path is empty.';
+        return;
+      }
+      if (ch2 === ch1) {
+        launchStatus.textContent = '2nd channel must differ from the 1st.';
+        return;
+      }
+      channels.push(ch2);
+      inputDirs[ch2] = src2;
+    }
+    launchBtn.disabled = true;
+    launchStatus.textContent = channels.length > 1
+      ? `Launching dual-channel pipeline (${channels.join(' + ')})…`
+      : 'Launching pipeline…';
+    try {
+      const payload = {
+        sampleId: sampleId.value.trim(),
+        pixelSizeUm: parseFloat(pixelUm.value),
+        zSpacingUm: parseFloat(zUm.value),
+        channels,
+        atlasHemisphere: hemi.value,
+      };
+      // Keep single-channel shape backwards compatible: inputDir (str) for
+      // legacy jobs; inputDirs (dict) when multiple channels are declared.
+      if (channels.length > 1) {
+        payload.inputDirs = inputDirs;
+        payload.inputDir = inputDirs[ch1]; // fallback for old handlers
+      } else {
+        payload.inputDir = inputDirs[ch1];
+      }
+      const resp = await fetch('/api/wizard/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        launchStatus.textContent = 'Launch failed: ' + (data.error || resp.status);
+        launchBtn.disabled = false;
+        return;
+      }
+      const dualSuffix = channels.length > 1
+        ? ` · 2nd channel reuses registration (≈15 min after 1st completes)`
+        : '';
+      launchStatus.textContent =
+        `✓ Pipeline started for jobId="${data.jobId}".${dualSuffix} ` +
+        `Check the Registration Workflow tab for progress.`;
+      launchStatus.style.color = 'var(--success,#4caf50)';
+    } catch (err) {
+      launchStatus.textContent = 'Launch failed: ' + err.message;
+      launchBtn.disabled = false;
+    }
+  });
 })();

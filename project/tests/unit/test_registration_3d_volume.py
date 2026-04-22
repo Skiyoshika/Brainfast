@@ -38,6 +38,112 @@ def test_build_volume_from_tiffs_writes_target_resolution_volume(tmp_path):
     assert meta["volume_path"] == output_path
 
 
+def test_build_volume_from_tiffs_uncapped_allows_downsample_above_four(tmp_path):
+    """Miki-level registration needs native xy resolution. When raw_factor > 4
+    (e.g. 5 µm pixel → 25 µm target = factor 5), the old hardcoded
+    min(4, ...) cap forced over-downsampling and destroyed the moving volume's
+    intensity detail, blocking ANTs MI/CC convergence (NCC -0.16 vs Miki 0.66).
+
+    With xy_downsample_cap=None (new default), downsample_factor should match
+    round(raw_factor) — no artificial ceiling."""
+    slice_dir = tmp_path / "slices"
+    slice_dir.mkdir()
+
+    # 10×10 slices → after downsample=5 → 2×2 per slice
+    imwrite(slice_dir / "z001.tif", np.full((10, 10), 100, dtype=np.uint16))
+    imwrite(slice_dir / "z002.tif", np.full((10, 10), 200, dtype=np.uint16))
+
+    meta = build_volume_from_tiffs(
+        slice_dir,
+        tmp_path / "vol_uncapped.nii.gz",
+        pixel_um_xy=5.0,
+        z_spacing_um=25.0,
+        target_um=25.0,
+        glob_pattern="z*.tif",
+    )
+
+    # raw_factor = 25/5 = 5. Old capped default would return 4. New default
+    # (cap=None) should return 5 to match Miki-level voxel density.
+    assert meta["downsample_factor"] == 5, (
+        f"uncapped default regressed: got {meta['downsample_factor']}, expected 5"
+    )
+
+
+def test_build_volume_from_tiffs_respects_explicit_cap(tmp_path):
+    """Operators on memory-constrained machines can still ask for a cap."""
+    slice_dir = tmp_path / "slices"
+    slice_dir.mkdir()
+
+    imwrite(slice_dir / "z001.tif", np.full((10, 10), 100, dtype=np.uint16))
+
+    meta = build_volume_from_tiffs(
+        slice_dir,
+        tmp_path / "vol_capped.nii.gz",
+        pixel_um_xy=5.0,
+        z_spacing_um=25.0,
+        target_um=25.0,
+        xy_downsample_cap=2,
+    )
+
+    # raw_factor=5, cap=2 → downsample=2
+    assert meta["downsample_factor"] == 2
+
+
+def test_build_volume_from_tiffs_emits_allen_compatible_affine(tmp_path):
+    """The emitted NIfTI must carry an Allen-CCF-compatible off-diagonal affine
+    so ANTs sees the moving volume in the same physical coordinate system as
+    the template, rather than a raw-diagonal affine that forces SyN to absorb
+    a global rigid mismatch.
+
+    Reference structure (from RegTools `create_nifti_image` and Allen
+    average_template_25.nii.gz):
+        row 0: (0, 0, +dz, *)         — source axis-2 → physical axis-0
+        row 1: (-dx, 0, 0, *)         — source axis-0 → physical axis-1 (negated)
+        row 2: (0, -dy, 0, *)         — source axis-1 → physical axis-2 (negated)
+        row 3: (0, 0,  0,  1)
+    where (dx, dy, dz) = (z_spacing_mm, xy_spacing_mm, xy_spacing_mm).
+    The previous diag-only affine (Bug: NCC -0.24 vs Miki 0.66) is the
+    regression we're guarding against.
+    """
+    slice_dir = tmp_path / "slices"
+    slice_dir.mkdir()
+
+    imwrite(slice_dir / "z001.tif", np.full((10, 10), 100, dtype=np.uint16))
+    imwrite(slice_dir / "z002.tif", np.full((10, 10), 200, dtype=np.uint16))
+
+    out = tmp_path / "vol.nii.gz"
+    build_volume_from_tiffs(
+        slice_dir,
+        out,
+        pixel_um_xy=5.0,
+        z_spacing_um=24.765,
+        target_um=25.0,  # raw_factor = 5, no cap → downsample=5 → xy spacing = 25 µm
+    )
+
+    img = nib.load(str(out))
+    A = img.affine
+    dz_mm = 0.024765
+    dy_mm = 0.025
+    dx_mm = 0.025
+
+    # Off-diagonal placements must be non-zero, with the expected signs.
+    assert A[0, 2] == pytest.approx(dx_mm, rel=1e-3), (
+        f"affine[0,2] should be +xy_spacing; got {A[0, 2]}"
+    )
+    assert A[1, 0] == pytest.approx(-dz_mm, rel=1e-3), (
+        f"affine[1,0] should be -z_spacing; got {A[1, 0]}"
+    )
+    assert A[2, 1] == pytest.approx(-dy_mm, rel=1e-3), (
+        f"affine[2,1] should be -xy_spacing; got {A[2, 1]}"
+    )
+    # Diagonal (except last row) must be zero — i.e. NOT a plain diag affine.
+    assert A[0, 0] == 0.0
+    assert A[1, 1] == 0.0
+    assert A[2, 2] == 0.0
+    # Homogeneous row.
+    assert (A[3] == np.array([0, 0, 0, 1])).all()
+
+
 def test_build_volume_from_tiffs_raises_for_empty_glob(tmp_path):
     with pytest.raises(FileNotFoundError):
         build_volume_from_tiffs(

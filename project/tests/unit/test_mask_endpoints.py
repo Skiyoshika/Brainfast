@@ -110,7 +110,7 @@ class TestSaveTrainingSample:
 
         import project.frontend.server_context as ctx
 
-        training_dir = ctx.PROJECT_ROOT / "cellpose_training"
+        training_dir = ctx.PROJECT_ROOT / "outputs" / "state" / "cellpose_training"
 
         mask_data = np.array([[0, 1], [2, 0]], dtype=np.int32)
         compressed = zlib.compress(mask_data.tobytes())
@@ -222,7 +222,7 @@ class TestTrainingSetEndpoints:
         import project.frontend.server_context as ctx
 
         # Create training data directly
-        td = ctx.PROJECT_ROOT / "cellpose_training"
+        td = ctx.PROJECT_ROOT / "outputs" / "state" / "cellpose_training"
         td.mkdir(parents=True, exist_ok=True)
         for i in range(3):
             imwrite(str(td / f"s{i}.tif"), np.zeros((8, 8), dtype=np.uint16))
@@ -238,7 +238,7 @@ class TestTrainingSetEndpoints:
     def test_delete_training_sample(self, client, tmp_path):
         import project.frontend.server_context as ctx
 
-        td = ctx.PROJECT_ROOT / "cellpose_training"
+        td = ctx.PROJECT_ROOT / "outputs" / "state" / "cellpose_training"
         td.mkdir(parents=True, exist_ok=True)
         imwrite(str(td / "test.tif"), np.zeros((4, 4), dtype=np.uint16))
         imwrite(str(td / "test_masks.tif"), np.ones((4, 4), dtype=np.uint16))

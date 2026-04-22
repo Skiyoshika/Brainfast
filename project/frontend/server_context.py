@@ -566,6 +566,50 @@ def _apply_liquify_drags(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_calibration_samples_dir() -> Path:
+    """Return the single canonical dir both save and learn must use.
+
+    Save Calibration + Learn has two sides: the save helper writes
+    ori/show/label pairs; the learn thread reads them. Review finding 2
+    caught a bug where, on the rename-fallback path, these helpers resolved
+    independently — one wrote to legacy ``<project>/train_data_set/`` while
+    the other read from the empty new shared-state path, silently making
+    the learn a no-op.
+
+    This resolver pins the choice so every caller gets the same dir:
+
+    * If the shared state path exists, use it.
+    * Else if a legacy ``<project>/train_data_set/`` dir exists and has
+      data, try to ``rename()`` it onto the shared-state path. On success
+      return the new path. On failure (cross-disk, in-use, permissions)
+      fall back to the legacy path — and both save and learn stay on it.
+    * Otherwise return (and lazily create) the shared-state path.
+
+    Idempotent; safe to call repeatedly.
+    """
+    from scripts.paths import calibration_samples_dir as _new_calib_dir
+
+    new_dir = _new_calib_dir(PROJECT_ROOT)
+    legacy_dir = PROJECT_ROOT / "train_data_set"
+    if new_dir.exists():
+        return new_dir
+    if legacy_dir.exists() and legacy_dir.is_dir() and any(legacy_dir.iterdir()):
+        try:
+            new_dir.parent.mkdir(parents=True, exist_ok=True)
+            legacy_dir.rename(new_dir)
+            print(f"[calibration] migrated legacy samples {legacy_dir} -> {new_dir}")
+            return new_dir
+        except OSError as exc:
+            print(
+                f"[calibration] could not rename legacy dir ({exc}); "
+                f"save + learn will keep using {legacy_dir} for this run. "
+                "Move it manually to enable the shared-state path."
+            )
+            return legacy_dir
+    new_dir.mkdir(parents=True, exist_ok=True)
+    return new_dir
+
+
 def _save_calibration_pair(
     real_path: Path,
     corrected_label_tif: Path,
@@ -576,7 +620,9 @@ def _save_calibration_pair(
     from scripts.image_utils import norm_u8_robust
     from scripts.slice_select import select_real_slice_2d
 
-    train_dir = PROJECT_ROOT / "train_data_set"
+    # Shared resolver so save + learn always agree on one dir; see
+    # _resolve_calibration_samples_dir doc for the review-finding-2 rationale.
+    train_dir = _resolve_calibration_samples_dir()
     train_dir.mkdir(parents=True, exist_ok=True)
     sid = _next_train_pair_id(train_dir)
     ori_png = train_dir / f"{sid}_Ori.png"
@@ -591,7 +637,10 @@ def _save_calibration_pair(
     shutil.copy2(corrected_overlay_png, show_png)
     shutil.copy2(corrected_label_tif, label_tif)
 
-    calib_dir = OUTPUT_DIR / "manual_calibration"
+    # Manifest lives next to the samples under whichever root save+learn
+    # agreed on (so on the legacy-fallback path it lands under
+    # train_data_set/manifests, not a split-brain shared-state dir).
+    calib_dir = train_dir.parent / "manifests"
     calib_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = calib_dir / f"calibration_sample_{sid}.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -616,13 +665,22 @@ def _learn_from_trainset_async():
         learning_state["running"] = True  # reserve under lock before spawning thread
 
     def _worker():
+        from scripts.paths import calibration_tuned_json
+
+        tuned_json_path = calibration_tuned_json(PROJECT_ROOT)
+        tuned_json_path.parent.mkdir(parents=True, exist_ok=True)
+        # Review finding 2 — must go through the shared resolver so the
+        # learn thread reads the SAME dir the save helper wrote to, even
+        # when the shared-state rename fallback kept us on the legacy path.
+        train_dir_for_learn = _resolve_calibration_samples_dir()
         learning_state.update(
             {
                 "started_at": datetime.datetime.now().isoformat(timespec="seconds"),
                 "finished_at": "",
                 "ok": None,
                 "error": "",
-                "out_json": str(OUTPUT_DIR / "trainset_tuned_params.json"),
+                "out_json": str(tuned_json_path),
+                "train_dir": str(train_dir_for_learn),
                 "log_tail": [],
             }
         )
@@ -630,11 +688,11 @@ def _learn_from_trainset_async():
             sys.executable,
             str(PROJECT_ROOT / "scripts" / "learn_from_trainset.py"),
             "--train-dir",
-            str(PROJECT_ROOT / "train_data_set"),
+            str(train_dir_for_learn),
             "--annotation",
             str(PROJECT_ROOT / "annotation_25.nii.gz"),
             "--out-json",
-            str(OUTPUT_DIR / "trainset_tuned_params.json"),
+            str(tuned_json_path),
             "--fit-modes",
             "contain,cover",
             "--smooth-values",
@@ -878,22 +936,44 @@ def _runner(
         except Exception:
             pass
 
-    try:
+    # Input dirs can be per-channel when the caller passes a dict
+    #   {"red": "path/to/c0_slices", "farred": "path/to/c1_slices"}
+    # or a single string shared across all channels. Normalize to dict.
+    input_dirs_by_channel: dict[str, str] = {}
+    if isinstance(input_dir, dict):
+        input_dirs_by_channel = {k: str(v) for k, v in input_dir.items()}
+    else:
         for ch in channels:
+            input_dirs_by_channel[ch] = str(input_dir)
+
+    try:
+        for ch_idx, ch in enumerate(channels):
             job_state["current_channel"] = ch
-            _append_log(f"[run] job={safe_job_id} channel={ch}", state=job_state)
+            ch_input_dir = input_dirs_by_channel.get(ch, str(input_dir))
+            _append_log(
+                f"[run] job={safe_job_id} channel={ch} input={ch_input_dir}",
+                state=job_state,
+            )
             cmd = [
                 sys.executable,
                 str(PROJECT_ROOT / "scripts" / "main.py"),
                 "--config",
                 config_path,
                 "--run-real-input",
-                input_dir,
+                ch_input_dir,
             ]
             env = os.environ.copy()
             env["BRAINCOUNT_ACTIVE_CHANNEL"] = ch
             env["BRAINCOUNT_OUTPUT_DIR"] = str(job_out)
             env["BRAINCOUNT_JOB_ID"] = safe_job_id
+            # 2nd+ channels reuse the 1st channel's registration artifacts
+            # (ANTs + Laplacian + truth_export live in job_out already).
+            if ch_idx > 0:
+                env["BRAINCOUNT_REUSE_FROM_DIR"] = str(job_out)
+                _append_log(
+                    f"[run] channel={ch} will reuse registration from {job_out}",
+                    state=job_state,
+                )
 
             p = subprocess.Popen(
                 cmd,
@@ -916,6 +996,14 @@ def _runner(
                 leaf = job_out / "cell_counts_leaf.csv"
                 if leaf.exists():
                     shutil.copy2(leaf, job_out / f"cell_counts_leaf_{ch}.csv")
+                # Also preserve the per-channel cells_mapped.csv so downstream
+                # UI/analysis can look up every channel's detections.
+                cells = job_out / "cells_mapped.csv"
+                if cells.exists():
+                    shutil.copy2(cells, job_out / f"cells_mapped_{ch}.csv")
+                hierarchy = job_out / "cell_counts_hierarchy.csv"
+                if hierarchy.exists():
+                    shutil.copy2(hierarchy, job_out / f"cell_counts_hierarchy_{ch}.csv")
             else:
                 job_state["error"] = f"channel {ch} failed with code {code}"
                 _append_error(

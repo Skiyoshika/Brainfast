@@ -126,3 +126,85 @@ def test_leaf_channel_returns_empty_when_channel_file_missing(tmp_path: Path, mo
         resp = client.get("/api/outputs/leaf/red")
         assert resp.status_code == 204
         assert resp.get_data(as_text=True) == ""
+
+
+def _make_job_with_channel_slices(
+    tmp_path: Path, job_id: str, channels: dict[str, int], n_slices: int = 3
+) -> Path:
+    """Build a minimal outputs/jobs/<job>/ dir with tmp_channel/ch_N_*.tif
+    files + a runtime_config that declares the channel_map.
+    """
+    import json as _json
+
+    import numpy as np
+    from tifffile import imwrite
+
+    job_dir = tmp_path / "jobs" / job_id
+    (job_dir / "tmp_channel").mkdir(parents=True)
+    for ch_name, ch_idx in channels.items():
+        for z in range(n_slices):
+            arr = (np.arange(64 * 64, dtype=np.uint16).reshape(64, 64) * (ch_idx + 1)) % 65535
+            imwrite(str(job_dir / "tmp_channel" / f"ch_{ch_idx}_{z:04d}.tif"), arr)
+    # Also create a runtime_config so the endpoint can resolve channel_map
+    (job_dir / "runtime_configs").mkdir()
+    (job_dir / "runtime_configs" / "run_config_20260420_000000.json").write_text(
+        _json.dumps({"input": {"channel_map": channels}}),
+        encoding="utf-8",
+    )
+    # Artifact marker so _outputs_root picks up this job
+    (job_dir / "ants_registration").mkdir()
+    return job_dir
+
+
+def test_raw_channel_slice_returns_png_for_existing_channel(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path)
+    _make_job_with_channel_slices(
+        tmp_path, "job_dual", channels={"red": 0, "farred": 2}, n_slices=3
+    )
+    with app.test_client() as client:
+        resp = client.get("/api/outputs/raw-channel-slice?job=job_dual&z=1&channel=farred")
+        assert resp.status_code == 200
+        assert resp.headers.get("Content-Type", "").startswith("image/png")
+        # PNG magic number
+        data = resp.get_data()
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_raw_channel_slice_returns_404_for_missing_channel(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path)
+    _make_job_with_channel_slices(
+        tmp_path, "job_red_only", channels={"red": 0}, n_slices=3
+    )
+    with app.test_client() as client:
+        resp = client.get("/api/outputs/raw-channel-slice?job=job_red_only&z=0&channel=farred")
+        assert resp.status_code == 404
+
+
+def test_raw_channel_slice_accepts_tint_and_still_returns_png(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path)
+    _make_job_with_channel_slices(
+        tmp_path, "job_tint", channels={"red": 0, "farred": 2}, n_slices=2
+    )
+    with app.test_client() as client:
+        resp = client.get(
+            "/api/outputs/raw-channel-slice?job=job_tint&z=0&channel=farred&tint=00ffff"
+        )
+        assert resp.status_code == 200
+        data = resp.get_data()
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_channel_info_reports_present_channels(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path)
+    _make_job_with_channel_slices(
+        tmp_path, "job_info", channels={"red": 0, "farred": 2}, n_slices=5
+    )
+    with app.test_client() as client:
+        resp = client.get("/api/outputs/channel-info?job=job_info")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert set(data["channels"]) == {"red", "farred"}
+        assert data["slice_count"] == 5
+        assert data["channel_map"]["red"] == 0
+        assert data["channel_map"]["farred"] == 2

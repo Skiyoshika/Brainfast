@@ -17,6 +17,7 @@ def build_volume_from_tiffs(
     z_spacing_um: float,
     target_um: float = 25.0,
     glob_pattern: str = "z*.tif",
+    xy_downsample_cap: int | None = None,
 ) -> dict[str, object]:
     slice_dir = Path(slice_dir)
     output_path = Path(output_path)
@@ -28,11 +29,18 @@ def build_volume_from_tiffs(
     pixel_um_xy = float(pixel_um_xy)
     z_spacing_um = float(z_spacing_um)
     target_um = float(target_um)
-    # Limit downsampling to preserve tissue morphology for registration.
-    # Miki's pipeline used 5 µm pixels; we cap at 4x to stay within ANTs
-    # memory limits while keeping ≤ 3 µm resolution for sub-micron inputs.
+    # Downsample xy to bring pixel size toward the atlas target_um.
+    # xy_downsample_cap=None (default) matches the target exactly — "Miki mode"
+    # preserves native intensity detail so ANTs SyN has enough signal to
+    # converge (previous hardcoded min(4,…) blocked 5 µm inputs at factor 4,
+    # destroying intensity correlation; see docs/.../registration-quality-
+    # investigation.md Bug #3). Pass an integer cap on RAM-constrained
+    # machines to trade detail for headroom.
     raw_factor = target_um / pixel_um_xy
-    downsample_factor = max(1, min(4, round(raw_factor)))
+    rounded = max(1, round(raw_factor))
+    if xy_downsample_cap is not None:
+        rounded = min(int(xy_downsample_cap), rounded)
+    downsample_factor = max(1, rounded)
 
     stack = []
     for p in slices:
@@ -64,9 +72,33 @@ def build_volume_from_tiffs(
         pixel_um_xy * downsample_factor,
     )
     voxel_mm = tuple(v / 1000.0 for v in voxel_um)
-    affine = np.diag([voxel_mm[0], voxel_mm[1], voxel_mm[2], 1.0])
+    # Build an Allen-CCF-compatible off-diagonal affine so ANTs sees the
+    # moving volume in the same physical coordinate system as the template.
+    # This matches the structure produced by RegTools'
+    # `create_nifti_image` (see docs/.../2026-04-16-registration-quality-
+    # investigation.md follow-up note on affine parity). Previously we
+    # used np.diag([dz, dy, dx, 1]) which put the data in a raw-RAS frame
+    # completely different from the Allen template's PIR-origin frame —
+    # ANTs then wasted SyN capacity absorbing that global rigid mismatch,
+    # producing NCC ≈ -0.2 vs the Miki-style baseline of ≈ 0.7.
+    #
+    # Row mapping (source_axis → physical_axis):
+    #   row 0: source axis 2 (X) →  +dx_mm in physical axis 0
+    #   row 1: source axis 0 (Z) →  -dz_mm in physical axis 1
+    #   row 2: source axis 1 (Y) →  -dy_mm in physical axis 2
+    dz_mm, dy_mm, dx_mm = voxel_mm
+    affine = np.array(
+        [
+            [0.0, 0.0, dx_mm, 0.0],
+            [-dz_mm, 0.0, 0.0, 0.0],
+            [0.0, -dy_mm, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
     img = nib.Nifti1Image(scaled, affine)
     img.header.set_zooms(voxel_mm)
+    img.header["qform_code"] = 1
     output_path.parent.mkdir(parents=True, exist_ok=True)
     nib.save(img, str(output_path))
 

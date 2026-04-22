@@ -12,6 +12,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+# regtools_align.align_utils depends on OpenCV for morphology + thinning.
+# cv2 is shipped only via the ``.[full]`` extras; the minimal ``.[dev]``
+# wheel set used by the hosted "Unit tests" CI job does not install it.
+# Skip the whole module in that environment — the ".[full,dev]" smoke job
+# still exercises these same tests, keeping coverage intact.
+pytest.importorskip("cv2")
+
 
 def test_align_package_importable():
     from project.scripts.regtools_align import compute_longitudinal_fissure_alignment

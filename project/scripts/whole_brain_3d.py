@@ -499,9 +499,7 @@ def _reuse_prior_registration_and_quantify(
         # When the caller passes an empty merged_slice_paths (e.g. detection
         # scans the input dir directly), real_slice_path falls back to empty.
         # Otherwise one-to-one pairing is enforced by the guard above.
-        real_slice_path = (
-            str(merged_slice_paths[i]) if merged_slice_paths else ""
-        )
+        real_slice_path = str(merged_slice_paths[i]) if merged_slice_paths else ""
         overlay_path = prior_truth_dir / label_path.name.replace(
             "_registered_label.tif", "_overlay.png"
         )

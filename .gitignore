@@ -27,6 +27,12 @@ project/frontend/dist/
 # Agentic workspace / brainstorm artifacts
 .superpowers/
 
+# Runtime-mutable learned artifacts — shared-state layout lives under
+# project/outputs/ (already ignored). These specific legacy paths can
+# also accumulate runtime data before migration, so ignore them too.
+project/train_data_set/class_priors/
+project/cellpose_training/
+
 # OS/editor artifacts
 .DS_Store
 Thumbs.db

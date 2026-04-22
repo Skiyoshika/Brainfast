@@ -90,6 +90,12 @@ jobs:
       - name: Run default-path integration smoke test
         run: python -m pytest project/tests/integration/test_default_path_smoke.py -v --tb=short
 
+      - name: Run Waitress server-boot E2E (production WSGI smoke)
+        # Spawns the real server in a subprocess and verifies key routes are
+        # reachable via HTTP with `Server: waitress` header. Catches WSGI
+        # regressions that Flask test_client hides.
+        run: python -m pytest project/tests/integration/test_server_boot_e2e.py -v --tb=short
+
       - name: Guard — learned calibration reaches default whole-brain path
         # Dedicated invocation so a broken closed loop fails with an
         # unmistakable job name in the PR checks UI (the test is already

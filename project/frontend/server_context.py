@@ -124,7 +124,7 @@ def _discover_recent_output_dir(base: Path) -> Path | None:
             for marker_path in base.rglob(marker_name):
                 if marker_path.is_file():
                     candidate_dirs.add(marker_path.parent)
-        except Exception:
+        except OSError:
             continue
 
     best_dir: Path | None = None
@@ -149,7 +149,7 @@ def latest_run_params(out_dir: Path | None = None) -> dict:
         return {}
     try:
         return json.loads(params_files[0].read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return {}
 
 
@@ -168,7 +168,7 @@ def latest_stage_progress(out_dir: Path | None = None) -> dict:
     target_dir = out_dir or active_output_dir()
     try:
         return read_stage_progress(target_dir)
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return {}
 
 
@@ -364,7 +364,7 @@ def _parse_progress_line(line: str) -> dict[str, object] | None:
             try:
                 payload[f"{key}Current"] = int(cur)
                 payload[f"{key}Total"] = int(total)
-            except Exception:
+            except ValueError:
                 continue
         else:
             payload[key] = raw
@@ -408,7 +408,7 @@ def _next_train_pair_id(train_dir: Path) -> int:
     for p in train_dir.glob("*_Ori.png"):
         try:
             seen.add(int(p.stem.replace("_Ori", "")))
-        except Exception:
+        except ValueError:
             continue
     while n in seen:
         n += 1
@@ -421,17 +421,17 @@ def _trainset_pair_ids(train_dir: Path) -> list[int]:
     for p in train_dir.glob("*_Ori.png"):
         try:
             ori_ids.add(int(p.stem.replace("_Ori", "")))
-        except Exception:
+        except ValueError:
             continue
     for p in train_dir.glob("*_Show.png"):
         try:
             target_ids.add(int(p.stem.replace("_Show", "")))
-        except Exception:
+        except ValueError:
             continue
     for p in train_dir.glob("*_Label.tif"):
         try:
             target_ids.add(int(p.stem.replace("_Label", "")))
-        except Exception:
+        except ValueError:
             continue
     return sorted(ori_ids & target_ids)
 
@@ -451,13 +451,13 @@ def _prune_trainset_if_needed(train_dir: Path, max_samples: int) -> dict:
             if p.exists():
                 try:
                     p.unlink()
-                except Exception:
+                except OSError:
                     pass
         m = calib_dir / f"calibration_sample_{sid}.json"
         if m.exists():
             try:
                 m.unlink()
-            except Exception:
+            except OSError:
                 pass
         removed += 1
 
@@ -507,7 +507,7 @@ def _apply_liquify_drags(
             y1 = float(d.get("y1"))
             x2 = float(d.get("x2"))
             y2 = float(d.get("y2"))
-        except Exception:
+        except (TypeError, ValueError):
             continue
         radius = float(d.get("radius", 80.0))
         strength = float(d.get("strength", 0.72))
@@ -771,7 +771,7 @@ def _load_hover_structure_tree() -> dict:
             try:
                 _hover_tree_cache = json.loads(p.read_text(encoding="utf-8"))
                 return _hover_tree_cache
-            except Exception:
+            except (OSError, json.JSONDecodeError):
                 continue
     _hover_tree_cache = {}
     return _hover_tree_cache
@@ -802,7 +802,7 @@ def _build_parent_name_map(structure_csv_path: str) -> dict[int, str]:
                         continue
                     try:
                         rid = int(info.get("id", raw_key))
-                    except Exception:
+                    except (TypeError, ValueError):
                         continue
                     parent_name = str(info.get("parent_name", "")).strip()
                     if not parent_name:
@@ -815,13 +815,13 @@ def _build_parent_name_map(structure_csv_path: str) -> dict[int, str]:
                         out[rid] = parent_name
             _hover_parent_cache = {"csv": str(p), "mtime": mtime, "map": out}
             return out
-        except Exception:
+        except (OSError, json.JSONDecodeError, AttributeError, TypeError):
             _hover_parent_cache = {"csv": str(p), "mtime": mtime, "map": {}}
             return {}
 
     try:
         df = pd.read_csv(p)
-    except Exception:
+    except (OSError, UnicodeDecodeError, pd.errors.ParserError, pd.errors.EmptyDataError):
         _hover_parent_cache = {"csv": str(p), "mtime": mtime, "map": {}}
         return {}
 
@@ -872,7 +872,7 @@ def _build_parent_name_map(structure_csv_path: str) -> dict[int, str]:
                 pnm = name_map.get(pid, "")
                 if pnm:
                     out[rid] = pnm
-    except Exception:
+    except (KeyError, ValueError, TypeError):
         out = {}
 
     _hover_parent_cache = {"csv": str(p), "mtime": mtime, "map": out}
@@ -933,7 +933,7 @@ def _runner(
             (job_out / f"run_params_{ts}.json").write_text(
                 json.dumps(params_to_save, indent=2, ensure_ascii=False), encoding="utf-8"
             )
-        except Exception:
+        except OSError:
             pass
 
     # Input dirs can be per-channel when the caller passes a dict
@@ -1210,6 +1210,6 @@ def _active_reg_cfg() -> dict:
             if p.exists():
                 data = _json.loads(p.read_text(encoding="utf-8-sig"))
                 return data.get("registration", {})
-    except Exception:
+    except (OSError, _json.JSONDecodeError):
         pass
     return {}

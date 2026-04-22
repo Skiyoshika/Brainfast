@@ -8,6 +8,7 @@ dynamic = ["version"]
 
 dependencies = [
     "flask>=3.0",
+    "waitress>=3.0",
     "numpy>=1.26,<3",
     "packaging>=24.0",
     "pandas>=2.2",

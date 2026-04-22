@@ -143,8 +143,28 @@ def ensure_port_available(port: int, host: str = "127.0.0.1") -> None:
 
 def main():
     port = int(os.environ.get("BRAINFAST_PORT", "8787"))
-    ensure_port_available(port)
-    app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
+    host = os.environ.get("BRAINFAST_HOST", "127.0.0.1")
+    ensure_port_available(port, host)
+
+    if os.environ.get("BRAINFAST_DEV"):
+        app.run(host=host, port=port, debug=True, threaded=True)
+        return
+
+    try:
+        import waitress
+    except ImportError:
+        sys.stderr.write(
+            "[brainfast] waitress not installed; falling back to Flask dev server. "
+            "Run `pip install -e .` to get the production server.\n"
+        )
+        app.run(host=host, port=port, debug=False, threaded=True)
+        return
+
+    threads = int(os.environ.get("BRAINFAST_THREADS", "8"))
+    sys.stderr.write(
+        f"[brainfast] serving via waitress on http://{host}:{port} (threads={threads})\n"
+    )
+    waitress.serve(app, host=host, port=port, threads=threads)
 
 
 if __name__ == "__main__":

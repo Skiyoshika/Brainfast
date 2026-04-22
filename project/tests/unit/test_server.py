@@ -62,25 +62,22 @@ def test_main_falls_back_to_flask_when_waitress_missing(monkeypatch):
     """Graceful degradation: if waitress isn't installed, use app.run with a warning.
 
     Keeps existing installs working during the rollout before `pip install -e .`
-    is rerun.
+    is rerun. Setting sys.modules['waitress'] = None makes `import waitress`
+    raise ImportError without patching builtins.__import__ — the latter
+    interacts badly with coverage's sys.settrace hook on some CI runners.
     """
+    import sys as _sys
+
     monkeypatch.delenv("BRAINFAST_DEV", raising=False)
     monkeypatch.setenv("BRAINFAST_PORT", "18789")
 
     server = _import_server_main()
 
-    import builtins
-
-    real_import = builtins.__import__
-
-    def fake_import(name, *args, **kwargs):
-        if name == "waitress":
-            raise ImportError("waitress not installed")
-        return real_import(name, *args, **kwargs)
+    # Force `import waitress` inside server.main() to raise ImportError
+    monkeypatch.setitem(_sys.modules, "waitress", None)
 
     with (
         patch.object(server, "ensure_port_available", lambda *a, **k: None),
-        patch("builtins.__import__", side_effect=fake_import),
         patch.object(server.app, "run") as flask_run,
     ):
         server.main()

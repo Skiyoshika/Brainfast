@@ -8,8 +8,8 @@ authors:
   - name: Brainfast contributors
 repository-code: "https://github.com/Skiyoshika/Brainfast"
 license: AGPL-3.0-only
-version: "0.3.0-desktop"
-date-released: "2026-03-30"
+version: "1.0.0-rc1"
+date-released: "2026-04-21"
 abstract: >-
   Brainfast is a workstation-oriented toolkit for Allen atlas registration,
   manual review, calibration learning, and whole-brain cell counting from

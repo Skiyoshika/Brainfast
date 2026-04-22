@@ -13,6 +13,7 @@ import project.frontend.server_context as ctx
 from project.frontend.api_errors import (
     ERR_NOT_FOUND,
 )
+from project.scripts.asset_bootstrap import atlas_asset_status
 
 bp = Blueprint("api_atlas", __name__, url_prefix="/api/atlas")
 
@@ -20,6 +21,23 @@ bp = Blueprint("api_atlas", __name__, url_prefix="/api/atlas")
 def _normalize_path(p: str) -> str:
     """Normalize Windows paths: resolve double-backslashes, mixed separators."""
     return os.path.normpath(p) if p else p
+
+
+@bp.get("/status")
+def atlas_status():
+    """Report whether the Allen atlas annotation + structure graph are available.
+
+    Used by the UI on page load: if `allRequiredReady` is False, the frontend
+    shows a banner with `downloadHint` so new users know how to obtain the atlas.
+    """
+    status = atlas_asset_status(ctx.PROJECT_ROOT)
+    status["ok"] = True
+    status["projectRoot"] = str(ctx.PROJECT_ROOT)
+    status["downloadHint"] = (
+        "Run `python project/download_atlas.py --ensure` from the repo root, "
+        "or double-click Start_Brainfast.bat on Windows to auto-download."
+    )
+    return jsonify(status)
 
 
 @bp.post("/autopick-z")

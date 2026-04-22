@@ -562,6 +562,12 @@ const LANGS = {
     'liquify3d.overlayChannel': 'Channel:',
     'liquify3d.overlayColor': 'Tint:',
     'liquify3d.overlayOpacity': 'Opacity:',
+    'atlas.banner.title': 'Atlas file missing',
+    'atlas.banner.bodyAnnotation': 'Brainfast needs the Allen CCFv3 atlas annotation_25.nii.gz to register brain slices. Run the command below or double-click Start_Brainfast.bat to fetch it (~50 MB). Reload once the download finishes.',
+    'atlas.banner.bodyStructureOnly': 'Brainfast needs the Allen structure graph to map cells to brain regions. Run the command below or double-click Start_Brainfast.bat to fetch it. Reload once the download finishes.',
+    'atlas.banner.retry': 'Recheck',
+    'atlas.banner.dismiss': 'Dismiss',
+    'atlas.banner.structureAlsoMissing': 'The structure graph is also missing.',
   },
   zh: {
     'nav.workflow': '配准工作流',
@@ -1112,6 +1118,12 @@ const LANGS = {
     'liquify3d.overlayChannel': '通道:',
     'liquify3d.overlayColor': '颜色:',
     'liquify3d.overlayOpacity': '透明度:',
+    'atlas.banner.title': '缺少图谱文件',
+    'atlas.banner.bodyAnnotation': 'Brainfast 需要 Allen CCFv3 图谱 annotation_25.nii.gz 才能完成脑片配准。请运行下方命令，或双击 Start_Brainfast.bat 自动下载（约 50 MB）。下载完成后请刷新页面。',
+    'atlas.banner.bodyStructureOnly': 'Brainfast 需要 Allen 脑区结构图谱才能完成细胞-脑区映射。请运行下方命令，或双击 Start_Brainfast.bat 下载。下载完成后请刷新页面。',
+    'atlas.banner.retry': '重新检查',
+    'atlas.banner.dismiss': '关闭',
+    'atlas.banner.structureAlsoMissing': '同时缺少脑区结构文件。',
   },
 };
 
@@ -3776,6 +3788,45 @@ for (const id of _PERSIST_FIELDS) {
 }
 
 // ================================================================
+async function checkAtlasStatus() {
+  const banner = document.getElementById('atlasMissingBanner');
+  if (!banner) return;
+  if (localStorage.getItem('brainfast.atlasBanner.dismissed') === '1') return;
+  try {
+    const data = await fetch('/api/atlas/status').then(r => r.json());
+    if (!data || !data.ok) return;
+    if (data.allRequiredReady) {
+      banner.classList.add('hidden');
+      return;
+    }
+    const bodyEl = banner.querySelector('.amb-body');
+    if (bodyEl) {
+      let body;
+      if (!data.annotationReady) {
+        body = t('atlas.banner.bodyAnnotation');
+        if (!data.structureReady) body += ' ' + t('atlas.banner.structureAlsoMissing');
+      } else {
+        body = t('atlas.banner.bodyStructureOnly');
+      }
+      bodyEl.textContent = body;
+    }
+    banner.classList.remove('hidden');
+  } catch (e) {
+    console.warn('atlas-status check failed:', e);
+  }
+}
+
+function wireAtlasBanner() {
+  const retry = document.getElementById('atlasMissingRetry');
+  const dismiss = document.getElementById('atlasMissingDismiss');
+  if (retry) retry.onclick = () => { checkAtlasStatus(); };
+  if (dismiss) dismiss.onclick = () => {
+    const banner = document.getElementById('atlasMissingBanner');
+    if (banner) banner.classList.add('hidden');
+    localStorage.setItem('brainfast.atlasBanner.dismissed', '1');
+  };
+}
+
 async function init() {
   // Restore persisted form values before applying defaults
   _restoreFormFields();
@@ -3783,6 +3834,9 @@ async function init() {
   // Apply saved or default language
   applyLang(currentLang);
   applyWorkflowMode(workflowModeEl?.value || 'oneclick');
+
+  wireAtlasBanner();
+  checkAtlasStatus();
 
   try {
     const info = await fetch('/api/info').then(r => r.json());

@@ -1,5 +1,7 @@
 # Closed-Loop Calibration and Productization Remediation Implementation Plan
 
+> **STATUS: COMPLETE (verified 2026-04-21)** — all Tasks 1–6 code landed via the commit chain `3ec553b → 684011d`. Verification on 2026-04-21: 115 unit tests pass, 6 integration smoke tests pass, ruff check + format clean, no stale doc strings. Checkboxes flipped to reflect reality.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the April 20 review gaps so calibration learning, class-prior reuse, detector-training documentation, and release gates all match the shipped `whole + miki_3d + cpsam` product behavior.
@@ -71,14 +73,14 @@
 - Test: `project/tests/unit/test_api_liquify_3d.py`
 - Test: `project/tests/unit/test_mask_endpoints.py`
 
-- [ ] **Step 1: Write failing path-contract tests**
+- [x] **Step 1: Write failing path-contract tests**
 
 Add coverage that `RunPaths.from_project_root(..., outputs_dir=job_out)` exposes a shared runtime-state root and does not point mutable artifacts back into `PROJECT_ROOT / "train_data_set"` or `PROJECT_ROOT / "cellpose_training"`.
 
 Run: `python -m pytest project/tests/unit/test_api_pipeline.py -q`
 Expected: new assertions fail until shared-state paths exist.
 
-- [ ] **Step 2: Define the shared state layout in `RunPaths`**
+- [x] **Step 2: Define the shared state layout in `RunPaths`**
 
 Extend `RunPaths` with explicit shared-state paths rooted at `project_root / "outputs" / "state"` by default, with `BRAINFAST_STATE_DIR` as an override:
 
@@ -93,7 +95,7 @@ outputs/state/
 
 The goal is one canonical place for learned artifacts that must survive across jobs.
 
-- [ ] **Step 3: Migrate backend callers to the shared state layout**
+- [x] **Step 3: Migrate backend callers to the shared state layout**
 
 Update:
 - `server_context._save_calibration_pair()` to write calibration samples under `outputs/state/calibration/samples`
@@ -103,11 +105,11 @@ Update:
 
 Do not keep compatibility writes into the old source-tree locations.
 
-- [ ] **Step 4: Preserve backward readability where needed**
+- [x] **Step 4: Preserve backward readability where needed**
 
 If migration is needed for existing local data, read from legacy locations only as a fallback and log a clear migration message, but always write to the new shared state location.
 
-- [ ] **Step 5: Verify the state contract**
+- [x] **Step 5: Verify the state contract**
 
 Run:
 - `python -m pytest project/tests/unit/test_api_pipeline.py -q`
@@ -134,7 +136,7 @@ Expected: the new tests pass and endpoint tests create runtime artifacts only un
 - Test: `project/tests/unit/test_whole_brain_3d.py`
 - Test: `project/tests/integration/test_default_path_smoke.py`
 
-- [ ] **Step 1: Write failing tests for learned-parameter resolution**
+- [x] **Step 1: Write failing tests for learned-parameter resolution**
 
 Add unit coverage for:
 - `_load_tuned_overlay_params(...)` falling back from `outputs/jobs/<job_id>/trainset_tuned_params.json` to the shared calibrated JSON
@@ -146,7 +148,7 @@ Run:
 
 Expected: new assertions fail before the code path is wired through.
 
-- [ ] **Step 2: Resolve tuned params before the whole-brain early return**
+- [x] **Step 2: Resolve tuned params before the whole-brain early return**
 
 Refactor `project/scripts/main.py` so tuned parameters are loaded before the `run_whole_brain_3d(...)` return path. The whole-brain branch must receive:
 - `warp_params`
@@ -155,7 +157,7 @@ Refactor `project/scripts/main.py` so tuned parameters are loaded before the `ru
 
 This removes the current bypass where the default path never sees learned calibration.
 
-- [ ] **Step 3: Remove hard-coded truth-export defaults**
+- [x] **Step 3: Remove hard-coded truth-export defaults**
 
 Update `export_registered_truth_slices(...)` and the callers in:
 - `project/scripts/whole_brain_3d.py`
@@ -163,7 +165,7 @@ Update `export_registered_truth_slices(...)` and the callers in:
 
 so they accept caller-provided `fit_mode` and `edge_smooth_iter` instead of hard-coding `"cover"` and `0`.
 
-- [ ] **Step 4: Snapshot the resolved tuned params into each job output**
+- [x] **Step 4: Snapshot the resolved tuned params into each job output**
 
 When a job starts, copy or materialize the resolved tuned JSON into that job's output directory for reproducibility. Reading should use:
 1. job-local tuned JSON if present
@@ -171,7 +173,7 @@ When a job starts, copy or materialize the resolved tuned JSON into that job's o
 
 Writing a job-local snapshot avoids "mystery behavior" when a later shared learning run changes the global artifact.
 
-- [ ] **Step 5: Prove the closed loop in the hosted smoke path**
+- [x] **Step 5: Prove the closed loop in the hosted smoke path**
 
 Extend `project/tests/integration/test_default_path_smoke.py` so the synthetic default-path run verifies that learned truth-export parameters are consumed on the shipped whole-brain path.
 
@@ -197,7 +199,7 @@ Expected: a learned parameter artifact changes the exported registered-label con
 - Test: `project/tests/unit/test_class_prior.py`
 - Test: `project/tests/unit/test_frontend_regressions.py`
 
-- [ ] **Step 1: Write failing tests for automatic warm-start behavior**
+- [x] **Step 1: Write failing tests for automatic warm-start behavior**
 
 Add coverage for:
 - auto-detected class + ready prior + empty job state -> warm-start is applied automatically
@@ -210,14 +212,14 @@ Run:
 
 Expected: new regression assertions fail before the UI flow is added.
 
-- [ ] **Step 2: Make `ClassPriorStore.update()` iterator-safe**
+- [x] **Step 2: Make `ClassPriorStore.update()` iterator-safe**
 
 Convert `pairs` to a list once inside `ClassPriorStore.update()` before iterating and logging. Add a unit test that passes an iterator instead of a list and asserts `pair_count` remains correct.
 
 Run: `python -m pytest project/tests/unit/test_class_prior.py -q`
 Expected: the new iterator test fails before the fix and passes after it.
 
-- [ ] **Step 3: Add a single auto-warm-start client flow**
+- [x] **Step 3: Add a single auto-warm-start client flow**
 
 In `project/frontend/app.js`, introduce one client-side function that runs when:
 - a class is auto-detected or manually selected
@@ -230,11 +232,11 @@ That function should:
 - update the banner to show what happened
 - never auto-force overwrite an existing job
 
-- [ ] **Step 4: Keep the manual override path**
+- [x] **Step 4: Keep the manual override path**
 
 Retain the explicit `Warm-start from prior` button. When a job already has manual pairs, the button can still offer the current confirmation flow with `force=true`.
 
-- [ ] **Step 5: Verify the UX contract**
+- [x] **Step 5: Verify the UX contract**
 
 Run:
 - `python -m pytest project/tests/unit/test_api_liquify_3d.py -q`
@@ -255,7 +257,7 @@ Expected: auto-seeding happens once for empty jobs, manual work is not clobbered
 - Modify: `docs/user_guide.md`
 - Modify: `docs/release/known-limitations.md`
 
-- [ ] **Step 1: Rewrite the workflow-boundary section in `README.md`**
+- [x] **Step 1: Rewrite the workflow-boundary section in `README.md`**
 
 Make the distinctions explicit:
 - `Save Calibration + Learn` tunes overlay/truth-export behavior
@@ -263,7 +265,7 @@ Make the distinctions explicit:
 - detector retraining exists in the UI
 - default runtime remains `miki_3d + cpsam`
 
-- [ ] **Step 2: Fix stale install and startup instructions in `docs/user_guide.md`**
+- [x] **Step 2: Fix stale install and startup instructions in `docs/user_guide.md`**
 
 Replace the current stale statements:
 - `https://github.com/<org>/Brainfast.git`
@@ -275,18 +277,18 @@ Replace the current stale statements:
 
 with the actual current product contract and the `BRAINFAST_PORT` environment-variable override.
 
-- [ ] **Step 3: Rewrite `known-limitations.md` to match the post-fix behavior**
+- [x] **Step 3: Rewrite `known-limitations.md` to match the post-fix behavior**
 
 After Tasks 1-3 land, the limitations file must say what still is not closed-loop, rather than repeating the old "2D preview only" statement if that is no longer true.
 
-- [ ] **Step 4: Add one feature matrix**
+- [x] **Step 4: Add one feature matrix**
 
 Document these three separate learning loops so operators stop conflating them:
 - calibration learn
 - class-prior warm-start
 - Cellpose retraining
 
-- [ ] **Step 5: Verify the docs no longer contain stale claims**
+- [x] **Step 5: Verify the docs no longer contain stale claims**
 
 Run:
 - `Select-String -Path README.md,docs/user_guide.md,docs/release/known-limitations.md -Pattern '<org>/Brainfast|\\[advanced\\]|StartIdleBrainTrial|--port 8788|does not yet ship a detector-specific manual relabel / retrain workflow'`
@@ -305,7 +307,7 @@ Expected: no stale matches remain.
 - Modify: `docs/release/manual-acceptance.md`
 - Modify: `project/tests/integration/test_default_path_smoke.py`
 
-- [ ] **Step 1: Add hosted coverage for the closed-loop regression**
+- [x] **Step 1: Add hosted coverage for the closed-loop regression**
 
 Use the existing synthetic smoke framework to verify:
 - a learned calibration artifact is consumed by the default whole-brain path
@@ -314,11 +316,11 @@ Use the existing synthetic smoke framework to verify:
 
 This keeps the critical behavior under GitHub-hosted CI instead of depending on the disabled self-hosted integration job.
 
-- [ ] **Step 2: Keep self-hosted integration optional, but stop relying on it for core assurance**
+- [x] **Step 2: Keep self-hosted integration optional, but stop relying on it for core assurance**
 
 Do not block the plan on removing `if: false` from the self-hosted integration job unless the runner is actually available. The supported path must already be defended by hosted tests.
 
-- [ ] **Step 3: Expand manual acceptance**
+- [x] **Step 3: Expand manual acceptance**
 
 Update `docs/release/manual-acceptance.md` to require:
 - one `Save Calibration + Learn` round-trip
@@ -327,7 +329,7 @@ Update `docs/release/manual-acceptance.md` to require:
 - one liquify finalize verification
 - one Cellpose training-tab smoke check
 
-- [ ] **Step 4: Verify the release gates match the product claim**
+- [x] **Step 4: Verify the release gates match the product claim**
 
 Run:
 - `python -m pytest project/tests/integration/test_default_path_smoke.py -q`
@@ -346,11 +348,11 @@ Expected: the shipped path and the claimed learning loop are both under repeatab
 - Modify: `project/frontend/blueprints/api_pipeline.py`
 - Re-run: all test and lint targets already used by CI
 
-- [ ] **Step 1: Fix the current `ruff` failure**
+- [x] **Step 1: Fix the current `ruff` failure**
 
 Repair the import ordering issue in `project/frontend/blueprints/api_pipeline.py` so the repo is green under its own lint gate.
 
-- [ ] **Step 2: Run the focused verification stack**
+- [x] **Step 2: Run the focused verification stack**
 
 Run:
 - `python -m pytest project/tests/unit/test_api_pipeline.py -q`
@@ -365,7 +367,7 @@ Run:
 
 Expected: all changed-path tests pass.
 
-- [ ] **Step 3: Run the repo-level gates**
+- [x] **Step 3: Run the repo-level gates**
 
 Run:
 - `python -m pytest project/tests/unit -q`

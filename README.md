@@ -10,6 +10,12 @@ Brainfast is a local, privacy-first desktop tool that registers fluorescence mic
 
 > Built for neuroscience labs working with lightsheet or confocal TIFF stacks from cleared half-brain or whole-brain samples.
 
+<!-- Screenshots: see docs/assets/screenshots/README.md for the capture checklist.
+     Once the PNGs land, replace this comment with:
+     ![One-click workflow](docs/assets/screenshots/hero-workflow.png)
+     ![Results chart](docs/assets/screenshots/results-chart.png)
+-->
+
 ---
 
 ## What it does

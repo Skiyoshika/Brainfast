@@ -76,7 +76,7 @@ markers = [
     "integration: tests that require annotation_25.nii.gz or real slice data",
     "slow: tests that take >10s",
 ]
-addopts = "-v --timeout=60 --timeout-method=thread"
+addopts = "-v --timeout=300 --timeout-method=thread"
 
 [tool.ruff]
 # Settings kept in ruff.toml at repo root

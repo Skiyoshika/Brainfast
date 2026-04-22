@@ -179,6 +179,19 @@
 
   <main class="main">
 
+    <div id="atlasMissingBanner" class="atlas-missing-banner hidden" role="alert" aria-live="polite">
+      <div class="amb-icon" aria-hidden="true">⚠</div>
+      <div class="amb-content">
+        <div class="amb-title" data-i18n="atlas.banner.title">Atlas file missing</div>
+        <div class="amb-body" data-i18n="atlas.banner.body">Brainfast needs the Allen CCFv3 atlas file to register brain slices. Run the command below (or double-click Start_Brainfast.bat) to fetch it.</div>
+        <code id="atlasMissingCmd">python project/download_atlas.py --ensure</code>
+      </div>
+      <div class="amb-actions">
+        <button id="atlasMissingRetry" class="btn-ghost" data-i18n="atlas.banner.retry">Recheck</button>
+        <button id="atlasMissingDismiss" class="btn-ghost" data-i18n="atlas.banner.dismiss">Dismiss</button>
+      </div>
+    </div>
+
     <!-- ================================================
          TAB 1: Registration Workflow
     ================================================ -->

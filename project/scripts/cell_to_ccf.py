@@ -154,11 +154,39 @@ def _header_info_via_ants(path: Path | str) -> tuple[np.ndarray, np.ndarray, np.
     return spacing, origin, direction
 
 
+def _apply_axis_align_to_points(
+    points_zyx: np.ndarray,
+    axis_align_matrix: np.ndarray | None,
+) -> np.ndarray:
+    """Apply a 4×4 rigid axis-align affine to Nx3 voxel points (z, y, x).
+
+    Matches Xu Lab's ``transform_input_points`` step 1: homogeneous coord
+    multiply + strip trailing 1. Skip when the matrix is None or close to
+    identity (``atol=1e-6``).
+    """
+    if axis_align_matrix is None:
+        return points_zyx
+    A = np.asarray(axis_align_matrix, dtype=np.float64)
+    if A.shape != (4, 4):
+        raise ValueError(f"axis_align_matrix must be 4x4, got {A.shape}")
+    if np.allclose(A, np.eye(4), atol=1e-6):
+        return points_zyx
+    pts = np.asarray(points_zyx, dtype=np.float64)
+    if pts.ndim == 1:
+        pts = pts.reshape(1, -1)
+    ones = np.ones((pts.shape[0], 1), dtype=np.float64)
+    homo = np.hstack([pts, ones])
+    aligned = (A @ homo.T).T
+    return aligned[:, :3]
+
+
 def transform_points_sample_to_ccf(
     points_sample_voxel_zyx: np.ndarray,
     sample_volume_path: Path | str,
     ccf_template_path: Path | str,
     inverse_transforms: list[str],
+    *,
+    axis_align_matrix: np.ndarray | None = None,
 ) -> np.ndarray:
     """Transform Nx3 sample-voxel points (z, y, x) into CCF voxel space.
 
@@ -217,9 +245,12 @@ def transform_points_sample_to_ccf(
     transform_paths = [p for _, p in ordered]
     which_to_invert = [kind == "affine" for kind, _ in ordered]
 
-    # Convert sample voxel → sample physical.
+    # Optional axis-align affine (Xu Lab's transform_input_points step 1).
+    points_aligned = _apply_axis_align_to_points(points_sample_voxel_zyx, axis_align_matrix)
+
+    # Convert aligned-sample voxel → sample physical.
     physical_sample = voxel_to_physical(
-        points_sample_voxel_zyx, sample_spacing, sample_origin, sample_direction
+        points_aligned, sample_spacing, sample_origin, sample_direction
     )
 
     # ANTs internally orders points as (x, y, z) even when the image axes are
@@ -332,6 +363,7 @@ def map_cells_via_ccf_transform(
     inverse_transforms: list[str],
     pixel_size_um: float,
     ccf_template_path: Path | str | None = None,
+    axis_align_matrix: np.ndarray | None = None,
 ) -> pd.DataFrame:
     """End-to-end Brainfast cell → CCF region_id lookup (Xu Lab-aligned).
 
@@ -365,6 +397,7 @@ def map_cells_via_ccf_transform(
         sample_volume_path=sample_volume_path,
         ccf_template_path=ccf_coord_src,
         inverse_transforms=list(inverse_transforms),
+        axis_align_matrix=axis_align_matrix,
     )
     region_ids, oob = lookup_region_ids_from_ccf_voxels(ccf_voxel_zyx, ccf_annotation_path)
 

@@ -117,6 +117,129 @@ def volume_source_to_nifti(
     return output_path, tuple(int(v) for v in vol.shape)
 
 
+def _orient_section_xulab(arr: np.ndarray) -> np.ndarray:
+    """Apply Xu Lab's standard orientation transforms to a 2D slice.
+
+    Matches ``regtools.utils.io.image_io._orient_section``: transpose + flip
+    along both axes. This rotates and mirrors the raw TIFF so that when pages
+    are stacked along axis 0 the resulting volume matches the PIR-oriented
+    NIfTI that Xu Lab's ``create_nifti_image`` produces.
+    """
+    arr = np.asarray(arr)
+    arr = np.where(arr < 0, 0, arr)
+    arr = arr.T
+    arr = np.flip(arr, axis=0)
+    arr = np.flip(arr, axis=1)
+    return arr
+
+
+def multipage_tiff_to_nifti(
+    tiff_path: Path | str,
+    output_path: Path | str,
+    *,
+    downscale_factor: int = 8,
+    voxel_spacing_mm: tuple[float, float, float] = (0.05, 0.025, 0.025),
+    orient: bool = True,
+    ccf_origin: tuple[float, float, float] | None = (-5.695, 5.35, 5.22),
+) -> dict:
+    """Convert a multi-page TIFF to a PIR-oriented NIfTI matching Xu Lab's CCF
+    convention. Mirrors Xu Lab's ``create_nii_images`` entry point + its
+    ``_load_sections_from_multipage`` helper.
+
+    Reads every page with :mod:`tifffile` (Xu Lab uses SimpleITK), applies the
+    standard orient transform if requested, XY-downsamples by
+    ``downscale_factor`` via ``skimage.transform.resize``, stacks along axis 0,
+    writes a NIfTI with a PIR direction-cosine affine.
+
+    Parameters
+    ----------
+    tiff_path
+        Multi-page TIFF file.
+    output_path
+        NIfTI destination (``.nii`` or ``.nii.gz``).
+    downscale_factor
+        XY pre-downscale (Xu Lab default 8).
+    voxel_spacing_mm
+        ``(z_mm, y_mm, x_mm)`` voxel size for the output NIfTI. Default 50 µm Z
+        + 25 µm XY matches Xu Lab's ``create_nifti_image(scale=2.5)`` when
+        TIFF pages are already 25 µm-equivalent after the /8 downscale. Set
+        this explicitly for your dataset (e.g. ``(0.005, 0.025, 0.025)`` for
+        ChATe27 which has 5 µm Z step).
+    orient
+        If True, apply Xu Lab's transpose+flip to each page.
+    ccf_origin
+        NIfTI origin to stamp in the affine (qoffset_*). Defaults to CCF
+        template's origin. Pass ``None`` to keep origin at zero.
+
+    Returns
+    -------
+    dict with keys ``volume_path, shape, downscale_factor, voxel_mm, page_count``.
+    """
+    import gc
+
+    from skimage.transform import resize
+    from tifffile import TiffFile
+
+    tiff_path = Path(tiff_path)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    downscale_factor = max(1, int(downscale_factor))
+
+    with TiffFile(str(tiff_path)) as tf:
+        n_pages = len(tf.pages)
+        if n_pages == 0:
+            raise ValueError(f"empty TIFF: {tiff_path}")
+        first = tf.pages[0].asarray()
+        if first.ndim == 3:
+            first = first[0]
+        if orient:
+            first = _orient_section_xulab(first)
+        out_h = max(1, first.shape[0] // downscale_factor)
+        out_w = max(1, first.shape[1] // downscale_factor)
+        src_dtype = first.dtype
+        stack = np.empty((n_pages, out_h, out_w), dtype=src_dtype)
+        for i in range(n_pages):
+            page = tf.pages[i].asarray()
+            if page.ndim == 3:
+                page = page[0]
+            if orient:
+                page = _orient_section_xulab(page)
+            resized = resize(
+                page.astype(np.float32),
+                (out_h, out_w),
+                preserve_range=True,
+                anti_aliasing=True,
+            ).astype(src_dtype)
+            stack[i] = resized
+        del first
+        gc.collect()
+
+    z_mm, y_mm, x_mm = (float(v) for v in voxel_spacing_mm)
+    affine = np.zeros((4, 4), dtype=np.float64)
+    # PIR direction cosines (axis 0 -> -Y = P; axis 1 -> -Z = I; axis 2 -> +X = R)
+    affine[0, 2] = x_mm
+    affine[1, 0] = -z_mm
+    affine[2, 1] = -y_mm
+    affine[3, 3] = 1.0
+    if ccf_origin is not None:
+        affine[0, 3] = float(ccf_origin[0])
+        affine[1, 3] = float(ccf_origin[1])
+        affine[2, 3] = float(ccf_origin[2])
+
+    img = nib.Nifti1Image(stack, affine)
+    img.header["qform_code"] = 1
+    img.header["sform_code"] = 1
+    img.header.set_zooms((z_mm, y_mm, x_mm))
+    nib.save(img, str(output_path))
+    return {
+        "volume_path": output_path,
+        "shape": tuple(int(s) for s in stack.shape),
+        "downscale_factor": downscale_factor,
+        "voxel_mm": (z_mm, y_mm, x_mm),
+        "page_count": n_pages,
+    }
+
+
 def _make_brainfast_affine(vox_mm: tuple[float, float, float]) -> np.ndarray:
     """Match the historical Brainfast/UCI volumetric orientation (PIR).
 

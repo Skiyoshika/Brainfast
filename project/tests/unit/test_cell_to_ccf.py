@@ -18,6 +18,7 @@ import pytest
 
 from project.scripts.cell_to_ccf import (
     _affine_to_spacing_origin_direction,
+    _apply_axis_align_to_points,
     lookup_region_ids_from_ccf_voxels,
     physical_to_voxel,
     sample_pixel_to_volume_voxel,
@@ -225,6 +226,64 @@ def test_round_trip_with_matching_affines(tmp_path):
 # ---------------------------------------------------------------------------
 # map_cells_via_ccf_transform — empty-input short-circuit
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# _apply_axis_align_to_points
+# ---------------------------------------------------------------------------
+
+
+def test_apply_axis_align_none_passthrough():
+    pts = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float64)
+    out = _apply_axis_align_to_points(pts, None)
+    np.testing.assert_array_equal(out, pts)
+
+
+def test_apply_axis_align_identity_passthrough():
+    pts = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float64)
+    out = _apply_axis_align_to_points(pts, np.eye(4))
+    np.testing.assert_allclose(out, pts)
+
+
+def test_apply_axis_align_translation_adds_offset():
+    pts = np.array([[0.0, 0.0, 0.0], [1.0, 2.0, 3.0]])
+    A = np.eye(4)
+    A[:3, 3] = [10, 20, 30]
+    out = _apply_axis_align_to_points(pts, A)
+    np.testing.assert_allclose(out[0], [10, 20, 30])
+    np.testing.assert_allclose(out[1], [11, 22, 33])
+
+
+def test_apply_axis_align_rotation_preserves_norm():
+    pts = np.array([[1.0, 0.0, 0.0]])
+    # 90° rotation in z-y plane
+    A = np.array(
+        [
+            [1, 0, 0, 0],
+            [0, 0, -1, 0],
+            [0, 1, 0, 0],
+            [0, 0, 0, 1],
+        ],
+        dtype=np.float64,
+    )
+    out = _apply_axis_align_to_points(pts, A)
+    assert abs(np.linalg.norm(out) - 1.0) < 1e-9
+
+
+def test_apply_axis_align_rejects_wrong_shape():
+    pts = np.array([[1, 2, 3]])
+    with pytest.raises(ValueError, match="4x4"):
+        _apply_axis_align_to_points(pts, np.eye(3))
+
+
+def test_apply_axis_align_accepts_1d_points():
+    pts = np.array([1.0, 2.0, 3.0])
+    # Non-identity matrix so reshape path is exercised (identity bypass returns input as-is)
+    A = np.eye(4)
+    A[:3, 3] = [10, 20, 30]
+    out = _apply_axis_align_to_points(pts, A)
+    assert out.shape == (1, 3)
+    np.testing.assert_allclose(out[0], [11, 22, 33])
 
 
 def test_map_cells_empty_dataframe(tmp_path):

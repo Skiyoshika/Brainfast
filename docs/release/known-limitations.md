@@ -32,6 +32,12 @@
   fallback-free default path to start. The wizard ships with LoG fallback
   enabled by default so Cellpose OOM on low-VRAM machines does not
   dead-end the run.
-- Mutable learned artifacts live under `outputs/state/` (or the path
-  pointed to by `BRAINFAST_STATE_DIR`). Deleting `outputs/state/` resets
-  every learning loop.
+- Mutable learned artifacts live under `<project>/outputs/state/` (or
+  the path pointed to by `BRAINFAST_STATE_DIR`). Deleting that directory
+  resets every learning loop.
+- Atlas assets (`annotation_25.nii.gz` + structure graph) are fetched
+  automatically by `Start_Brainfast.bat` via `download_atlas.py --ensure`.
+  Users who launch `python project/frontend/server.py` directly must run
+  the same command first; the amber banner at the top of the UI links to
+  the recheck flow but does not yet trigger an in-UI download (planned for
+  v0.5 via `POST /api/atlas/ensure`).

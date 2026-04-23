@@ -723,7 +723,7 @@ def _learn_from_trainset_async():
             if code != 0:
                 learning_state["error"] = f"learn_from_trainset exited with code {code}"
             learning_state["log_tail"] = lines
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # worker must trap all to set learning_state
             learning_state["ok"] = False
             learning_state["error"] = str(e)
         finally:
@@ -1039,7 +1039,7 @@ def _runner(
         )
         if len(job_state["history"]) > 20:
             job_state["history"] = job_state["history"][-20:]
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001  # worker must trap all to set job_state
         job_state["error"] = f"pipeline crashed: {exc}"
         job_state["done"] = False
         _append_log(f"[crash] job={safe_job_id} {exc}", state=job_state)
@@ -1121,7 +1121,7 @@ def _run_autopick_worker(token: str, real_path, annotation_path, out_label, kwar
                 "_finished_at": time.time(),
             }
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # worker must trap all to set task state
         if "cancelled by user" in str(e).lower():
             task.update(
                 {
@@ -1177,7 +1177,7 @@ def _run_preview_worker(token: str, kwargs: dict, job_id: str, structure_csv):
                 },
             }
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # worker must trap all to set task state
         task.update(
             {
                 "status": "error",

@@ -284,6 +284,72 @@ def transform_points_sample_to_ccf(
 
 
 # ---------------------------------------------------------------------------
+# Volume warp sample → CCF — mirrors Xu Lab transform_input_data
+# ---------------------------------------------------------------------------
+
+
+def transform_volume_sample_to_ccf(
+    sample_volume_path: Path | str,
+    *,
+    ccf_template_path: Path | str,
+    inverse_transforms: list[str],
+    output_path: Path | str,
+    interpolator: str = "linear",
+    axis_align_matrix: np.ndarray | None = None,
+) -> Path:
+    """Warp a sample-space 3D volume into CCF space using the same ANTs
+    transforms that :func:`transform_points_sample_to_ccf` uses for points.
+
+    Mirrors Xu Lab's ``transform_input_data``
+    (``regtools/registration/point_registration.py:620``) — axis-align step
+    first (pre-rotate the volume via ``scipy.ndimage.affine_transform`` if
+    ``axis_align_matrix`` is non-identity), then ANTs image warp.
+
+    For label volumes (discrete IDs) pass ``interpolator='genericLabel'`` or
+    ``'nearestNeighbor'``; for intensity volumes use ``'linear'``.
+    """
+    ants = importlib.import_module("ants")
+    from scipy.ndimage import affine_transform as _aff_tx
+
+    sample_volume_path = Path(sample_volume_path)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Optional axis-align pre-rotation on the voxel grid
+    intermediate_path = sample_volume_path
+    if axis_align_matrix is not None and not np.allclose(axis_align_matrix, np.eye(4), atol=1e-6):
+        img = nib.load(str(sample_volume_path))
+        data = np.asarray(img.dataobj)
+        aligned = _aff_tx(
+            data,
+            np.linalg.inv(np.asarray(axis_align_matrix, dtype=np.float64)),
+            output_shape=data.shape,
+            order=1,
+        )
+        aligned = np.where(aligned < 0, 0, aligned).astype(data.dtype)
+        intermediate_path = output_path.with_name(output_path.stem + "_axisAligned.nii.gz")
+        nib.save(nib.Nifti1Image(aligned, img.affine, img.header), str(intermediate_path))
+
+    # Sort transforms [affine, warp] with affine inverted
+    ordered: list[tuple[str, str]] = [
+        (_classify_transform(tf), str(tf)) for tf in inverse_transforms
+    ]
+    ordered.sort(key=lambda e: 0 if e[0] == "affine" else 1)
+    transform_paths = [p for _, p in ordered]
+
+    fixed = ants.image_read(str(ccf_template_path))
+    moving = ants.image_read(str(intermediate_path))
+    warped = ants.apply_transforms(
+        fixed=fixed,
+        moving=moving,
+        transformlist=transform_paths,
+        interpolator=interpolator,
+    )
+    ants.image_write(warped, str(output_path))
+    return output_path
+
+
+# ---------------------------------------------------------------------------
 # Region lookup — mirrors Xu Lab count_registered_points core loop
 # ---------------------------------------------------------------------------
 

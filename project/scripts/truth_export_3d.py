@@ -39,7 +39,6 @@ def export_registered_truth_slices(
     overlay_alpha: float = 0.72,
     fit_mode: str = "cover",
     edge_smooth_iter: int = 0,
-    annotation_prewarped: bool = True,
 ) -> list[dict]:
     """Export per-slice registered-label rasters + overlays.
 
@@ -47,19 +46,18 @@ def export_registered_truth_slices(
     calibration can reach the default whole-brain path. Previously these were
     hard-coded to ``"cover"`` / ``0`` which silently bypassed calibration.
 
-    ``annotation_prewarped`` mirrors the upstream
-    ``whole_brain_3d.annotation_sampling_mode``:
+    The annotation volume is assumed to already be in sample space (the 3D
+    ANTs registration has warped it there). ``render_overlay`` is called with
+    ``prewarped_label=True`` to do only a nearest-neighbor resize to the
+    real-image pixel grid, skipping the in-plane 2D warp.
 
-    * ``True`` (default — matches ``3d_reslice`` upstream mode): the annotation
-      volume has already been warped into sample space by the 3D ANTs
-      registration, so each slice only needs a nearest-neighbor resize to the
-      real-image pixel grid. ``render_overlay`` is called with
-      ``prewarped_label=True`` to skip the in-plane 2D warp.
-    * ``False`` (matches ``per_slice_native`` upstream mode): the annotation is
-      at CCF native Y×X resolution with per-slice Z-mapping but no in-plane
-      alignment. ``render_overlay`` is called with ``prewarped_label=False`` so
-      ``_tissue_guided_warp`` provides per-slice in-plane alignment while
-      preserving full leaf-region granularity.
+    For the Xu Lab-canonical alternative (warp cell points into CCF instead
+    of warping annotation into sample space), see
+    :func:`scripts.cell_to_ccf.map_cells_via_ccf_transform`. The old
+    ``annotation_sampling_mode='per_slice_native'`` toggle and its
+    ``annotation_prewarped=False`` downstream flag were spike work addressing
+    symptoms of a stale RAS affine bug in legacy ``input_volume.nii.gz``
+    files; the root-cause fix lives in :mod:`scripts.migrate_volume_affine`.
     """
     annotation_img = nib.load(str(annotation_volume_path))
     volume = np.asarray(annotation_img.dataobj, dtype=np.int32)
@@ -105,16 +103,11 @@ def export_registered_truth_slices(
 
         imwrite(str(label_path), label_slice)
 
-        # Route to render_overlay based on upstream annotation-sampling mode.
-        # See the docstring for the full rationale; short version:
-        #   annotation_prewarped=True  → 3d_reslice upstream, only resize here
-        #   annotation_prewarped=False → per_slice_native upstream (CCF-Y×X),
-        #                                do per-slice tissue-guided 2D warp to
-        #                                align in-plane while preserving leaf IDs
-        #
-        # warped_label_out=label_path: render_overlay writes the final
-        # (resized/masked) label back to disk so that the mapping step uses
-        # the same canonical raster shown in the overlay.
+        # The 3D ANTs registration already placed annotation in sample space;
+        # we only need a nearest-neighbor resize. ``warped_label_out=label_path``
+        # tells render_overlay to rewrite the resized label back to disk so the
+        # downstream mapping step uses the same canonical raster shown in the
+        # overlay.
         _, diagnostic = render_overlay(
             real_slice_path=real_slice_path,
             label_slice_path=label_path,
@@ -127,7 +120,7 @@ def export_registered_truth_slices(
             edge_smooth_iter=int(edge_smooth_iter),
             warp_params=dict(warp_params or {}),
             return_meta=True,
-            prewarped_label=bool(annotation_prewarped),
+            prewarped_label=True,
             warped_label_out=label_path,
             min_mean_threshold=1.0,
         )

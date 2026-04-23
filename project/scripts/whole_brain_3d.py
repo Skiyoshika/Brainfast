@@ -11,7 +11,6 @@ from scipy.ndimage import map_coordinates
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 try:
-    from scripts.annotation_sidecar import write_annotation_sidecar as _write_annotation_sidecar
     from scripts.laplacian_refine_3d import refine_registered_volume
     from scripts.pipeline_progress import write_stage_progress
     from scripts.registration_3d_ants import run_ants_registration
@@ -21,7 +20,6 @@ try:
     )
     from scripts.truth_export_3d import export_registered_truth_slices
 except ImportError:
-    from annotation_sidecar import write_annotation_sidecar as _write_annotation_sidecar
     from laplacian_refine_3d import refine_registered_volume
     from pipeline_progress import write_stage_progress
     from registration_3d_ants import run_ants_registration
@@ -199,45 +197,24 @@ def _warp_annotation_volume_to_input_space(
     *,
     forward_transforms: list[str] | None = None,
     ants_result_path: Path | None = None,
-    annotation_sampling_mode: str = "3d_reslice",
 ) -> Path:
     """Warp atlas annotation into input-volume space.
 
-    ``annotation_sampling_mode``:
-      * ``"3d_reslice"`` (default) — tries ANTs inverse / forward warps with
-        nearestNeighbor into the sample-Z-downsampled grid (strategies 1 & 2),
-        falling back to Z-mapped native-resolution sampling (strategy 3) only
-        if the ANTs strategies fail a coverage gate. This preserves XY in-plane
-        alignment but drops thin leaf regions whose Z span is narrower than one
-        sample slice.
-      * ``"per_slice_native"`` — skips the 3D reslice entirely and always uses
-        strategy 3 (Z-mapped native CCF Y×X annotation), preserving the full
-        Allen leaf-region granularity. In-plane XY alignment is then provided
-        per slice by ``render_overlay(prewarped_label=False)`` downstream in
-        ``export_registered_truth_slices``.
+    Tries ANTs inverse / forward warps with nearestNeighbor into the sample
+    grid (strategies 1 & 2), falling back to Z-mapped native-resolution
+    sampling (strategy 3) only if the ANTs strategies fail a coverage gate.
+
+    The earlier ``annotation_sampling_mode='per_slice_native'`` toggle was a
+    spike addressing symptoms of the RAS-diagonal affine bug in legacy
+    ``input_volume.nii.gz`` files — that bug is now fixed at the source (see
+    ``scripts.migrate_volume_affine``), so this function reverts to the
+    simpler Xu Lab-aligned "warp via ANTs with fallback" approach.
+
+    For Xu Lab-canonical cell → CCF mapping (points warped into CCF, annotation
+    NOT warped into sample), use ``scripts.cell_to_ccf.map_cells_via_ccf_transform``.
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    mode = str(annotation_sampling_mode or "3d_reslice").strip().lower()
-    if mode not in {"3d_reslice", "per_slice_native"}:
-        print(f"[warp] unknown annotation_sampling_mode={mode!r}, falling back to 3d_reslice")
-        mode = "3d_reslice"
-
-    if mode == "per_slice_native":
-        print("[warp] annotation_sampling_mode=per_slice_native — using Strategy 3 directly")
-        ok = _direct_z_mapping_fallback(
-            annotation_path=annotation_path,
-            reference_volume_path=reference_volume_path,
-            output_path=output_path,
-            ants_result_path=ants_result_path,
-        )
-        if not ok:
-            raise RuntimeError(
-                "annotation_sampling_mode=per_slice_native failed: "
-                "_direct_z_mapping_fallback could not map any slices"
-            )
-        return output_path
 
     warped_ok = False
     best_nonzero = 0
@@ -759,7 +736,12 @@ def run_whole_brain_3d(
                     f"atlas AP [{ap_start}, {ap_end}]"
                 )
 
-    ants_transform = str(reg_cfg.get("ants_transform", "SyN"))
+    # Default aligned with Xu Lab's ``method='ants_synra'`` variant (Rigid +
+    # Affine + SyN). Previously this was 'SyN' which under Xu Lab's convention
+    # skips the Rigid+Affine init — fine for close-to-aligned inputs, weak for
+    # samples needing initial pose correction. SyNRA is the safer Xu Lab-aligned
+    # default. Override via ``cfg.registration.ants_transform`` if needed.
+    ants_transform = str(reg_cfg.get("ants_transform", "SyNRA"))
     random_seed = int(reg_cfg.get("random_seed", 42))
     laplacian_lambda = float(reg_cfg.get("laplacian_lambda", 0.18))
     laplacian_maxiter = int(reg_cfg.get("laplacian_maxiter", 100))
@@ -1047,9 +1029,6 @@ def run_whole_brain_3d(
             "annotation_registered_path": str(registered_annotation_path),
         },
     )
-    annotation_sampling_mode = (
-        str(reg_cfg.get("annotation_sampling_mode", "3d_reslice")).strip().lower() or "3d_reslice"
-    )
     annotation_registered_path = _warp_annotation_volume_to_input_space(
         annotation_path=refined_annotation_path,
         reference_volume_path=Path(volume_meta["volume_path"]),
@@ -1057,12 +1036,7 @@ def run_whole_brain_3d(
         output_path=registered_annotation_path,
         forward_transforms=list(ants_meta.get("forward_transforms", [])) or None,
         ants_result_path=Path(ants_meta.get("registered_volume", "")),
-        annotation_sampling_mode=annotation_sampling_mode,
     )
-    # Stamp the sampling mode alongside the annotation NIfTI so downstream
-    # re-consumers (liquify_3d_finalize, etc.) can route to the right
-    # render_overlay flag without plumbing a new parameter through every API.
-    _write_annotation_sidecar(registered_annotation_path, annotation_sampling_mode)
     # Reverse the ML flip on annotation so it matches original tissue orientation
     if volume_meta.get("ml_flipped", False):
         _ann_img = nib.load(str(annotation_registered_path))
@@ -1092,9 +1066,6 @@ def run_whole_brain_3d(
     te_warp_params = dict(truth_cfg.get("warp_params", {}) or {})
     te_fit_mode = str(truth_cfg.get("fit_mode", "cover")).strip() or "cover"
     te_edge = int(truth_cfg.get("edge_smooth_iter", 0) or 0)
-    # per_slice_native keeps CCF native Y×X resolution without in-plane warp —
-    # hand off in-plane alignment to render_overlay's tissue-guided 2D warp.
-    annotation_prewarped = annotation_sampling_mode != "per_slice_native"
     truth_rows = export_registered_truth_slices(
         real_slice_paths=list(merged_slice_paths),
         annotation_volume_path=annotation_registered_path,
@@ -1105,7 +1076,6 @@ def run_whole_brain_3d(
         warp_params=te_warp_params,
         fit_mode=te_fit_mode,
         edge_smooth_iter=te_edge,
-        annotation_prewarped=annotation_prewarped,
     )
 
     quant_meta = run_quantification_from_truth(

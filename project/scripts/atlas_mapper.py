@@ -71,6 +71,23 @@ def map_cells_with_registered_label_slice(
     registration_score: float | None = None,
     registration_method: str = "registered_slice_label",
 ) -> pd.DataFrame:
+    """Map cells to region IDs by reading labels from a per-slice annotation TIFF.
+
+    This is Brainfast's legacy cell → region path. It's **valid only when the
+    registered-label TIFF is a faithful per-slice annotation** — i.e. when
+    upstream registration produces one label TIFF per sample slice whose
+    pixel values are the correct atlas labels at that sample's pixel grid.
+    That condition is met by the 2D per-slice workflow
+    (:mod:`scripts.registration_2d_per_slice`).
+
+    For 3D whole-brain pipelines (``whole_brain_3d.run_whole_brain_3d``) the
+    label TIFFs come from warping the full CCF annotation *into* sample Z
+    space, which drops thin leaf regions when sample Z-spacing is coarser than
+    CCF's. The Xu Lab-canonical replacement is
+    :func:`scripts.cell_to_ccf.map_cells_via_ccf_transform`, which transforms
+    cell *points* into CCF space and looks up the native annotation voxel
+    directly (no leaf loss). Migrate 3D callers there when possible.
+    """
     if not Path(registered_label_tif).exists():
         raise FileNotFoundError(f"registered label slice not found: {registered_label_tif}")
     if not Path(structure_csv).exists():

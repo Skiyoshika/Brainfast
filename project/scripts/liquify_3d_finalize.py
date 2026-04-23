@@ -27,15 +27,10 @@ from pathlib import Path
 import pandas as pd
 
 try:
-    from scripts.annotation_sidecar import (
-        annotation_prewarped_for_mode,
-        read_annotation_sampling_mode,
-    )
     from scripts.atlas_mapper import map_cells_with_registered_label_slice
     from scripts.map_and_aggregate import aggregate_by_region
     from scripts.truth_export_3d import export_registered_truth_slices
 except ImportError:  # pragma: no cover — pipeline context
-    from annotation_sidecar import annotation_prewarped_for_mode, read_annotation_sampling_mode
     from atlas_mapper import map_cells_with_registered_label_slice
     from map_and_aggregate import aggregate_by_region
     from truth_export_3d import export_registered_truth_slices
@@ -121,24 +116,14 @@ def finalize_liquify_to_cell_counts(
     refined_path = _require_path(outputs_dir / _REFINED_NAME, "annotation_refined_liquify3d")
     _require_path(cells_csv, "cells CSV")
 
-    # Inherit the upstream annotation-sampling mode from the sidecar alongside
-    # ants_registration/annotation_registered.nii.gz. The refined Liquify
-    # annotation was produced by warping that registered annotation in place,
-    # so it has the same shape/coord-system semantics.
-    upstream_registered = outputs_dir / "ants_registration" / "annotation_registered.nii.gz"
-    sampling_mode = read_annotation_sampling_mode(upstream_registered)
-    prewarped = annotation_prewarped_for_mode(sampling_mode)
-
     truth_dir = outputs_dir / _TRUTH_DIR_NAME
     truth_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Re-export per-slice registered-label TIFs from the refined annotation.
     _emit(
         "export_truth",
         1,
         10,
-        f"Re-exporting {len(real_slice_paths)} truth slice(s) from refined annotation "
-        f"(sampling_mode={sampling_mode}, prewarped={prewarped})",
+        f"Re-exporting {len(real_slice_paths)} truth slice(s) from refined annotation",
     )
     truth_rows = export_registered_truth_slices(
         real_slice_paths=real_slice_paths,
@@ -150,7 +135,6 @@ def finalize_liquify_to_cell_counts(
         warp_params=dict(warp_params or {}),
         fit_mode=str(fit_mode),
         edge_smooth_iter=int(edge_smooth_iter),
-        annotation_prewarped=prewarped,
     )
 
     # Build a slice_id → registered_label_path lookup so we can map each cell

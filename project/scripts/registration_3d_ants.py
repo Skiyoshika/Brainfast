@@ -127,9 +127,30 @@ def run_ants_registration(
     fixed_path: Path,
     moving_path: Path,
     out_dir: Path,
-    transform: str = "SyN",
+    transform: str = "SyNRA",
     random_seed: int = 42,
+    *,
+    aff_metric: str | None = "mattes",
+    syn_metric: str | None = "mattes",
+    syn_sampling: int | None = 32,
+    reg_iterations: tuple[int, ...] | None = None,
 ) -> dict[str, object]:
+    """Run ANTs registration — Xu Lab convention with a Brainfast cross-modality patch.
+
+    Defaults match Xu Lab's ``method='ants_synra'`` variant (Rigid + Affine +
+    SyN) with one addition: Mattes MI as both the affine and SyN metric. Xu
+    Lab defaults to CC, which fails in our env on cross-modality fluorescence-
+    vs-Nissl pairs (ANTs exit code 1). Mattes MI handles the intensity
+    distribution mismatch without changing the alignment algorithm.
+
+    The previous Brainfast override of ``reg_iterations=(200, 200, 100, 50)``
+    is gone — we now trust ANTs's default multi-resolution schedule unless
+    the caller explicitly passes one. This keeps behaviour closer to Xu Lab's
+    ``ants.registration`` call and avoids over-fitting at coarse resolution.
+
+    Pass ``aff_metric=None`` / ``syn_metric=None`` to drop the Mattes override
+    and use ANTs defaults (same as Xu Lab).
+    """
     # Patch matplotlib compatibility for ANTsPy (matplotlib >=3.10 removed dedent_interpd)
     try:
         import matplotlib._docstring as _mpl_ds
@@ -148,33 +169,28 @@ def run_ants_registration(
     fixed_img = ants.image_read(str(fixed_path))
     moving_img = ants.image_read(str(moving_path))
 
-    # Use SyNRA (SyN + Rigid + Affine) with brain-optimised parameters.
-    # For cross-modality registration (fluorescence vs Nissl), Mattes MI
-    # is far more robust than CC (which assumes linear intensity relationship).
-    if transform.lower() in ("syn", "synra"):
-        import logging as _alog
+    reg_kwargs: dict[str, object] = dict(
+        fixed=fixed_img,
+        moving=moving_img,
+        type_of_transform=str(transform),
+        random_seed=int(random_seed),
+        verbose=False,
+    )
+    if aff_metric is not None:
+        reg_kwargs["aff_metric"] = aff_metric
+    if syn_metric is not None:
+        reg_kwargs["syn_metric"] = syn_metric
+    if syn_sampling is not None:
+        reg_kwargs["syn_sampling"] = int(syn_sampling)
+    if reg_iterations is not None:
+        reg_kwargs["reg_iterations"] = tuple(int(v) for v in reg_iterations)
 
-        _alog.getLogger(__name__).info(
-            "Running ANTs SyNRA with Mattes MI metric (cross-modality optimised)"
-        )
-        reg = ants.registration(
-            fixed=fixed_img,
-            moving=moving_img,
-            type_of_transform="SyNRA",
-            aff_metric="mattes",
-            syn_metric="mattes",
-            syn_sampling=32,
-            reg_iterations=(200, 200, 100, 50),
-            random_seed=int(random_seed),
-            verbose=False,
-        )
-    else:
-        reg = ants.registration(
-            fixed=fixed_img,
-            moving=moving_img,
-            type_of_transform=str(transform),
-            random_seed=int(random_seed),
-        )
+    import logging as _alog
+
+    _alog.getLogger(__name__).info(
+        "ANTs %s (aff_metric=%s syn_metric=%s)", transform, aff_metric, syn_metric
+    )
+    reg = ants.registration(**reg_kwargs)
 
     registered_volume = out_dir / "ants_result.nii.gz"
     ants.image_write(reg["warpedmovout"], str(registered_volume))

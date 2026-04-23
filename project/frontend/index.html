@@ -1014,6 +1014,75 @@
         <div id="volumeQcSummary" class="volume-qc-summary"></div>
       </section>
 
+      <!-- Stitching launcher (optional; requires the stitching extras — TissueCyte tile data) -->
+      <section class="panel" id="stitchingSection" style="display:none">
+        <div class="results-toolbar">
+          <h2 data-i18n="stitch.title">Stitching (TissueCyte)</h2>
+          <span id="stitchStatus" class="hint-text"></span>
+        </div>
+        <p class="hint-text" data-i18n="stitch.hint">
+          Stitch raw TissueCyte mosaic tiles into full sections before running the pipeline.
+          Deps: <code>pip install -e ".[stitching]"</code>.
+        </p>
+        <div class="form-row" style="gap:10px; flex-wrap:wrap;">
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span data-i18n="stitch.inputDir">Tile input directory</span>
+            <input id="stitchInputDir" type="text" style="width:340px;"
+                   placeholder="raw TissueCyte tiles dir (contains Mosaic file)" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span data-i18n="stitch.outputDir">Output directory</span>
+            <input id="stitchOutputDir" type="text" style="width:340px;"
+                   placeholder="where stitched sections will be written" />
+          </label>
+          <button type="button" id="stitchStartBtn" class="btn btn-primary"
+                  style="align-self:end;" disabled>
+            <i data-lucide="layers" class="btn-icon"></i>
+            <span data-i18n="stitch.start">Start stitching</span>
+          </button>
+        </div>
+        <div id="stitchJobBlock" style="display:none; margin-top:10px; font-family:monospace; font-size:0.85em;">
+          <span data-i18n="stitch.jobId">Job:</span>
+          <span id="stitchJobId"></span>
+          &nbsp;·&nbsp;
+          <span data-i18n="stitch.jobStatus">Status:</span>
+          <span id="stitchJobStatus">queued</span>
+        </div>
+      </section>
+
+      <!-- Neuroglancer 3D viewer launcher (optional; requires the neuroglancer extras) -->
+      <section class="panel" id="neuroglancerSection" style="display:none">
+        <div class="results-toolbar">
+          <h2 data-i18n="ng.title">Neuroglancer 3D Viewer</h2>
+          <span id="ngStatus" class="hint-text"></span>
+        </div>
+        <p class="hint-text" data-i18n="ng.hint">
+          Launch a self-hosted Neuroglancer instance to browse the registered volume and CCF
+          annotation overlay in 3D. Deps: <code>pip install -e ".[neuroglancer]"</code>.
+        </p>
+        <div class="form-row" style="gap:10px; flex-wrap:wrap;">
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span data-i18n="ng.volumePath">Volume NIfTI</span>
+            <input id="ngVolumePath" type="text" style="width:340px;"
+                   placeholder="outputs/&lt;run&gt;/3d/ants_result.nii.gz" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span data-i18n="ng.segPath">Segmentation NIfTI</span>
+            <input id="ngSegPath" type="text" style="width:340px;"
+                   placeholder="outputs/&lt;run&gt;/3d/annotation_in_sample_space.nii.gz" />
+          </label>
+          <button type="button" id="ngLaunchBtn" class="btn btn-primary"
+                  style="align-self:end;" disabled>
+            <i data-lucide="external-link" class="btn-icon"></i>
+            <span data-i18n="ng.launch">Launch Neuroglancer</span>
+          </button>
+        </div>
+        <div id="ngUrlBlock" style="display:none; margin-top:10px;">
+          <span data-i18n="ng.urlReady">Viewer ready:</span>
+          <a id="ngUrlLink" href="#" target="_blank" rel="noopener"></a>
+        </div>
+      </section>
+
       <!-- Annotated Slice: region labels on best slice -->
       <section class="panel" id="annotatedSliceSection" style="display:none">
         <h2 data-i18n="qc.annotatedSliceTitle">Atlas Registration — Annotated Brain Regions</h2>

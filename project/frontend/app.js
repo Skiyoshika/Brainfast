@@ -539,6 +539,19 @@ const LANGS = {
     'newsample.fixedMaxDimHint': 'Downsample fixed side so longest axis \u2264 this before SyN. Empty = full-res.',
     'newsample.axisAlign': 'Pre-align axes via midline fissure',
     'newsample.cellToCcf': 'Xu Lab cell\u2192CCF mapping',
+    'ng.title': 'Neuroglancer 3D Viewer',
+    'ng.hint': 'Launch a self-hosted Neuroglancer instance to browse the registered volume and CCF annotation overlay in 3D. Requires the neuroglancer extras.',
+    'ng.volumePath': 'Volume NIfTI',
+    'ng.segPath': 'Segmentation NIfTI',
+    'ng.launch': 'Launch Neuroglancer',
+    'ng.urlReady': 'Viewer ready:',
+    'stitch.title': 'Stitching (TissueCyte)',
+    'stitch.hint': 'Stitch raw TissueCyte mosaic tiles into full sections before running the pipeline. Requires the stitching extras.',
+    'stitch.inputDir': 'Tile input directory',
+    'stitch.outputDir': 'Output directory',
+    'stitch.start': 'Start stitching',
+    'stitch.jobId': 'Job:',
+    'stitch.jobStatus': 'Status:',
     // ----- 3D Liquify -----
     'nav.liquify3d': '3D Liquify',
     'liquify3d.title': '3D Landmark Liquify',
@@ -1101,6 +1114,19 @@ const LANGS = {
     'newsample.fixedMaxDimHint': '将固定侧最长轴降采样到该值再跑 SyN。留空则原分辨率。',
     'newsample.axisAlign': '按中线裂预对齐主轴',
     'newsample.cellToCcf': 'Xu Lab 细胞\u2192CCF 映射',
+    'ng.title': 'Neuroglancer 三维查看器',
+    'ng.hint': '启动本地 Neuroglancer 实例，在浏览器里 3D 浏览配准体积 + CCF 注释叠加。需要装 neuroglancer 附加依赖。',
+    'ng.volumePath': '体积 NIfTI',
+    'ng.segPath': '分割 NIfTI',
+    'ng.launch': '启动 Neuroglancer',
+    'ng.urlReady': '查看器就绪：',
+    'stitch.title': '拼接（TissueCyte）',
+    'stitch.hint': '把 TissueCyte 原始瓦片拼成完整切片，再跑后续管线。需要装 stitching 附加依赖。',
+    'stitch.inputDir': '瓦片输入目录',
+    'stitch.outputDir': '输出目录',
+    'stitch.start': '开始拼接',
+    'stitch.jobId': '任务 ID：',
+    'stitch.jobStatus': '状态：',
     // ----- 3D 液化 -----
     'nav.liquify3d': '3D 液化',
     'liquify3d.title': '3D 地标液化',
@@ -2928,6 +2954,170 @@ async function refreshQcAll() {
   refreshZContinuity();
 }
 document.getElementById('refreshQcAllBtn').onclick = refreshQcAll;
+
+// ----------------------------------------------------------------
+// NEUROGLANCER VIEWER (optional; requires neuroglancer extras)
+// ----------------------------------------------------------------
+async function probeNeuroglancerAvailability() {
+  const section = document.getElementById('neuroglancerSection');
+  const status = document.getElementById('ngStatus');
+  const launchBtn = document.getElementById('ngLaunchBtn');
+  if (!section) return;
+  try {
+    const resp = await fetch('/api/neuroglancer/available');
+    const data = await resp.json();
+    if (data.available) {
+      section.style.display = '';
+      launchBtn.disabled = false;
+      if (status) status.textContent = '';
+    } else {
+      section.style.display = '';
+      launchBtn.disabled = true;
+      if (status) {
+        status.textContent = `Missing: ${data.missing || 'neuroglancer'} — run ${data.install}`;
+      }
+    }
+  } catch (err) {
+    section.style.display = 'none';
+  }
+}
+
+async function launchNeuroglancerViewer() {
+  const volume = document.getElementById('ngVolumePath')?.value?.trim();
+  const seg = document.getElementById('ngSegPath')?.value?.trim();
+  const launchBtn = document.getElementById('ngLaunchBtn');
+  const urlBlock = document.getElementById('ngUrlBlock');
+  const urlLink = document.getElementById('ngUrlLink');
+  const status = document.getElementById('ngStatus');
+  if (!volume) {
+    if (status) status.textContent = 'Provide a Volume NIfTI path first.';
+    return;
+  }
+  launchBtn.disabled = true;
+  if (status) status.textContent = 'Starting viewer…';
+  try {
+    const payload = {
+      imageInputs: [{ path: volume, type: 'nii', name: 'Registered Volume' }],
+    };
+    if (seg) payload.segmentationPath = seg;
+    const resp = await fetch('/api/neuroglancer/launch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      if (status) status.textContent = 'Launch failed: ' + (data.error || resp.status);
+      launchBtn.disabled = false;
+      return;
+    }
+    if (urlLink) {
+      urlLink.href = data.url;
+      urlLink.textContent = data.url;
+    }
+    if (urlBlock) urlBlock.style.display = '';
+    if (status) status.textContent = 'Viewer ready — click the URL to open it.';
+    window.open(data.url, '_blank', 'noopener');
+  } catch (err) {
+    if (status) status.textContent = 'Launch failed: ' + err.message;
+  } finally {
+    launchBtn.disabled = false;
+  }
+}
+
+document.getElementById('ngLaunchBtn')?.addEventListener('click', launchNeuroglancerViewer);
+probeNeuroglancerAvailability();
+
+// ----------------------------------------------------------------
+// STITCHING (TissueCyte) (optional; requires stitching extras)
+// ----------------------------------------------------------------
+async function probeStitchingAvailability() {
+  const section = document.getElementById('stitchingSection');
+  const status = document.getElementById('stitchStatus');
+  const startBtn = document.getElementById('stitchStartBtn');
+  if (!section) return;
+  try {
+    const resp = await fetch('/api/stitching/available');
+    const data = await resp.json();
+    section.style.display = '';
+    if (data.available) {
+      startBtn.disabled = false;
+      if (status) status.textContent = '';
+    } else {
+      startBtn.disabled = true;
+      if (status) status.textContent = `Missing: ${data.missing || 'cv2'} — run ${data.install}`;
+    }
+  } catch (err) {
+    section.style.display = 'none';
+  }
+}
+
+let _stitchPollTimer = null;
+async function pollStitchingStatus(jobId) {
+  const statusSpan = document.getElementById('stitchJobStatus');
+  try {
+    const resp = await fetch(`/api/stitching/status?jobId=${encodeURIComponent(jobId)}`);
+    const data = await resp.json();
+    if (!data.ok) {
+      if (statusSpan) statusSpan.textContent = 'unknown';
+      clearInterval(_stitchPollTimer);
+      return;
+    }
+    if (statusSpan) statusSpan.textContent = data.status;
+    if (data.status === 'done' || data.status === 'error') {
+      clearInterval(_stitchPollTimer);
+      const status = document.getElementById('stitchStatus');
+      if (status) {
+        status.textContent = data.status === 'done'
+          ? 'Stitching finished.'
+          : 'Stitching failed: ' + (data.error || 'unknown error');
+      }
+    }
+  } catch (err) {
+    clearInterval(_stitchPollTimer);
+  }
+}
+
+async function startStitching() {
+  const inputDir = document.getElementById('stitchInputDir')?.value?.trim();
+  const outputDir = document.getElementById('stitchOutputDir')?.value?.trim();
+  const startBtn = document.getElementById('stitchStartBtn');
+  const status = document.getElementById('stitchStatus');
+  const jobBlock = document.getElementById('stitchJobBlock');
+  const jobIdSpan = document.getElementById('stitchJobId');
+  const statusSpan = document.getElementById('stitchJobStatus');
+  if (!inputDir || !outputDir) {
+    if (status) status.textContent = 'Provide both input + output directories.';
+    return;
+  }
+  startBtn.disabled = true;
+  if (status) status.textContent = 'Starting stitch job…';
+  try {
+    const resp = await fetch('/api/stitching/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inputDir, outputDir }),
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      if (status) status.textContent = 'Start failed: ' + (data.error || resp.status);
+      startBtn.disabled = false;
+      return;
+    }
+    if (jobIdSpan) jobIdSpan.textContent = data.jobId;
+    if (statusSpan) statusSpan.textContent = data.status || 'queued';
+    if (jobBlock) jobBlock.style.display = '';
+    if (status) status.textContent = 'Job started; polling status every 5s.';
+    if (_stitchPollTimer) clearInterval(_stitchPollTimer);
+    _stitchPollTimer = setInterval(() => pollStitchingStatus(data.jobId), 5000);
+  } catch (err) {
+    if (status) status.textContent = 'Start failed: ' + err.message;
+    startBtn.disabled = false;
+  }
+}
+
+document.getElementById('stitchStartBtn')?.addEventListener('click', startStitching);
+probeStitchingAvailability();
 
 // ----------------------------------------------------------------
 // Z-CONTINUITY SVG CHART

@@ -39,12 +39,27 @@ def export_registered_truth_slices(
     overlay_alpha: float = 0.72,
     fit_mode: str = "cover",
     edge_smooth_iter: int = 0,
+    annotation_prewarped: bool = True,
 ) -> list[dict]:
     """Export per-slice registered-label rasters + overlays.
 
     ``fit_mode`` and ``edge_smooth_iter`` are caller-controlled so a UI-learned
     calibration can reach the default whole-brain path. Previously these were
     hard-coded to ``"cover"`` / ``0`` which silently bypassed calibration.
+
+    ``annotation_prewarped`` mirrors the upstream
+    ``whole_brain_3d.annotation_sampling_mode``:
+
+    * ``True`` (default — matches ``3d_reslice`` upstream mode): the annotation
+      volume has already been warped into sample space by the 3D ANTs
+      registration, so each slice only needs a nearest-neighbor resize to the
+      real-image pixel grid. ``render_overlay`` is called with
+      ``prewarped_label=True`` to skip the in-plane 2D warp.
+    * ``False`` (matches ``per_slice_native`` upstream mode): the annotation is
+      at CCF native Y×X resolution with per-slice Z-mapping but no in-plane
+      alignment. ``render_overlay`` is called with ``prewarped_label=False`` so
+      ``_tissue_guided_warp`` provides per-slice in-plane alignment while
+      preserving full leaf-region granularity.
     """
     annotation_img = nib.load(str(annotation_volume_path))
     volume = np.asarray(annotation_img.dataobj, dtype=np.int32)
@@ -90,10 +105,12 @@ def export_registered_truth_slices(
 
         imwrite(str(label_path), label_slice)
 
-        # Use prewarped_label=True: the 3D ANTs registration already provides
-        # spatial alignment, so we only need nearest-neighbour resize to match
-        # the real image.  The tissue-guided 2D warp (prewarped_label=False)
-        # destroys the fine-grained region boundaries established by ANTs.
+        # Route to render_overlay based on upstream annotation-sampling mode.
+        # See the docstring for the full rationale; short version:
+        #   annotation_prewarped=True  → 3d_reslice upstream, only resize here
+        #   annotation_prewarped=False → per_slice_native upstream (CCF-Y×X),
+        #                                do per-slice tissue-guided 2D warp to
+        #                                align in-plane while preserving leaf IDs
         #
         # warped_label_out=label_path: render_overlay writes the final
         # (resized/masked) label back to disk so that the mapping step uses
@@ -110,7 +127,7 @@ def export_registered_truth_slices(
             edge_smooth_iter=int(edge_smooth_iter),
             warp_params=dict(warp_params or {}),
             return_meta=True,
-            prewarped_label=True,
+            prewarped_label=bool(annotation_prewarped),
             warped_label_out=label_path,
             min_mean_threshold=1.0,
         )

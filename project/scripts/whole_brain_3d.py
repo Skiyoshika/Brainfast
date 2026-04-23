@@ -11,6 +11,7 @@ from scipy.ndimage import map_coordinates
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 try:
+    from scripts.annotation_sidecar import write_annotation_sidecar as _write_annotation_sidecar
     from scripts.laplacian_refine_3d import refine_registered_volume
     from scripts.pipeline_progress import write_stage_progress
     from scripts.registration_3d_ants import run_ants_registration
@@ -20,6 +21,7 @@ try:
     )
     from scripts.truth_export_3d import export_registered_truth_slices
 except ImportError:
+    from annotation_sidecar import write_annotation_sidecar as _write_annotation_sidecar
     from laplacian_refine_3d import refine_registered_volume
     from pipeline_progress import write_stage_progress
     from registration_3d_ants import run_ants_registration
@@ -197,18 +199,45 @@ def _warp_annotation_volume_to_input_space(
     *,
     forward_transforms: list[str] | None = None,
     ants_result_path: Path | None = None,
+    annotation_sampling_mode: str = "3d_reslice",
 ) -> Path:
     """Warp atlas annotation into input-volume space.
 
-    Tries multiple strategies in order:
-    1. ANTs inverse transforms with nearestNeighbor interpolation
-       (avoids the genericLabel coverage loss with spacing mismatch)
-    2. ANTs forward transforms with whichtoinvert + nearestNeighbor
-       (alternative warp direction that can sometimes fill better)
-    3. Direct Z-mapping fallback from the ANTs registered result
+    ``annotation_sampling_mode``:
+      * ``"3d_reslice"`` (default) — tries ANTs inverse / forward warps with
+        nearestNeighbor into the sample-Z-downsampled grid (strategies 1 & 2),
+        falling back to Z-mapped native-resolution sampling (strategy 3) only
+        if the ANTs strategies fail a coverage gate. This preserves XY in-plane
+        alignment but drops thin leaf regions whose Z span is narrower than one
+        sample slice.
+      * ``"per_slice_native"`` — skips the 3D reslice entirely and always uses
+        strategy 3 (Z-mapped native CCF Y×X annotation), preserving the full
+        Allen leaf-region granularity. In-plane XY alignment is then provided
+        per slice by ``render_overlay(prewarped_label=False)`` downstream in
+        ``export_registered_truth_slices``.
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    mode = str(annotation_sampling_mode or "3d_reslice").strip().lower()
+    if mode not in {"3d_reslice", "per_slice_native"}:
+        print(f"[warp] unknown annotation_sampling_mode={mode!r}, falling back to 3d_reslice")
+        mode = "3d_reslice"
+
+    if mode == "per_slice_native":
+        print("[warp] annotation_sampling_mode=per_slice_native — using Strategy 3 directly")
+        ok = _direct_z_mapping_fallback(
+            annotation_path=annotation_path,
+            reference_volume_path=reference_volume_path,
+            output_path=output_path,
+            ants_result_path=ants_result_path,
+        )
+        if not ok:
+            raise RuntimeError(
+                "annotation_sampling_mode=per_slice_native failed: "
+                "_direct_z_mapping_fallback could not map any slices"
+            )
+        return output_path
 
     warped_ok = False
     best_nonzero = 0
@@ -308,19 +337,64 @@ def _warp_annotation_volume_to_input_space(
     return output_path
 
 
+def _compute_atlas_z_indices(
+    num_input_z: int,
+    num_atlas_z: int,
+    nonzero_atlas_z: np.ndarray | None,
+) -> np.ndarray:
+    """Map each of ``num_input_z`` sample slices to one CCF atlas Z index.
+
+    The input volume's Z-spacing (e.g. 125 µm) is typically coarser than the
+    CCF atlas Z-spacing (25 µm). After ANTs registers the input into atlas
+    space, the input spans some contiguous atlas-Z range ``[first, last]``;
+    we distribute the ``num_input_z`` sample slices proportionally across that
+    range so each sample slice lands on its anatomically-correct CCF slice.
+
+    The previous implementation used ``atlas_z = z_offset + i`` (1:1), which
+    only matched when input Z-spacing equalled atlas Z-spacing — a special
+    case. With a 5× input/atlas Z-spacing ratio the old formula picked the
+    first 1/5 of the atlas range and ignored the remaining 4/5.
+    """
+    num_input_z = max(1, int(num_input_z))
+    num_atlas_z = max(1, int(num_atlas_z))
+
+    if nonzero_atlas_z is not None and len(nonzero_atlas_z) > 0:
+        first_z = int(nonzero_atlas_z[0])
+        last_z = int(nonzero_atlas_z[-1])
+    else:
+        # No ANTs result — assume the input spans the full atlas Z range.
+        first_z, last_z = 0, num_atlas_z - 1
+
+    if num_input_z == 1:
+        return np.asarray([first_z], dtype=np.int32)
+
+    span = max(0, last_z - first_z)
+    # Evenly distribute sample slices across the atlas-Z span; rounding is
+    # equivalent to nearest-neighbor resampling of atlas-Z indices.
+    positions = np.linspace(0.0, float(span), num_input_z)
+    indices = np.clip(np.rint(first_z + positions).astype(np.int32), 0, num_atlas_z - 1)
+    return indices
+
+
 def _direct_z_mapping_fallback(
     annotation_path: Path,
     reference_volume_path: Path,
     output_path: Path,
     ants_result_path: Path | None = None,
 ) -> bool:
-    """Fallback: directly map annotation slices to input space using Z-offset
-    derived from the ANTs-registered result volume.
+    """Map each sample slice to the native-resolution CCF annotation slice.
 
-    For each input Z-slice, finds the corresponding atlas Z-slice.
-    The annotation is kept at its NATIVE atlas resolution (not downsampled
-    to the tiny input-volume grid) so that brain-region detail is preserved.
-    truth_export_3d.py will resize each slice to match the real image later.
+    For each input Z-slice, compute the corresponding atlas Z-slice (proportional
+    distribution across the atlas-Z range that the input occupies after ANTs
+    registration) and copy the full-resolution ``annotation[atlas_z, :, :]``
+    into position ``i`` of the output. The annotation is kept at its NATIVE
+    atlas Y×X resolution (not downsampled to the tiny input-volume grid) so
+    that thin leaf regions which would otherwise be lost to the Z-step mismatch
+    are preserved.
+
+    ``truth_export_3d.py`` provides per-slice in-plane alignment via
+    ``render_overlay(prewarped_label=False)`` when the upstream mode is
+    ``per_slice_native``.
     """
     ann_img = nib.load(str(annotation_path))
     ann_vol = np.asarray(ann_img.dataobj, dtype=np.int32)
@@ -330,29 +404,35 @@ def _direct_z_mapping_fallback(
     num_atlas_z = int(ann_vol.shape[0])
     atlas_yz = (int(ann_vol.shape[1]), int(ann_vol.shape[2]))
 
-    # Determine Z-offset from ANTs registered result (input warped into atlas space)
-    z_offset = 0
+    # Determine Z-range from ANTs registered result (input warped into atlas space)
+    nonzero_z: np.ndarray | None = None
     if ants_result_path is not None and Path(ants_result_path).exists():
         res_vol = np.asarray(nib.load(str(ants_result_path)).dataobj, dtype=np.float32)
         z_sums = np.array([float(np.sum(res_vol[z])) for z in range(res_vol.shape[0])])
-        nonzero_z = np.where(z_sums > 0)[0]
-        if len(nonzero_z) > 0:
-            z_offset = int(nonzero_z[0])
+        nz = np.where(z_sums > 0)[0]
+        if len(nz) > 0:
+            nonzero_z = nz
             print(
-                f"[warp-fallback] Z-offset from ANTs result: {z_offset} "
-                f"(input spans atlas Z {nonzero_z[0]}..{nonzero_z[-1]})"
+                f"[warp-fallback] Input spans atlas Z [{int(nz[0])}, {int(nz[-1])}] "
+                f"({len(nz)} atlas slices); will distribute {num_input_z} sample slices across that range"
             )
-    else:
-        # Heuristic: centre input within atlas
-        z_offset = max(0, (num_atlas_z - num_input_z) // 2)
-        print(f"[warp-fallback] No ANTs result available, using centred Z-offset: {z_offset}")
+    if nonzero_z is None:
+        # Heuristic: centre input within atlas when no ANTs reference is available
+        half = max(0, (num_atlas_z - num_input_z) // 2)
+        nonzero_z = np.arange(half, min(num_atlas_z, half + num_input_z), dtype=np.int32)
+        print(
+            f"[warp-fallback] No ANTs result available, using centred atlas Z "
+            f"[{int(nonzero_z[0])}, {int(nonzero_z[-1])}]"
+        )
 
-    # Build output volume at native atlas YZ resolution (preserves region detail)
+    atlas_z_for_slice = _compute_atlas_z_indices(num_input_z, num_atlas_z, nonzero_z)
+
+    # Build output volume at native atlas YX resolution (preserves region detail)
     out_vol = np.zeros((num_input_z, atlas_yz[0], atlas_yz[1]), dtype=np.int32)
 
     mapped_count = 0
     for i in range(num_input_z):
-        atlas_z = z_offset + i
+        atlas_z = int(atlas_z_for_slice[i])
         if 0 <= atlas_z < num_atlas_z:
             ann_slice = ann_vol[atlas_z]
             if int(np.count_nonzero(ann_slice)) > 0:
@@ -364,8 +444,9 @@ def _direct_z_mapping_fallback(
         return False
 
     print(
-        f"[warp-fallback] Mapped {mapped_count}/{num_input_z} slices at native {atlas_yz} resolution "
-        f"(atlas Z {z_offset}..{z_offset + num_input_z - 1})"
+        f"[warp-fallback] Mapped {mapped_count}/{num_input_z} sample slices to atlas Z "
+        f"[{int(atlas_z_for_slice[0])}..{int(atlas_z_for_slice[-1])}] "
+        f"at native Y×X {atlas_yz}"
     )
 
     # Use the annotation's affine (native atlas coordinate system)
@@ -966,6 +1047,9 @@ def run_whole_brain_3d(
             "annotation_registered_path": str(registered_annotation_path),
         },
     )
+    annotation_sampling_mode = (
+        str(reg_cfg.get("annotation_sampling_mode", "3d_reslice")).strip().lower() or "3d_reslice"
+    )
     annotation_registered_path = _warp_annotation_volume_to_input_space(
         annotation_path=refined_annotation_path,
         reference_volume_path=Path(volume_meta["volume_path"]),
@@ -973,7 +1057,12 @@ def run_whole_brain_3d(
         output_path=registered_annotation_path,
         forward_transforms=list(ants_meta.get("forward_transforms", [])) or None,
         ants_result_path=Path(ants_meta.get("registered_volume", "")),
+        annotation_sampling_mode=annotation_sampling_mode,
     )
+    # Stamp the sampling mode alongside the annotation NIfTI so downstream
+    # re-consumers (liquify_3d_finalize, etc.) can route to the right
+    # render_overlay flag without plumbing a new parameter through every API.
+    _write_annotation_sidecar(registered_annotation_path, annotation_sampling_mode)
     # Reverse the ML flip on annotation so it matches original tissue orientation
     if volume_meta.get("ml_flipped", False):
         _ann_img = nib.load(str(annotation_registered_path))
@@ -1003,6 +1092,9 @@ def run_whole_brain_3d(
     te_warp_params = dict(truth_cfg.get("warp_params", {}) or {})
     te_fit_mode = str(truth_cfg.get("fit_mode", "cover")).strip() or "cover"
     te_edge = int(truth_cfg.get("edge_smooth_iter", 0) or 0)
+    # per_slice_native keeps CCF native Y×X resolution without in-plane warp —
+    # hand off in-plane alignment to render_overlay's tissue-guided 2D warp.
+    annotation_prewarped = annotation_sampling_mode != "per_slice_native"
     truth_rows = export_registered_truth_slices(
         real_slice_paths=list(merged_slice_paths),
         annotation_volume_path=annotation_registered_path,
@@ -1013,6 +1105,7 @@ def run_whole_brain_3d(
         warp_params=te_warp_params,
         fit_mode=te_fit_mode,
         edge_smooth_iter=te_edge,
+        annotation_prewarped=annotation_prewarped,
     )
 
     quant_meta = run_quantification_from_truth(

@@ -205,9 +205,7 @@ def transform_points_sample_to_ccf(
     ants = importlib.import_module("ants")
     import pandas as _pd
 
-    sample_spacing, sample_origin, sample_direction = _header_info_via_ants(
-        sample_volume_path
-    )
+    sample_spacing, sample_origin, sample_direction = _header_info_via_ants(sample_volume_path)
     ccf_spacing, ccf_origin, ccf_direction = _header_info_via_ants(ccf_template_path)
 
     # Sort inverse transforms so ANTs sees [affine, warp] — Xu Lab's expected
@@ -376,12 +374,9 @@ def map_cells_via_ccf_transform(
     out["ccf_y_voxel"] = ccf_round[:, 1]
     out["ccf_x_voxel"] = ccf_round[:, 2]
     out["region_id"] = region_ids.astype(np.int64)
-    out["mapping_status"] = np.where(
-        region_ids > 0, "ok", "outside_ccf_or_unassigned"
-    )
+    out["mapping_status"] = np.where(region_ids > 0, "ok", "outside_ccf_or_unassigned")
     log.info(
-        "map_cells_via_ccf_transform: %d cells → CCF; %d out-of-bounds; "
-        "%d unique region_ids",
+        "map_cells_via_ccf_transform: %d cells → CCF; %d out-of-bounds; %d unique region_ids",
         len(out),
         oob,
         int(pd.Series(region_ids).nunique()),

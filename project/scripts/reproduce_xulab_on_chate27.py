@@ -187,9 +187,28 @@ for d in (stage2, fwd_dir, inv_dir):
 
 transform_used = None
 reg = None
+FIXED_MAX_DIM = 256  # pre-resample fixed/moving to keep SyN warp field <OOM
+
+def _maybe_downsample(img, max_dim: int):
+    current = max(int(s) for s in img.shape)
+    if current <= max_dim:
+        return img
+    factor = current / float(max_dim)
+    new_spacing = tuple(float(s) * factor for s in img.spacing)
+    return ants.resample_image(img, new_spacing, False, 0)
+
+
+fixed_ants_ds = _maybe_downsample(fixed_ants, FIXED_MAX_DIM)
+moving_ants_ds = _maybe_downsample(moving_ants, FIXED_MAX_DIM)
+print(
+    f"  pre-resample: fixed {fixed_ants.shape} -> {fixed_ants_ds.shape}, "
+    f"moving {moving_ants.shape} -> {moving_ants_ds.shape}",
+    flush=True,
+)
+
 for attempt_label, kwargs in [
     (
-        "SyNRA + Mattes + reg(20,10)",
+        "SyNRA + Mattes + reg(20,10) + fixed_max_dim=256",
         dict(
             type_of_transform="SyNRA",
             aff_metric="mattes",
@@ -201,7 +220,7 @@ for attempt_label, kwargs in [
         ),
     ),
     (
-        "SyN + Mattes + reg(20,10)",
+        "SyN + Mattes + reg(20,10) + fixed_max_dim=256",
         dict(
             type_of_transform="SyN",
             aff_metric="mattes",
@@ -213,14 +232,19 @@ for attempt_label, kwargs in [
         ),
     ),
     (
-        "Affine + Mattes (fallback)",
+        "Affine + Mattes (full-res fallback)",
         dict(type_of_transform="Affine", aff_metric="mattes", random_seed=42, verbose=False),
     ),
 ]:
     try:
         print(f"  attempting {attempt_label}...", flush=True)
         t0 = time.time()
-        reg = ants.registration(fixed=fixed_ants, moving=moving_ants, **kwargs)
+        # First 2 attempts use downsampled fixed/moving (SyN memory saver);
+        # last Affine fallback uses full res (it's light enough).
+        is_fallback = attempt_label.startswith("Affine")
+        _fixed = fixed_ants if is_fallback else fixed_ants_ds
+        _moving = moving_ants if is_fallback else moving_ants_ds
+        reg = ants.registration(fixed=_fixed, moving=_moving, **kwargs)
         transform_used = attempt_label
         print(f"  {attempt_label} succeeded in {time.time() - t0:.1f}s")
         break
@@ -274,7 +298,15 @@ ants.image_write(reg["warpedmovout"], str(result_path))
     encoding="utf-8",
 )
 
-# Z coverage check
+# Resample ANTs result back to the full-resolution CCF grid so downstream
+# annotation warp + preview see consistent shapes. ants.apply_transforms with
+# interpolator='linear' on the forward-warped result against the full fixed
+# template gives us a full-shape version.
+full_fixed_ants = ants.image_read(str(half_path))
+result_full = ants.resample_image_to_target(reg["warpedmovout"], full_fixed_ants, "linear")
+ants.image_write(result_full, str(result_path))
+
+# Z coverage check (on full-res result)
 result_arr = np.asarray(nib.load(str(result_path)).dataobj, dtype=np.float32)
 z_nz = [z for z in range(result_arr.shape[0]) if np.sum(result_arr[z] > 0) > 0]
 print(

@@ -966,12 +966,14 @@ def run_whole_brain_3d(
         "Running ANTS whole-brain registration",
         {"metrics_csv": str(ants_dir / "registration_metrics.csv")},
     )
+    fixed_max_dim = reg_cfg.get("fixed_max_dim")
     ants_meta = run_ants_registration(
         fixed_path=Path(template_meta["template_path"]),
         moving_path=Path(volume_meta["volume_path"]),
         out_dir=ants_dir,
         transform=ants_transform,
         random_seed=random_seed,
+        fixed_max_dim=int(fixed_max_dim) if fixed_max_dim else None,
     )
 
     if skip_laplacian:

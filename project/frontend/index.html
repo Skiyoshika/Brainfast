@@ -817,6 +817,40 @@
           </div>
         </div>
 
+        <!-- Step 2a: Advanced (Xu Lab parity) toggles -->
+        <details style="margin-top:12px; padding:10px; border:1px dashed var(--border,#333); border-radius:6px;">
+          <summary style="cursor:pointer; font-weight:600;" data-i18n="newsample.advanced">
+            Advanced (Xu Lab parity)
+          </summary>
+          <div class="form-row" style="gap:14px; margin-top:10px; flex-wrap:wrap;">
+            <label style="display:flex;flex-direction:column;gap:4px;">
+              <span data-i18n="newsample.antsTransform">ANTs transform</span>
+              <select id="wizAntsTransform" style="width:140px;">
+                <option value="SyNRA">SyNRA (default)</option>
+                <option value="SyN">SyN</option>
+                <option value="Affine">Affine only</option>
+                <option value="Rigid">Rigid only</option>
+              </select>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;">
+              <span data-i18n="newsample.fixedMaxDim">Fixed max dim (SyN memory)</span>
+              <input id="wizFixedMaxDim" type="number" step="1" min="0"
+                     placeholder="e.g. 256" style="width:140px;" />
+              <span class="field-hint" data-i18n="newsample.fixedMaxDimHint">
+                Downsample fixed side so longest axis ≤ this before SyN. Empty = full-res.
+              </span>
+            </label>
+            <label style="display:flex; gap:6px; align-items:center; margin-top:18px;">
+              <input type="checkbox" id="wizAxisAlign" />
+              <span data-i18n="newsample.axisAlign">Pre-align axes via midline fissure</span>
+            </label>
+            <label style="display:flex; gap:6px; align-items:center; margin-top:18px;">
+              <input type="checkbox" id="wizCellToCcf" />
+              <span data-i18n="newsample.cellToCcf">Xu Lab cell→CCF mapping</span>
+            </label>
+          </div>
+        </details>
+
         <!-- Step 2b: Optional second channel (dual-channel) -->
         <div id="wizSecondChannelBlock" style="margin-top:14px; padding:10px; border:1px dashed var(--border,#333); border-radius:6px;">
           <div class="form-row" style="gap:10px; align-items:center;">

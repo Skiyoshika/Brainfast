@@ -248,6 +248,82 @@ def test_launch_accepts_inputDirs_dict_for_dual_channel(client, tmp_path, monkey
     assert captured["channels"] == ["red", "farred"]
 
 
+def test_launch_applies_xulab_parity_overrides_to_generated_config(client, tmp_path, monkeypatch):
+    """Advanced wizard fields must flow into the registration block."""
+    src_dir = tmp_path / "slices"
+    src_dir.mkdir()
+    imwrite(str(src_dir / "z0050.tif"), np.full((4, 4), 100, dtype=np.uint16))
+
+    captured: dict = {}
+
+    def _fake_runner(config, input_dir, channels, params, *, job_id=None):
+        captured["config"] = str(config)
+
+    monkeypatch.setattr(ctx, "_runner", _fake_runner)
+
+    resp = client.post(
+        "/api/wizard/launch",
+        data=json.dumps(
+            {
+                "sampleId": "xulab42",
+                "inputDir": str(src_dir),
+                "pixelSizeUm": 5.0,
+                "zSpacingUm": 25.0,
+                "channels": ["red"],
+                "atlasHemisphere": "right_flipped",
+                "antsTransform": "Affine",
+                "axisAlignmentEnabled": True,
+                "useCellToCcfMapping": True,
+                "fixedMaxDim": 256,
+            }
+        ),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200, resp.get_json()
+    cfg = json.loads(Path(captured["config"]).read_text(encoding="utf-8"))
+    reg = cfg["registration"]
+    assert reg["ants_transform"] == "Affine"
+    assert reg["axis_alignment_enabled"] is True
+    assert reg["use_cell_to_ccf_mapping"] is True
+    assert reg["fixed_max_dim"] == 256
+
+
+def test_launch_without_xulab_fields_keeps_safe_defaults(client, tmp_path, monkeypatch):
+    """Old payloads without the new fields default to SyNRA + flags off + no fixed_max_dim."""
+    src_dir = tmp_path / "slices"
+    src_dir.mkdir()
+    imwrite(str(src_dir / "z0050.tif"), np.full((4, 4), 100, dtype=np.uint16))
+
+    captured: dict = {}
+
+    def _fake_runner(config, input_dir, channels, params, *, job_id=None):
+        captured["config"] = str(config)
+
+    monkeypatch.setattr(ctx, "_runner", _fake_runner)
+
+    resp = client.post(
+        "/api/wizard/launch",
+        data=json.dumps(
+            {
+                "sampleId": "legacy42",
+                "inputDir": str(src_dir),
+                "pixelSizeUm": 5.0,
+                "zSpacingUm": 25.0,
+                "channels": ["red"],
+                "atlasHemisphere": "right_flipped",
+            }
+        ),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+    cfg = json.loads(Path(captured["config"]).read_text(encoding="utf-8"))
+    reg = cfg["registration"]
+    assert reg["ants_transform"] == "SyNRA"
+    assert reg["axis_alignment_enabled"] is False
+    assert reg["use_cell_to_ccf_mapping"] is False
+    assert "fixed_max_dim" not in reg
+
+
 def test_launch_dual_channel_rejects_missing_channel_dir(client, tmp_path, monkeypatch):
     """If inputDirs references a directory that doesn't exist, fail fast with
     404 + channel name so the user knows which path is broken.

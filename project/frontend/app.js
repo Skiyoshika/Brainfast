@@ -533,6 +533,12 @@ const LANGS = {
     'newsample.secondChannelHint': 'Runs only detection (~15 min) on the 2nd channel — reuses the first channel\'s registration. Both channels become overlay-able in 3D Liquify.',
     'newsample.secondSource': '2nd source path (directory or multi-page TIFF)',
     'newsample.secondChannel': '2nd channel',
+    'newsample.advanced': 'Advanced (Xu Lab parity)',
+    'newsample.antsTransform': 'ANTs transform',
+    'newsample.fixedMaxDim': 'Fixed max dim (SyN memory)',
+    'newsample.fixedMaxDimHint': 'Downsample fixed side so longest axis \u2264 this before SyN. Empty = full-res.',
+    'newsample.axisAlign': 'Pre-align axes via midline fissure',
+    'newsample.cellToCcf': 'Xu Lab cell\u2192CCF mapping',
     // ----- 3D Liquify -----
     'nav.liquify3d': '3D Liquify',
     'liquify3d.title': '3D Landmark Liquify',
@@ -1089,6 +1095,12 @@ const LANGS = {
     'newsample.secondChannelHint': '仅对第二通道跑检测（约 15 分钟）— 复用第一通道的配准结果。两个通道都能在 3D Liquify 里叠加查看。',
     'newsample.secondSource': '第二通道源路径（目录或多页 TIFF）',
     'newsample.secondChannel': '第二通道',
+    'newsample.advanced': '高级（与 Xu Lab 对齐）',
+    'newsample.antsTransform': 'ANTs 变换类型',
+    'newsample.fixedMaxDim': '固定侧最大尺寸（SyN 省内存）',
+    'newsample.fixedMaxDimHint': '将固定侧最长轴降采样到该值再跑 SyN。留空则原分辨率。',
+    'newsample.axisAlign': '按中线裂预对齐主轴',
+    'newsample.cellToCcf': 'Xu Lab 细胞\u2192CCF 映射',
     // ----- 3D 液化 -----
     'nav.liquify3d': '3D 液化',
     'liquify3d.title': '3D 地标液化',
@@ -7287,13 +7299,24 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       ? `Launching dual-channel pipeline (${channels.join(' + ')})…`
       : 'Launching pipeline…';
     try {
+      const advAntsTransform = document.getElementById('wizAntsTransform')?.value || 'SyNRA';
+      const advFixedMaxDimRaw = document.getElementById('wizFixedMaxDim')?.value;
+      const advFixedMaxDim = advFixedMaxDimRaw ? parseInt(advFixedMaxDimRaw, 10) : null;
+      const advAxisAlign = !!document.getElementById('wizAxisAlign')?.checked;
+      const advCellToCcf = !!document.getElementById('wizCellToCcf')?.checked;
       const payload = {
         sampleId: sampleId.value.trim(),
         pixelSizeUm: parseFloat(pixelUm.value),
         zSpacingUm: parseFloat(zUm.value),
         channels,
         atlasHemisphere: hemi.value,
+        antsTransform: advAntsTransform,
+        axisAlignmentEnabled: advAxisAlign,
+        useCellToCcfMapping: advCellToCcf,
       };
+      if (advFixedMaxDim && Number.isFinite(advFixedMaxDim) && advFixedMaxDim > 0) {
+        payload.fixedMaxDim = advFixedMaxDim;
+      }
       // Keep single-channel shape backwards compatible: inputDir (str) for
       // legacy jobs; inputDirs (dict) when multiple channels are declared.
       if (channels.length > 1) {

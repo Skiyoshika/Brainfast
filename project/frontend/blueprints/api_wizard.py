@@ -207,6 +207,45 @@ def _build_run_config(payload: dict) -> dict:
     hemisphere = str(payload.get("atlasHemisphere", _DEFAULT_HEMISPHERE))
     slice_glob = str(payload.get("sliceGlob") or "z*.tif")
 
+    # Xu Lab parity options (advanced wizard fields).
+    # All default to "Brainfast historical" behaviour so existing wizard
+    # callers with no advanced fields still work unchanged.
+    ants_transform = str(payload.get("antsTransform") or "SyNRA")
+    axis_alignment_enabled = bool(payload.get("axisAlignmentEnabled", False))
+    use_cell_to_ccf_mapping = bool(payload.get("useCellToCcfMapping", False))
+    fixed_max_dim_raw = payload.get("fixedMaxDim")
+    try:
+        fixed_max_dim = int(fixed_max_dim_raw) if fixed_max_dim_raw not in (None, "", 0, "0") else None
+    except (TypeError, ValueError):
+        fixed_max_dim = None
+
+    reg_block: dict[str, object] = {
+        "mode": "2d_slice_with_3d_smoothness",
+        "scope": "whole",
+        "whole_brain_backend": "miki_3d",
+        "truth_source": "3d_registered_volume",
+        "template_path": "configs/allen_ref_cache/average_template_25.nii.gz",
+        "annotation_path": "annotation_25.nii.gz",
+        "skip_laplacian_refinement": False,
+        "ants_transform": ants_transform,
+        "random_seed": 42,
+        "atlas_hemisphere": hemisphere,
+        "atlas_z_from_filename": False,
+        "atlas_z_z_scale": 1.0,
+        "atlas_z_offset": 0,
+        "atlas_z_range": [0, 528],
+        "axis_alignment_enabled": axis_alignment_enabled,
+        "use_cell_to_ccf_mapping": use_cell_to_ccf_mapping,
+        "intensity_adapt": {
+            "mode": "hist_match+clahe",
+            "clahe_kernel_size": 32,
+            "clahe_clip_limit": 0.01,
+        },
+        "ml_flip": False,
+    }
+    if fixed_max_dim is not None:
+        reg_block["fixed_max_dim"] = fixed_max_dim
+
     return {
         "project": {"name": sample_id, "version": "wizard-1.0"},
         "input": {
@@ -222,29 +261,7 @@ def _build_run_config(payload: dict) -> dict:
         },
         "target": {"marker": "neurons", "signal_type": "cyto"},
         "compute": {"device": "auto", "vram_gb": 8},
-        "registration": {
-            "mode": "2d_slice_with_3d_smoothness",
-            "scope": "whole",
-            "whole_brain_backend": "miki_3d",
-            "truth_source": "3d_registered_volume",
-            "template_path": "configs/allen_ref_cache/average_template_25.nii.gz",
-            "annotation_path": "annotation_25.nii.gz",
-            "skip_laplacian_refinement": False,
-            "ants_transform": "SyN",
-            "random_seed": 42,
-            "atlas_hemisphere": hemisphere,
-            "atlas_z_from_filename": False,
-            "atlas_z_z_scale": 1.0,
-            "atlas_z_offset": 0,
-            "atlas_z_range": [0, 528],
-            "axis_alignment_enabled": False,
-            "intensity_adapt": {
-                "mode": "hist_match+clahe",
-                "clahe_kernel_size": 32,
-                "clahe_clip_limit": 0.01,
-            },
-            "ml_flip": False,
-        },
+        "registration": reg_block,
         "detection": {
             "mode": "cellpose",
             "primary_model": "cpsam",

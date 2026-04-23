@@ -134,6 +134,7 @@ def run_ants_registration(
     syn_metric: str | None = "mattes",
     syn_sampling: int | None = 32,
     reg_iterations: tuple[int, ...] | None = None,
+    fixed_max_dim: int | None = None,
 ) -> dict[str, object]:
     """Run ANTs registration — Xu Lab convention with a Brainfast cross-modality patch.
 
@@ -150,6 +151,15 @@ def run_ants_registration(
 
     Pass ``aff_metric=None`` / ``syn_metric=None`` to drop the Mattes override
     and use ANTs defaults (same as Xu Lab).
+
+    ``fixed_max_dim`` (optional, memory-saver): when set, fixed and moving are
+    resampled to a coarser voxel spacing before registration so the longest axis
+    of the fixed image is ≤ this size. ANTs transforms are stored in physical
+    coordinates, so transforms produced at the downsampled grid apply cleanly
+    to full-resolution inputs downstream (``apply_transforms`` resamples the
+    warp field to the target grid automatically). Use this to get SyN through
+    OOM on tight-memory machines — a value of ~256 typically drops peak memory
+    4-8× vs the default 528-slice CCF template.
     """
     # Patch matplotlib compatibility for ANTsPy (matplotlib >=3.10 removed dedent_interpd)
     try:
@@ -168,6 +178,29 @@ def run_ants_registration(
 
     fixed_img = ants.image_read(str(fixed_path))
     moving_img = ants.image_read(str(moving_path))
+
+    if fixed_max_dim is not None and fixed_max_dim > 0:
+        current_max = max(int(s) for s in fixed_img.shape)
+        if current_max > int(fixed_max_dim):
+            factor = current_max / float(fixed_max_dim)
+            new_fixed_spacing = tuple(float(s) * factor for s in fixed_img.spacing)
+            new_moving_spacing = tuple(float(s) * factor for s in moving_img.spacing)
+            import logging as _alog
+
+            _alog.getLogger(__name__).info(
+                "ANTs pre-downsample: fixed %s@%s -> spacing %s; moving %s@%s -> spacing %s "
+                "(factor %.2f, target max dim %d)",
+                fixed_img.shape,
+                fixed_img.spacing,
+                new_fixed_spacing,
+                moving_img.shape,
+                moving_img.spacing,
+                new_moving_spacing,
+                factor,
+                int(fixed_max_dim),
+            )
+            fixed_img = ants.resample_image(fixed_img, new_fixed_spacing, False, 0)
+            moving_img = ants.resample_image(moving_img, new_moving_spacing, False, 0)
 
     reg_kwargs: dict[str, object] = dict(
         fixed=fixed_img,

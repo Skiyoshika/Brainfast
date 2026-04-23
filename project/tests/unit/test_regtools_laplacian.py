@@ -91,3 +91,27 @@ def test_solver_anisotropic_spacing_accepted():
         maxiter=100,
     )
     assert field.shape == (3, 3, 4, 4)
+
+
+def test_slice_to_slice_laplacian_module_importable():
+    """Xu Lab slice-to-slice Laplacian must be exposed from the vendored package."""
+    from project.scripts.regtools_laplacian import sliceToSlice3DLaplacian
+
+    assert callable(sliceToSlice3DLaplacian)
+
+
+def test_slice_to_slice_laplacian_empty_volumes_returns_zero_field():
+    """Empty/blank volumes produce no correspondences; field is zero."""
+    from project.scripts.regtools_laplacian import sliceToSlice3DLaplacian
+
+    fixed = np.zeros((4, 6, 6), dtype=np.float32)
+    moving = np.zeros((4, 6, 6), dtype=np.float32)
+    field = sliceToSlice3DLaplacian(
+        fixedImage=fixed,
+        movingImage=moving,
+        axis=0,
+        rtol=1e-2,
+        maxiter=10,
+    )
+    assert field.shape == (3, 4, 6, 6)
+    assert np.allclose(field, 0.0)

@@ -236,6 +236,95 @@ def test_prepare_half_template_inputs_crops_ap_range_and_left_half(tmp_path):
     assert meta["shape"] == [4, 6, 3]
 
 
+def test_prepare_half_template_inputs_left_flipped_mirrors_left_half(tmp_path):
+    """Symmetric to right_flipped: takes CCF left half then LR-mirrors so the
+    lateral edge lands on the user's image-right side (standard mount for
+    left-hemisphere coronal sections)."""
+    template_path = tmp_path / "template.nii.gz"
+    annotation_path = tmp_path / "annotation.nii.gz"
+
+    template_data = np.arange(4 * 4 * 6, dtype=np.float32).reshape(4, 4, 6)
+    annotation_data = np.arange(4 * 4 * 6, dtype=np.int32).reshape(4, 4, 6)
+    affine = np.eye(4)
+    nib.save(nib.Nifti1Image(template_data, affine), str(template_path))
+    nib.save(nib.Nifti1Image(annotation_data, affine), str(annotation_path))
+
+    out_dir = tmp_path / "prepared_lf"
+    meta = prepare_half_template_inputs(
+        template_path,
+        annotation_path,
+        hemisphere="left_flipped",
+        ap_start=0,
+        ap_end=4,
+        out_dir=out_dir,
+    )
+    tmpl_half = nib.load(str(out_dir / "template_half.nii.gz"))
+    arr = np.asarray(tmpl_half.dataobj)
+
+    # Shape: ap_range × full y × half x
+    assert tmpl_half.shape == (4, 4, 3)
+    assert meta["hemisphere"] == "left_flipped"
+
+    # Verify the LR mirror actually happened: arr should equal
+    # template_data[:, :, :3][:, :, ::-1]
+    expected = template_data[:, :, :3][:, :, ::-1]
+    np.testing.assert_array_equal(arr, expected)
+
+
+def test_prepare_half_template_inputs_whole_returns_full_template(tmp_path):
+    """Whole brain mode skips both the LR crop and the LR flip."""
+    template_path = tmp_path / "template.nii.gz"
+    annotation_path = tmp_path / "annotation.nii.gz"
+
+    template_data = np.arange(4 * 4 * 6, dtype=np.float32).reshape(4, 4, 6)
+    annotation_data = np.arange(4 * 4 * 6, dtype=np.int32).reshape(4, 4, 6)
+    affine = np.eye(4)
+    nib.save(nib.Nifti1Image(template_data, affine), str(template_path))
+    nib.save(nib.Nifti1Image(annotation_data, affine), str(annotation_path))
+
+    out_dir = tmp_path / "prepared_whole"
+    meta = prepare_half_template_inputs(
+        template_path,
+        annotation_path,
+        hemisphere="whole",
+        ap_start=0,
+        ap_end=4,
+        out_dir=out_dir,
+    )
+    tmpl_half = nib.load(str(out_dir / "template_half.nii.gz"))
+
+    # Width is preserved (no half-crop)
+    assert tmpl_half.shape == (4, 4, 6)
+    expected = template_data
+    np.testing.assert_array_equal(np.asarray(tmpl_half.dataobj), expected)
+    assert meta["hemisphere"] == "whole"
+
+
+def test_prepare_half_template_inputs_both_alias_matches_whole(tmp_path):
+    """`both` is an alias of `whole` for back-compat with older config files."""
+    template_path = tmp_path / "template.nii.gz"
+    annotation_path = tmp_path / "annotation.nii.gz"
+
+    template_data = np.arange(4 * 4 * 6, dtype=np.float32).reshape(4, 4, 6)
+    annotation_data = np.arange(4 * 4 * 6, dtype=np.int32).reshape(4, 4, 6)
+    affine = np.eye(4)
+    nib.save(nib.Nifti1Image(template_data, affine), str(template_path))
+    nib.save(nib.Nifti1Image(annotation_data, affine), str(annotation_path))
+
+    out_dir = tmp_path / "prepared_both"
+    meta = prepare_half_template_inputs(
+        template_path,
+        annotation_path,
+        hemisphere="both",
+        ap_start=0,
+        ap_end=4,
+        out_dir=out_dir,
+    )
+    tmpl_half = nib.load(str(out_dir / "template_half.nii.gz"))
+    assert tmpl_half.shape == (4, 4, 6)
+    assert meta["hemisphere"] == "both"
+
+
 @pytest.mark.parametrize("hemisphere", ["right", "right_flipped"])
 def test_prepare_half_template_inputs_uses_zero_origin_affine_for_ants(tmp_path, hemisphere):
     """Template and annotation use zero-origin diagonal affines so ANTs sees

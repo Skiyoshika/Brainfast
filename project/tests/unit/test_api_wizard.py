@@ -389,3 +389,61 @@ def test_launch_inputDirs_alone_synthesizes_inputDir_for_legacy_validation(clien
         content_type="application/json",
     )
     assert resp.status_code == 200, resp.get_json()
+
+
+# ---------------------------------------------------------------------------
+# /api/wizard/extract-multipage-tiff
+# ---------------------------------------------------------------------------
+
+
+def test_extract_multipage_tiff_rejects_missing_fields(client):
+    resp = client.post(
+        "/api/wizard/extract-multipage-tiff",
+        data=json.dumps({}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+
+
+def test_extract_multipage_tiff_rejects_nonexistent_src(client, tmp_path):
+    resp = client.post(
+        "/api/wizard/extract-multipage-tiff",
+        data=json.dumps(
+            {
+                "src": str(tmp_path / "nope.tif"),
+                "outDir": str(tmp_path / "out"),
+            }
+        ),
+        content_type="application/json",
+    )
+    assert resp.status_code == 404
+
+
+def test_extract_multipage_tiff_splits_pages_to_directory(client, tmp_path):
+    """Real round-trip: write a 3-page TIFF, hit the endpoint, verify the
+    output directory ends up with 3 single-page slice files."""
+    src = tmp_path / "multipage.tif"
+    out_dir = tmp_path / "slices"
+    pages = np.stack(
+        [
+            np.full((4, 4), 100, dtype=np.uint16),
+            np.full((4, 4), 200, dtype=np.uint16),
+            np.full((4, 4), 300, dtype=np.uint16),
+        ]
+    )
+    imwrite(str(src), pages)
+
+    resp = client.post(
+        "/api/wizard/extract-multipage-tiff",
+        data=json.dumps({"src": str(src), "outDir": str(out_dir)}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200, resp.get_json()
+    body = resp.get_json()
+    assert body["ok"] is True
+    assert body["writtenCount"] == 3
+    assert out_dir.exists()
+    # extract_zstack writes z*.tif slices
+    written = sorted(p.name for p in out_dir.glob("*.tif"))
+    assert len(written) == 3

@@ -7,7 +7,13 @@ import nibabel as nib
 import numpy as np
 from tifffile import imread
 
-Hemisphere = Literal["left", "right", "right_flipped"]
+Hemisphere = Literal["left", "right", "right_flipped", "left_flipped", "whole", "both"]
+# UX-facing simplified set (what the wizard dropdown emits) is the 3-tuple:
+#   "right_flipped"  → right hemisphere coronal (lateral on image left, standard mount)
+#   "left_flipped"   → left hemisphere coronal (lateral on image right, standard mount)
+#   "whole" / "both" → full bilateral CCF (no crop, no flip)
+# The unflipped "right" / "left" values stay valid to preserve back-compat with
+# existing run_config_*.json files but are no longer surfaced in the wizard.
 
 
 def build_volume_from_tiffs(
@@ -136,12 +142,24 @@ def prepare_half_template_inputs(
 
     mid = template_data.shape[2] // 2
     if hemisphere == "right_flipped":
+        # Right hemisphere coronal, standard mount → lateral on image left
         template_half = template_data[:, :, mid:][:, :, ::-1].copy()
         annotation_half = annotation_data[:, :, mid:][:, :, ::-1].copy()
+    elif hemisphere == "left_flipped":
+        # Left hemisphere coronal, standard mount → lateral on image right.
+        # Symmetric to right_flipped: take CCF left half then mirror so the
+        # lateral edge lands where the user's image expects it.
+        template_half = template_data[:, :, :mid][:, :, ::-1].copy()
+        annotation_half = annotation_data[:, :, :mid][:, :, ::-1].copy()
     elif hemisphere == "right":
         template_half = template_data[:, :, mid:]
         annotation_half = annotation_data[:, :, mid:]
+    elif hemisphere in ("whole", "both"):
+        # Full bilateral CCF — no half-crop, no flip.
+        template_half = template_data
+        annotation_half = annotation_data
     else:
+        # Default + explicit "left" → unflipped CCF left half.
         template_half = template_data[:, :, :mid]
         annotation_half = annotation_data[:, :, :mid]
 

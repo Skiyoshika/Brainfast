@@ -526,7 +526,16 @@ const LANGS = {
     'newsample.sampleId': 'Sample ID',
     'newsample.pixelUm': 'XY pixel (µm)',
     'newsample.zUm': 'Z spacing (µm)',
-    'newsample.hemi': 'Atlas hemisphere',
+    'newsample.hemi': 'What did you scan?',
+    'newsample.hemiRight': 'Right hemisphere · coronal',
+    'newsample.hemiLeft': 'Left hemisphere · coronal',
+    'newsample.hemiWhole': 'Whole brain · coronal',
+    'newsample.browseDir': 'Browse dir',
+    'newsample.browseFile': 'Browse file',
+    'newsample.extractTitle': 'Multi-page TIFF detected — extract slices first',
+    'newsample.extractHint': 'The pipeline runs on a directory of single-page TIFFs. Extract this multi-page file into a slice directory; it will auto-Inspect when done.',
+    'newsample.extractOutDir': 'Output dir',
+    'newsample.extract': 'Extract slices',
     'newsample.channel': 'Channel',
     'newsample.launch': 'Step 3. Generate config & start pipeline',
     'newsample.addSecondChannel': 'Add second channel',
@@ -1103,7 +1112,16 @@ const LANGS = {
     'newsample.sampleId': '样本 ID',
     'newsample.pixelUm': 'XY 像素 (µm)',
     'newsample.zUm': 'Z 间距 (µm)',
-    'newsample.hemi': '图谱半球',
+    'newsample.hemi': '你扫的是哪边？',
+    'newsample.hemiRight': '右半球 · 冠状切片',
+    'newsample.hemiLeft': '左半球 · 冠状切片',
+    'newsample.hemiWhole': '完整脑 · 冠状切片',
+    'newsample.browseDir': '浏览文件夹',
+    'newsample.browseFile': '浏览文件',
+    'newsample.extractTitle': '检测到多页 TIFF —— 需要先拆成切片',
+    'newsample.extractHint': '后续管线只接受单页 TIFF 切片目录。点 Extract 把多页文件拆成切片目录，拆完会自动重新 Inspect。',
+    'newsample.extractOutDir': '输出目录',
+    'newsample.extract': '拆切片',
     'newsample.channel': '通道',
     'newsample.launch': '步骤 3。生成配置并启动管线',
     'newsample.addSecondChannel': '添加第二通道',
@@ -7357,6 +7375,94 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   let lastInspect = null;
   let lastInspect2 = null;
 
+  // ── Source path UX helpers ────────────────────────────────────────────
+  // (1) Strip quotes on paste — Windows "Copy as path" yields `"D:\..."`,
+  //     and a leading/trailing `"` makes Path() fail downstream.
+  const _stripQuotes = (s) => (s || '').replace(/^"+|"+$/g, '').trim();
+  sourceInput?.addEventListener('paste', (e) => {
+    const txt = (e.clipboardData || window.clipboardData).getData('text');
+    if (txt && (txt.startsWith('"') || txt.endsWith('"'))) {
+      e.preventDefault();
+      sourceInput.value = _stripQuotes(txt);
+    }
+  });
+  source2Input?.addEventListener('paste', (e) => {
+    const txt = (e.clipboardData || window.clipboardData).getData('text');
+    if (txt && (txt.startsWith('"') || txt.endsWith('"'))) {
+      e.preventDefault();
+      source2Input.value = _stripQuotes(txt);
+    }
+  });
+
+  // (2) Browse buttons — pop the OS-native file/folder picker via the
+  //     existing /api/browse endpoints (tkinter on the server side, which
+  //     for Brainfast is the user's own local machine).
+  $('wizBrowseDirBtn')?.addEventListener('click', async () => {
+    try {
+      const resp = await fetch('/api/browse/folder', { method: 'POST' });
+      const data = await resp.json();
+      if (data.ok && data.path) sourceInput.value = data.path;
+    } catch (err) {
+      if (inspectStatus) inspectStatus.textContent = 'Browse failed: ' + err.message;
+    }
+  });
+  $('wizBrowseFileBtn')?.addEventListener('click', async () => {
+    try {
+      const resp = await fetch('/api/browse/file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filetypes: 'tif,tiff' }),
+      });
+      const data = await resp.json();
+      if (data.ok && data.path) sourceInput.value = data.path;
+    } catch (err) {
+      if (inspectStatus) inspectStatus.textContent = 'Browse failed: ' + err.message;
+    }
+  });
+
+  // (3) Extract-slices button — visible only when Inspect detects a
+  //     multi-page TIFF.  Calls /api/wizard/extract-multipage-tiff and on
+  //     success rewrites sourceInput to the new slice dir + re-runs Inspect
+  //     so the launch button can light up.
+  const extractRow    = $('wizExtractRow');
+  const extractOutDir = $('wizExtractOutDir');
+  const extractBtn    = $('wizExtractBtn');
+  const extractStatus = $('wizExtractStatus');
+
+  extractBtn?.addEventListener('click', async () => {
+    const src = _stripQuotes(sourceInput.value);
+    const outDir = _stripQuotes(extractOutDir.value);
+    if (!src || !outDir) {
+      if (extractStatus) extractStatus.textContent = 'Provide both src + output dir.';
+      return;
+    }
+    extractBtn.disabled = true;
+    if (extractStatus) extractStatus.textContent = 'Extracting…';
+    try {
+      const resp = await fetch('/api/wizard/extract-multipage-tiff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ src, outDir, channel: 0, everyN: 1 }),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        if (extractStatus) extractStatus.textContent = 'Extract failed: ' + (data.error || resp.status);
+        extractBtn.disabled = false;
+        return;
+      }
+      if (extractStatus) {
+        extractStatus.textContent = `✓ Wrote ${data.writtenCount ?? '?'} slices.`;
+      }
+      sourceInput.value = data.outDir;
+      // Re-run Inspect on the new directory so launch button can enable
+      inspectBtn?.click();
+    } catch (err) {
+      if (extractStatus) extractStatus.textContent = 'Extract failed: ' + err.message;
+    } finally {
+      extractBtn.disabled = false;
+    }
+  });
+
   addSecondToggle?.addEventListener('change', () => {
     if (secondFields) {
       secondFields.style.display = addSecondToggle.checked ? '' : 'none';
@@ -7458,10 +7564,28 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       launchBtn.disabled = data.kind !== 'directory' || (data.n_files || 0) === 0;
       if (launchBtn.disabled) {
         launchStatus.textContent = data.kind === 'multipage_tiff'
-          ? 'Run extract_zstack first; then re-Inspect the resulting slice directory.'
+          ? 'Multi-page TIFF detected — fill output dir below + click Extract slices, then it will auto-Inspect.'
           : 'No TIFF slices found in directory.';
       } else {
         launchStatus.textContent = '';
+      }
+
+      // Reveal Extract row + suggest a default output dir when input is multi-page TIFF
+      if (data.kind === 'multipage_tiff') {
+        if (extractRow) extractRow.style.display = '';
+        if (extractOutDir && !extractOutDir.value) {
+          // Suggest <parent>/<basename>_slices
+          const src = _stripQuotes(sourceInput.value);
+          const lastSlash = Math.max(src.lastIndexOf('/'), src.lastIndexOf('\\'));
+          const dir = lastSlash >= 0 ? src.slice(0, lastSlash) : '.';
+          const name = lastSlash >= 0 ? src.slice(lastSlash + 1) : src;
+          const stem = name.replace(/\.tiff?$/i, '');
+          // Use whatever separator the user already used (defaults to forward slash)
+          const sep = src.includes('\\') ? '\\' : '/';
+          extractOutDir.value = `${dir}${sep}${stem}_slices`;
+        }
+      } else if (extractRow) {
+        extractRow.style.display = 'none';
       }
     } catch (err) {
       inspectStatus.textContent = 'Inspect failed: ' + err.message;

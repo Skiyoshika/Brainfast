@@ -77,6 +77,76 @@ def _read_imagej_spacing(path: Path) -> tuple[float | None, float | None]:
         return None, None
 
 
+@bp.post("/wizard/extract-multipage-tiff")
+def wizard_extract_multipage_tiff():
+    """Split a multi-page TIFF into per-slice TIFFs so the wizard can launch.
+
+    Body: ``{"src": "<path/to/multipage.tif>", "outDir": "<dst dir>",
+              "channel": 0, "everyN": 1}``.
+
+    The wizard's existing logic only enables the launch button when the
+    source path resolves to a directory of single-page TIFFs.  Until this
+    endpoint existed, users with a multi-page TIFF input had to drop to a
+    terminal and run ``python scripts/extract_zstack.py`` by hand.  Now the
+    UI can call this directly and re-Inspect the output dir.
+
+    Synchronous on purpose — typical extracts are 600-1000 pages and run in
+    seconds; if a future input is large enough to need progress streaming we
+    can promote to a job-tracked async run.
+    """
+    payload = request.get_json(silent=True) or {}
+    raw_src = (payload.get("src") or "").strip()
+    raw_out = (payload.get("outDir") or "").strip()
+    if not raw_src or not raw_out:
+        return jsonify(
+            {"ok": False, "error": "missing src/outDir", "error_code": ERR_INVALID_INPUT}
+        ), 400
+
+    src = Path(raw_src).expanduser()
+    out = Path(raw_out).expanduser()
+    if not src.exists() or not src.is_file():
+        return jsonify(
+            {
+                "ok": False,
+                "error": f"src not found or not a file: {src}",
+                "error_code": ERR_NOT_FOUND,
+            }
+        ), 404
+
+    channel = int(payload.get("channel", 0) or 0)
+    every_n = int(payload.get("everyN", 1) or 1)
+
+    try:
+        from project.scripts.extract_zstack import extract_zstack
+
+        written = extract_zstack(
+            src=src,
+            out_dir=out,
+            channel=channel,
+            every_n=every_n,
+            z_min=0,
+            z_max=-1,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": f"extract failed: {exc}"}), 500
+
+    return jsonify(
+        {
+            "ok": True,
+            "src": str(src),
+            "outDir": str(out),
+            "channel": channel,
+            "everyN": every_n,
+            # extract_zstack returns the list of written paths; we surface
+            # just the count for the UI.  Tolerate both ints and lists in case
+            # the underlying contract changes.
+            "writtenCount": (
+                len(written) if hasattr(written, "__len__") else int(written or 0)
+            ),
+        }
+    )
+
+
 @bp.post("/wizard/inspect-source")
 def wizard_inspect_source():
     """Look at a TIFF file or directory and report what kind of input it

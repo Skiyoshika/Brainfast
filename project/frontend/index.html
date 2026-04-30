@@ -773,12 +773,45 @@
                    placeholder="D:/Brainfast/project/data/35_C0_full_raw"
                    style="width:100%;" />
           </label>
+          <button type="button" class="btn" id="wizBrowseDirBtn"
+                  title="Pick a slice-directory in a native file dialog">
+            <i data-lucide="folder" class="btn-icon"></i>
+            <span data-i18n="newsample.browseDir">Browse dir</span>
+          </button>
+          <button type="button" class="btn" id="wizBrowseFileBtn"
+                  title="Pick a multi-page TIFF in a native file dialog">
+            <i data-lucide="file" class="btn-icon"></i>
+            <span data-i18n="newsample.browseFile">Browse file</span>
+          </button>
           <button type="button" class="btn" id="wizInspectBtn">
             <i data-lucide="search" class="btn-icon"></i>
             <span data-i18n="newsample.inspect">Inspect</span>
           </button>
         </div>
         <div id="wizInspectStatus" class="hint-text" style="margin-top:6px;"></div>
+
+        <!-- Multi-page TIFF helper: only shown after Inspect detects a multipage tiff -->
+        <div id="wizExtractRow" class="form-row" style="display:none; margin-top:8px; gap:12px; align-items:end; padding:10px; background:var(--bg-alt,#1a1d24); border-left:3px solid var(--accent,#4c72f5); border-radius:4px;">
+          <div style="flex:1;">
+            <div style="font-size:13px; font-weight:600;" data-i18n="newsample.extractTitle">
+              Multi-page TIFF detected — extract slices first
+            </div>
+            <div class="hint-text" data-i18n="newsample.extractHint">
+              The pipeline runs on a directory of single-page TIFFs. Extract this multi-page
+              file into a slice directory, then re-Inspect it to launch.
+            </div>
+          </div>
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span class="hint-text" data-i18n="newsample.extractOutDir">Output dir</span>
+            <input id="wizExtractOutDir" type="text" placeholder="<src dir>/<basename>_slices"
+                   style="width:300px;" />
+          </label>
+          <button type="button" class="btn btn-primary" id="wizExtractBtn">
+            <i data-lucide="scissors" class="btn-icon"></i>
+            <span data-i18n="newsample.extract">Extract slices</span>
+          </button>
+          <span id="wizExtractStatus" class="hint-text"></span>
+        </div>
 
         <!-- Step 2: Configure -->
         <div style="margin-top:18px; padding-top:10px; border-top:1px dashed var(--border,#333);">
@@ -799,11 +832,17 @@
               <input id="wizZUm" type="number" step="0.001" value="25.0" style="width:120px;" />
             </label>
             <label style="display:flex;flex-direction:column;gap:4px;">
-              <span data-i18n="newsample.hemi">Atlas hemisphere</span>
-              <select id="wizHemi" style="width:160px;">
-                <option value="right_flipped">right_flipped</option>
-                <option value="right">right</option>
-                <option value="left">left</option>
+              <span data-i18n="newsample.hemi">What did you scan?</span>
+              <select id="wizHemi" style="width:240px;">
+                <option value="right_flipped" data-i18n="newsample.hemiRight">
+                  Right hemisphere · coronal
+                </option>
+                <option value="left_flipped" data-i18n="newsample.hemiLeft">
+                  Left hemisphere · coronal
+                </option>
+                <option value="whole" data-i18n="newsample.hemiWhole">
+                  Whole brain · coronal
+                </option>
               </select>
             </label>
             <label style="display:flex;flex-direction:column;gap:4px;">

@@ -61,7 +61,7 @@ def stitching_available():
             "ok": True,
             "available": ok,
             "missing": _missing_module(err),
-            "install": "pip install -e \".[stitching]\"",
+            "install": 'pip install -e ".[stitching]"',
             "defaultBezierPath": str(default_bezier),
             "defaultBezierAvailable": default_bezier.exists(),
             "requiresBezierPath": not default_bezier.exists(),
@@ -136,7 +136,7 @@ def stitching_start():
             jsonify(
                 {
                     "ok": False,
-                    "error": "Stitching deps missing. Install with: pip install -e \".[stitching]\"",
+                    "error": 'Stitching deps missing. Install with: pip install -e ".[stitching]"',
                     "missing_module": _missing_module(err),
                 }
             ),

@@ -26,31 +26,36 @@ import gc
 import time
 import sys
 import logging
+
 logging.getLogger().setLevel(logging.INFO)
 logging.captureWarnings(True)
 
 # Enable ANSI escape sequences on Windows
 import colorama
 from colorama import Fore, Style
+
 colorama.init()
 
 # Color shortcuts for pretty printing (matches registration pipeline)
-C_HEADER = Fore.CYAN + Style.BRIGHT      # Section headers
-C_STEP = Fore.BLUE + Style.BRIGHT        # Step indicators
-C_INFO = Fore.WHITE                       # General info
-C_PATH = Fore.YELLOW                      # File paths
-C_VALUE = Fore.MAGENTA                    # Numeric values
-C_SUCCESS = Fore.GREEN + Style.BRIGHT    # Success messages
-C_WARN = Fore.YELLOW + Style.BRIGHT      # Warnings
-C_ERROR = Fore.RED + Style.BRIGHT        # Errors
-C_RESET = Style.RESET_ALL                # Reset to default
+C_HEADER = Fore.CYAN + Style.BRIGHT  # Section headers
+C_STEP = Fore.BLUE + Style.BRIGHT  # Step indicators
+C_INFO = Fore.WHITE  # General info
+C_PATH = Fore.YELLOW  # File paths
+C_VALUE = Fore.MAGENTA  # Numeric values
+C_SUCCESS = Fore.GREEN + Style.BRIGHT  # Success messages
+C_WARN = Fore.YELLOW + Style.BRIGHT  # Warnings
+C_ERROR = Fore.RED + Style.BRIGHT  # Errors
+C_RESET = Style.RESET_ALL  # Reset to default
 
 # ANSI escape code stripping regex (for log file output)
 import re as _re_ansi
-_ANSI_ESCAPE = _re_ansi.compile(r'\x1b\[[0-9;]*m')
+
+_ANSI_ESCAPE = _re_ansi.compile(r"\x1b\[[0-9;]*m")
 
 # Ensure project root is on sys.path when run as a standalone script.
-_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+_project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
@@ -59,19 +64,19 @@ if _project_root not in sys.path:
 # this file does not depend on the wider Xu Lab utils tree). Semantics match
 # upstream: dual stdout + file, strips ANSI for the file, restores on close().
 class _Tee:
-    _TEE_ANSI_RE = _re_ansi.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    _TEE_ANSI_RE = _re_ansi.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
     def __init__(self, log_path):
         self.terminal = sys.stdout
         self._original_stderr = sys.stderr
-        self.log_file = open(log_path, 'w', encoding='utf-8')
+        self.log_file = open(log_path, "w", encoding="utf-8")
 
     def write(self, message):
         try:
             self.terminal.write(message)
         except UnicodeEncodeError:
-            self.terminal.write(message.encode('ascii', errors='replace').decode('ascii'))
-        clean_message = self._TEE_ANSI_RE.sub('', message)
+            self.terminal.write(message.encode("ascii", errors="replace").decode("ascii"))
+        clean_message = self._TEE_ANSI_RE.sub("", message)
         self.log_file.write(clean_message)
         self.log_file.flush()
 
@@ -83,6 +88,7 @@ class _Tee:
         sys.stdout = self.terminal
         sys.stderr = self._original_stderr
         self.log_file.close()
+
 
 # Third party imports
 import glob
@@ -113,7 +119,7 @@ def bernstein(u, n: int, k: int) -> float:
     Returns:
         float: Bernstein polynomial output
     """
-    return binom(n, k) * u**k * (1 - u)**(n - k)
+    return binom(n, k) * u**k * (1 - u) ** (n - k)
 
 
 def create_perfect_grid(nhs: int, nvs: int, lw: float, sw: float) -> np.ndarray:
@@ -134,10 +140,22 @@ def create_perfect_grid(nhs: int, nvs: int, lw: float, sw: float) -> np.ndarray:
     im = np.zeros((2 * xs + nvs * sw + lw, 2 * ys + nhs * sw + lw))
     # Generate horizontal lines
     for i in range(nhs + 1):
-        cv2.line(im, (xs + i * sw, ys), (xs + i * sw, im.shape[0] - ys - int(lw / 2)), (255, 255, 255), thickness=lw)
+        cv2.line(
+            im,
+            (xs + i * sw, ys),
+            (xs + i * sw, im.shape[0] - ys - int(lw / 2)),
+            (255, 255, 255),
+            thickness=lw,
+        )
     # Generate vertical lines
     for i in range(nvs + 1):
-        cv2.line(im, (xs, ys + i * sw), (im.shape[1] - xs - int(lw / 2), ys + i * sw), (255, 255, 255), thickness=lw)
+        cv2.line(
+            im,
+            (xs, ys + i * sw),
+            (im.shape[1] - xs - int(lw / 2), ys + i * sw),
+            (255, 255, 255),
+            thickness=lw,
+        )
     return im
 
 
@@ -162,12 +180,12 @@ def get_deformation_map(width: int, height: int, kx, ky) -> tuple:
                shape (2*width, 2*height) each.
     """
     n, m = 4, 4
-    n_rows = 2 * width    # corresponds to the 'i' / row axis
-    n_cols = 2 * height   # corresponds to the 'j' / column axis
+    n_rows = 2 * width  # corresponds to the 'i' / row axis
+    n_cols = 2 * height  # corresponds to the 'j' / column axis
 
     # 1-D Bernstein basis vectors — tiny matrices
-    u_vals = np.arange(n_cols, dtype=np.float64) / n_cols   # column param
-    v_vals = np.arange(n_rows, dtype=np.float64) / n_rows   # row param
+    u_vals = np.arange(n_cols, dtype=np.float64) / n_cols  # column param
+    v_vals = np.arange(n_rows, dtype=np.float64) / n_rows  # row param
 
     Bu = np.column_stack([bernstein(u_vals, n, i) for i in range(n + 1)])  # (n_cols, 5)
     Bv = np.column_stack([bernstein(v_vals, m, j) for j in range(m + 1)])  # (n_rows, 5)
@@ -210,13 +228,12 @@ def correct_deformation(im0: np.ndarray, H, map_x, map_y) -> np.ndarray:
     # cv2.remap does bilinear interpolation in optimised C++ with SIMD.
     # map_x provides the source column for each destination pixel,
     # map_y provides the source row.  Output shape matches map shape.
-    upsampled = cv2.remap(im_warp, map_x, map_y,
-                          interpolation=cv2.INTER_LINEAR,
-                          borderMode=cv2.BORDER_REPLICATE)
+    upsampled = cv2.remap(
+        im_warp, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE
+    )
     del im_warp
 
-    return cv2.resize(np.float32(upsampled), (w, h),
-                      interpolation=cv2.INTER_AREA)
+    return cv2.resize(np.float32(upsampled), (w, h), interpolation=cv2.INTER_AREA)
 
 
 def get_missing_tile_paths(missing_tiles) -> list:
@@ -231,8 +248,8 @@ def get_missing_tile_paths(missing_tiles) -> list:
     paths = []
 
     for index, path in missing_tiles.items():
-        spath = ','.join(map(str, path))
-        logging.info('Writing missing tile path for tile {0} as {1}'.format(index, spath))
+        spath = ",".join(map(str, path))
+        logging.info("Writing missing tile path for tile {0} as {1}".format(index, spath))
         paths.append(spath)
 
     return paths
@@ -273,8 +290,7 @@ def write_output(imgarr: np.ndarray, path: str):
     cv2.imwrite(path, out)
 
 
-def normalize_image_by_median(image: np.ndarray,
-                              dark_level: float = 0.0) -> np.ndarray:
+def normalize_image_by_median(image: np.ndarray, dark_level: float = 0.0) -> np.ndarray:
     """Creates a multiplicative gain map from an average-tile image.
 
     The gain map is ``(median - dark) / (image - dark)``, designed so that
@@ -305,9 +321,8 @@ def normalize_image_by_median(image: np.ndarray,
     median = np.median(image)
 
     if median > dark_level:
-        with np.errstate(divide='ignore', invalid='ignore'):
-            gain = np.divide(median - dark_level,
-                             image - dark_level)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            gain = np.divide(median - dark_level, image - dark_level)
         gain[np.isnan(gain)] = 1.0
         gain[np.isinf(gain)] = 1.0
         np.clip(gain, 0.1, 3.0, out=gain)
@@ -374,26 +389,28 @@ def _estimate_noise_floors(section_jsons, n_channels, max_samples=200):
         detected (meaning include everything).
     """
     import random as _random
+
     rng = _random.Random(42)  # fixed seed for reproducibility
 
     # Collect all tile paths per channel
     tiles_by_ch = [[] for _ in range(n_channels)]
     for sj in section_jsons:
-        for t in sj['tiles']:
-            ch = t['channel'] - 1
+        for t in sj["tiles"]:
+            ch = t["channel"] - 1
             if 0 <= ch < n_channels:
-                tiles_by_ch[ch].append(t['path'])
+                tiles_by_ch[ch].append(t["path"])
 
     results = []
     for ch in range(n_channels):
         paths = tiles_by_ch[ch]
         if not paths:
-            results.append({'tile_threshold': 0.0, 'pixel_threshold': 0.0})
+            results.append({"tile_threshold": 0.0, "pixel_threshold": 0.0})
             continue
 
         # Sample a subset for speed
-        sampled = (rng.sample(paths, min(max_samples, len(paths)))
-                   if len(paths) > max_samples else paths)
+        sampled = (
+            rng.sample(paths, min(max_samples, len(paths))) if len(paths) > max_samples else paths
+        )
 
         # Compute tile medians in parallel (I/O-bound; cv2.imread releases GIL)
         def _read_median(p):
@@ -406,7 +423,7 @@ def _estimate_noise_floors(section_jsons, n_channels, max_samples=200):
             medians = [m for m in pool.map(_read_median, sampled) if m is not None]
 
         if len(medians) < 2:
-            results.append({'tile_threshold': 0.0, 'pixel_threshold': 0.0})
+            results.append({"tile_threshold": 0.0, "pixel_threshold": 0.0})
             continue
 
         medians = np.array(medians, dtype=np.float64)
@@ -414,47 +431,45 @@ def _estimate_noise_floors(section_jsons, n_channels, max_samples=200):
 
         # If all tile medians are nearly identical, no split is meaningful
         if mx - mn < 1.0:
-            results.append({'tile_threshold': 0.0, 'pixel_threshold': 0.0})
+            results.append({"tile_threshold": 0.0, "pixel_threshold": 0.0})
             continue
 
         # --- Otsu on tile medians ---
         # Scale to uint8 for cv2.threshold (Otsu needs integer histogram).
         scaled = ((medians - mn) / (mx - mn) * 255).astype(np.uint8)
         otsu_val, _ = cv2.threshold(
-            scaled.reshape(-1, 1), 0, 255,
-            cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            scaled.reshape(-1, 1), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
         )
         tile_thresh = mn + (otsu_val / 255.0) * (mx - mn)
 
         # Safety: if the threshold falls above 50 % of the median range,
         # there are likely no truly empty tiles — include everything.
         if (tile_thresh - mn) / (mx - mn) > 0.5:
-            results.append({'tile_threshold': 0.0, 'pixel_threshold': 0.0})
+            results.append({"tile_threshold": 0.0, "pixel_threshold": 0.0})
             continue
 
         # --- Noise floor from the dark-tile cluster ---
         dark_medians = medians[medians <= tile_thresh]
         if len(dark_medians) > 0:
             noise_mean = float(np.mean(dark_medians))
-            noise_std = (float(np.std(dark_medians))
-                         if len(dark_medians) > 1
-                         else noise_mean * 0.5)
+            noise_std = float(np.std(dark_medians)) if len(dark_medians) > 1 else noise_mean * 0.5
             pixel_thresh = noise_mean + 3.0 * noise_std
         else:
             noise_mean = 0.0
             pixel_thresh = 0.0
 
-        results.append({
-            'tile_threshold': float(tile_thresh),
-            'pixel_threshold': float(max(pixel_thresh, 1.0)),
-            'dark_level': float(noise_mean),
-        })
+        results.append(
+            {
+                "tile_threshold": float(tile_thresh),
+                "pixel_threshold": float(max(pixel_thresh, 1.0)),
+                "dark_level": float(noise_mean),
+            }
+        )
 
     return results
 
 
-def get_section_avg(tiles: list, n_channels: int = 4,
-                    noise_thresholds=None):
+def get_section_avg(tiles: list, n_channels: int = 4, noise_thresholds=None):
     """Per-pixel illumination-weighted accumulation for vignetting estimation.
 
     Uses auto-detected thresholds (from :func:`_estimate_noise_floors`) at
@@ -490,15 +505,15 @@ def get_section_avg(tiles: list, n_channels: int = 4,
 
     for tile in tiles:
         try:
-            im = read_image(tile['path'])
+            im = read_image(tile["path"])
             ch = tile["channel"] - 1
             if ch >= n_channels:
                 continue
 
             # --- Per-channel adaptive thresholds ---
             if noise_thresholds and ch < len(noise_thresholds):
-                tile_thresh = noise_thresholds[ch]['tile_threshold']
-                pixel_thresh = noise_thresholds[ch]['pixel_threshold']
+                tile_thresh = noise_thresholds[ch]["tile_threshold"]
+                pixel_thresh = noise_thresholds[ch]["pixel_threshold"]
             else:
                 tile_thresh = 0.0
                 pixel_thresh = 0.0
@@ -519,8 +534,9 @@ def get_section_avg(tiles: list, n_channels: int = 4,
                 counts[ch] += 1  # broadcasts: every pixel counted
 
         except (IOError, OSError, RuntimeError):
-            logging.info('Did not find image tile for channel %d (zero-indexed)',
-                         tile.get('channel', 0) - 1)
+            logging.info(
+                "Did not find image tile for channel %d (zero-indexed)", tile.get("channel", 0) - 1
+            )
 
     return sums, counts
 
@@ -535,8 +551,9 @@ def get_section_avg(tiles: list, n_channels: int = 4,
 _VIGNETTE_SMOOTH_SIGMA = 30
 
 
-def generate_avg_tiles(section_jsons: list, avg_tiles_dir: str, n_threads: int,
-                      n_channels: int = 4):
+def generate_avg_tiles(
+    section_jsons: list, avg_tiles_dir: str, n_threads: int, n_channels: int = 4
+):
     """Generates average tiles for each channel.
 
     First estimates the per-channel noise floor by sampling tile medians
@@ -557,17 +574,18 @@ def generate_avg_tiles(section_jsons: list, avg_tiles_dir: str, n_threads: int,
     print(f"  {C_INFO}Estimating noise floor from tile medians...{C_RESET}")
     noise_thresholds = _estimate_noise_floors(section_jsons, n_channels)
     for ch, t in enumerate(noise_thresholds):
-        if t['tile_threshold'] > 0:
-            print(f"    {C_INFO}Ch {ch}: tile thresh = {C_VALUE}{t['tile_threshold']:.1f}{C_RESET}"
-                  f"{C_INFO}, pixel thresh = {C_VALUE}{t['pixel_threshold']:.1f}{C_RESET}"
-                  f"{C_INFO}, dark level = {C_VALUE}{t.get('dark_level', 0):.1f}{C_RESET}")
+        if t["tile_threshold"] > 0:
+            print(
+                f"    {C_INFO}Ch {ch}: tile thresh = {C_VALUE}{t['tile_threshold']:.1f}{C_RESET}"
+                f"{C_INFO}, pixel thresh = {C_VALUE}{t['pixel_threshold']:.1f}{C_RESET}"
+                f"{C_INFO}, dark level = {C_VALUE}{t.get('dark_level', 0):.1f}{C_RESET}"
+            )
         else:
             print(f"    {C_INFO}Ch {ch}: no empty tiles detected, including all{C_RESET}")
 
     # --- Parallel per-section accumulation with adaptive thresholds ---
     results = Parallel(n_jobs=n_threads, verbose=13)(
-        delayed(get_section_avg)(sj['tiles'], n_channels, noise_thresholds)
-        for sj in section_jsons
+        delayed(get_section_avg)(sj["tiles"], n_channels, noise_thresholds) for sj in section_jsons
     )
 
     # --- Global pixel-weighted mean across all sections ---
@@ -610,27 +628,32 @@ def generate_avg_tiles(section_jsons: list, avg_tiles_dir: str, n_threads: int,
             # (linear extrapolation) continues the vignetting decline
             # past the tile boundary, eliminating the bias.
             _pad = int(np.ceil(3.0 * _VIGNETTE_SMOOTH_SIGMA))
-            avg_padded = np.pad(avg, _pad, mode='reflect',
-                                reflect_type='odd')
+            avg_padded = np.pad(avg, _pad, mode="reflect", reflect_type="odd")
             np.clip(avg_padded, 1.0, None, out=avg_padded)
             h, w = avg.shape
-            avg = cv2.GaussianBlur(avg_padded, (0, 0),
-                                   sigmaX=_VIGNETTE_SMOOTH_SIGMA
-                                   )[_pad:_pad + h,
-                                     _pad:_pad + w].copy()
+            avg = cv2.GaussianBlur(avg_padded, (0, 0), sigmaX=_VIGNETTE_SMOOTH_SIGMA)[
+                _pad : _pad + h, _pad : _pad + w
+            ].copy()
             del avg_padded
         else:
             avg[:] = 1.0  # no tissue found; identity gain
 
-        cv2.imwrite(os.path.join(avg_tiles_dir, f"avg_tile_{ch}.tif"),
-                    avg.astype(np.float32))
+        cv2.imwrite(os.path.join(avg_tiles_dir, f"avg_tile_{ch}.tif"), avg.astype(np.float32))
 
     return noise_thresholds
 
 
-def _process_one_tile(tile_params, avg_tiles, H, pX_, pY_, save_undistorted,
-                     vignetting_correction=True, noise_thresholds=None,
-                     undistorted_dir=None):
+def _process_one_tile(
+    tile_params,
+    avg_tiles,
+    H,
+    pX_,
+    pY_,
+    save_undistorted,
+    vignetting_correction=True,
+    noise_thresholds=None,
+    undistorted_dir=None,
+):
     """Process a single tile: read, correct vignetting & deformation, create Tile.
 
     Extracted as a standalone function so tiles can be processed in parallel
@@ -638,7 +661,7 @@ def _process_one_tile(tile_params, avg_tiles, H, pX_, pY_, save_undistorted,
     """
     tile = tile_params.copy()
     try:
-        im = read_image(tile['path'])
+        im = read_image(tile["path"])
 
         # Flat-field vignetting correction: subtracts the camera dark
         # level before applying the gain map, then adds it back.  This
@@ -647,13 +670,13 @@ def _process_one_tile(tile_params, avg_tiles, H, pX_, pY_, save_undistorted,
         # would create sharp intensity seams at every tile boundary.
         #   corrected = (raw - dark) × gain + dark
         if vignetting_correction:
-            ch_idx = tile['channel'] - 1
+            ch_idx = tile["channel"] - 1
             if ch_idx < len(avg_tiles):
                 avg = avg_tiles[ch_idx]
                 im = im.astype(np.float32)
                 dark = np.float32(0)
                 if noise_thresholds and ch_idx < len(noise_thresholds):
-                    dark = np.float32(noise_thresholds[ch_idx].get('dark_level', 0))
+                    dark = np.float32(noise_thresholds[ch_idx].get("dark_level", 0))
                 if dark > 0:
                     im -= dark
                 np.multiply(im, avg, out=im)
@@ -663,30 +686,36 @@ def _process_one_tile(tile_params, avg_tiles, H, pX_, pY_, save_undistorted,
         # Correct deformation
         im_corrected = correct_deformation(im, H, pX_, pY_)
         del im  # free raw tile immediately
-        tile['image'] = im_corrected
+        tile["image"] = im_corrected
         if save_undistorted and undistorted_dir is not None:
-            undistorted_tile_path = os.path.join(undistorted_dir,
-                                                 "ch{}".format(tile['channel'] - 1),
-                                                 os.path.split(tile['path'])[1])
+            undistorted_tile_path = os.path.join(
+                undistorted_dir, "ch{}".format(tile["channel"] - 1), os.path.split(tile["path"])[1]
+            )
             write_output(np.ascontiguousarray(im_corrected), undistorted_tile_path)
-        tile['is_missing'] = False
+        tile["is_missing"] = False
 
     # If the tile is missing, set the image to None and is_missing to True
     except (IOError, OSError, RuntimeError) as err:
-        tile['image'] = None
-        tile['is_missing'] = True
+        tile["image"] = None
+        tile["is_missing"] = True
 
     # Decrement channel by 1 to make it zero-indexed
-    tile['channel'] = tile['channel'] - 1
+    tile["channel"] = tile["channel"] - 1
     return Tile(**tile)
 
 
-def generate_tiles(tiles: list, avg_tiles: list,
-                   H, pX_, pY_, ch: int = None,
-                   save_undistorted: bool = False,
-                   vignetting_correction: bool = True,
-                   noise_thresholds=None,
-                   undistorted_dir=None):
+def generate_tiles(
+    tiles: list,
+    avg_tiles: list,
+    H,
+    pX_,
+    pY_,
+    ch: int = None,
+    save_undistorted: bool = False,
+    vignetting_correction: bool = True,
+    noise_thresholds=None,
+    undistorted_dir=None,
+):
     """Generate the images for the tiles and applies processing on them.
 
     Tiles are processed in parallel using threads. The per-tile work (I/O,
@@ -710,7 +739,7 @@ def generate_tiles(tiles: list, avg_tiles: list,
     """
     # Filter to specific channel if requested
     if ch is not None:
-        tiles = [t for t in tiles if t['channel'] == ch + 1]
+        tiles = [t for t in tiles if t["channel"] == ch + 1]
 
     if not tiles:
         return []
@@ -721,10 +750,18 @@ def generate_tiles(tiles: list, avg_tiles: list,
     max_workers = min(4, len(tiles))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [
-            executor.submit(_process_one_tile, t, avg_tiles, H, pX_, pY_,
-                            save_undistorted,
-                            vignetting_correction, noise_thresholds,
-                            undistorted_dir)
+            executor.submit(
+                _process_one_tile,
+                t,
+                avg_tiles,
+                H,
+                pX_,
+                pY_,
+                save_undistorted,
+                vignetting_correction,
+                noise_thresholds,
+                undistorted_dir,
+            )
             for t in tiles
         ]
         return [f.result() for f in futures]
@@ -755,18 +792,20 @@ def create_section_json(sno: int, sectionName: str, mosaic_data: list):
     mcolumns = int(mosaic_data["mcolumns"])
     mrows = int(mosaic_data["mrows"])
     tiles_per_position = mrows * mcolumns
-    image_dimensions = {"row": mrows * size['row'] + 2 * startx,
-                        "column": mcolumns * size['column'] + 2 * starty}
+    image_dimensions = {
+        "row": mrows * size["row"] + 2 * startx,
+        "column": mcolumns * size["column"] + 2 * starty,
+    }
 
     # Auto-detect tile indices from actual files in the section folder.
     # This handles both old format (0-based per-section indices) and new
     # format (globally cumulative indices).
-    all_tifs = glob.glob(os.path.join(sectionName, '*.tif'))
+    all_tifs = glob.glob(os.path.join(sectionName, "*.tif"))
     tile_indices = set()
     for fpath in all_tifs:
         fname = os.path.basename(fpath)
         # Extract the numeric index from filename pattern: *-{index}_{channel}.tif
-        m = _re.search(r'-(\d+)_\d+\.tif$', fname)
+        m = _re.search(r"-(\d+)_\d+\.tif$", fname)
         if m:
             tile_indices.add(int(m.group(1)))
     tile_indices = sorted(tile_indices)
@@ -789,7 +828,7 @@ def create_section_json(sno: int, sectionName: str, mosaic_data: list):
             index = layer_indices[pos]
             pos += 1
 
-            tile_paths = sorted(glob.glob(f'{sectionName}/*-{index}_*.tif'))
+            tile_paths = sorted(glob.glob(f"{sectionName}/*-{index}_*.tif"))
             if len(tile_paths) == 0:
                 continue
             bounds = {}
@@ -801,9 +840,16 @@ def create_section_json(sno: int, sectionName: str, mosaic_data: list):
                 col["start"] = startx + ncol * size["column"] + ncol * txx + nrow * tyx
                 col["end"] = col["start"] + size["column"]
             else:
-                row["start"] = starty + (mrows - nrow - 1) * size["row"] + (mrows - nrow - 1) * tyy + ncol * txy
+                row["start"] = (
+                    starty
+                    + (mrows - nrow - 1) * size["row"]
+                    + (mrows - nrow - 1) * tyy
+                    + ncol * txy
+                )
                 row["end"] = row["start"] + size["row"]
-                col["start"] = startx + ncol * size["column"] + ncol * txx + (mrows - nrow - 1) * tyx
+                col["start"] = (
+                    startx + ncol * size["column"] + ncol * txx + (mrows - nrow - 1) * tyx
+                )
                 col["end"] = col["start"] + size["column"]
             bounds["row"] = row
             bounds["column"] = col
@@ -811,7 +857,7 @@ def create_section_json(sno: int, sectionName: str, mosaic_data: list):
                 tile_data = {}
                 tile_data["path"] = path
                 tile_data["bounds"] = bounds
-                tile_data["margins"]= margins
+                tile_data["margins"] = margins
                 tile_data["size"] = size
                 tile_data["channel"] = ch + 1
                 tile_data["index"] = index
@@ -821,7 +867,7 @@ def create_section_json(sno: int, sectionName: str, mosaic_data: list):
     unique_channels = sorted(set(t["channel"] for t in tiles))
     section_json["channels"] = unique_channels if unique_channels else [1]
     section_json["tiles"] = tiles
-    section_json['slice_fname'] = os.path.split(sectionName)[-1] + "_1"
+    section_json["slice_fname"] = os.path.split(sectionName)[-1] + "_1"
     section_json["image_dimensions"] = image_dimensions
     return section_json
 
@@ -838,21 +884,22 @@ def get_section_data(root_dir: str, n_threads: int, sectionNum: int = -1):
     Returns:
         _type_: Section data
     """
-    files = glob.glob(root_dir + 'Mosaic*')
+    files = glob.glob(root_dir + "Mosaic*")
     print(f"  {C_INFO}Input directory: {C_PATH}{root_dir}{C_RESET}")
     print(f"  {C_INFO}Mosaic files found: {C_VALUE}{len(files)}{C_RESET}")
     # Look for mosaic file
     if len(files) == 0:
-        raise FileNotFoundError(f"No Mosaic file found in {root_dir}. "
-                                "Expected a file matching '*Mosaic*'.")
+        raise FileNotFoundError(
+            f"No Mosaic file found in {root_dir}. Expected a file matching '*Mosaic*'."
+        )
     else:
         mosaic_file = files[0]
 
     mosaic_data = {}
     with open(mosaic_file) as fp:
         for line in fp:
-            k,v = line.rstrip("\n").split(":",1)
-            mosaic_data[k]=v
+            k, v = line.rstrip("\n").split(":", 1)
+            mosaic_data[k] = v
 
     sectionNames = glob.glob(root_dir + mosaic_data["Sample ID"] + "*")
     # Filter to directories only (avoid matching log files or other non-directory entries)
@@ -860,24 +907,36 @@ def get_section_data(root_dir: str, n_threads: int, sectionNum: int = -1):
 
     # If a specific section number is provided, generate the section data for that section only
     if sectionNum != -1:
-        sectionName = os.path.join(root_dir, "{}-{:04d}".format(mosaic_data["Sample ID"], sectionNum + 1))
+        sectionName = os.path.join(
+            root_dir, "{}-{:04d}".format(mosaic_data["Sample ID"], sectionNum + 1)
+        )
         section_jsons = [create_section_json(sectionNum, sectionName, mosaic_data)]
         return mosaic_data, section_jsons
 
     # Otherwise, generate section data for all sections
-    section_jsons = Parallel(n_jobs=n_threads)(delayed(create_section_json)(sno, sectionName, mosaic_data)
-                                               for sno,sectionName in enumerate(sectionNames))
+    section_jsons = Parallel(n_jobs=n_threads)(
+        delayed(create_section_json)(sno, sectionName, mosaic_data)
+        for sno, sectionName in enumerate(sectionNames)
+    )
 
     return mosaic_data, section_jsons
 
 
-def stitch_section(data: dict, avg_tiles: list, output_dir: str, H, pX_, pY_,
-                   ch: int = None, save_undistorted: bool = False,
-                   blend_mode: str = 'multiband',
-                   vignetting_correction: bool = True,
-                   noise_thresholds=None,
-                   seam_correction: bool = True,
-                   zero_background: bool = False):
+def stitch_section(
+    data: dict,
+    avg_tiles: list,
+    output_dir: str,
+    H,
+    pX_,
+    pY_,
+    ch: int = None,
+    save_undistorted: bool = False,
+    blend_mode: str = "multiband",
+    vignetting_correction: bool = True,
+    noise_thresholds=None,
+    seam_correction: bool = True,
+    zero_background: bool = False,
+):
     """Stitches the tiles together to create a complete section.
 
     Args:
@@ -895,11 +954,20 @@ def stitch_section(data: dict, avg_tiles: list, output_dir: str, H, pX_, pY_,
     """
 
     # Derive undistorted_dir from output_dir when save_undistorted is enabled
-    _undistorted_dir = os.path.join(output_dir, 'undistorted') if save_undistorted else None
+    _undistorted_dir = os.path.join(output_dir, "undistorted") if save_undistorted else None
 
-    tiles = generate_tiles(data['tiles'], avg_tiles, H, pX_, pY_, ch, save_undistorted,
-                           vignetting_correction, noise_thresholds,
-                           _undistorted_dir)
+    tiles = generate_tiles(
+        data["tiles"],
+        avg_tiles,
+        H,
+        pX_,
+        pY_,
+        ch,
+        save_undistorted,
+        vignetting_correction,
+        noise_thresholds,
+        _undistorted_dir,
+    )
 
     # Derive per-channel noise floors for gain compensation.
     # Uses pixel_threshold + 5 to ensure background pixels are excluded
@@ -908,33 +976,40 @@ def stitch_section(data: dict, avg_tiles: list, output_dir: str, H, pX_, pY_,
     # dataset without hardcoded thresholds.
     seam_noise_floors = None
     if noise_thresholds is not None:
-        seam_noise_floors = [
-            nt.get('pixel_threshold', 30.0) + 5.0
-            for nt in noise_thresholds
-        ]
+        seam_noise_floors = [nt.get("pixel_threshold", 30.0) + 5.0 for nt in noise_thresholds]
 
-    stitcher = Stitcher(data['image_dimensions'], tiles, data['channels'],
-                        blend_mode=blend_mode,
-                        noise_floors=seam_noise_floors,
-                        seam_correction=seam_correction,
-                        zero_background=zero_background)
+    stitcher = Stitcher(
+        data["image_dimensions"],
+        tiles,
+        data["channels"],
+        blend_mode=blend_mode,
+        noise_floors=seam_noise_floors,
+        seam_correction=seam_correction,
+        zero_background=zero_background,
+    )
     image, missing = stitcher.run()
     # Tiles' image data was already freed inside stitcher.run()
-    del tiles, stitcher; gc.collect()
+    del tiles, stitcher
+    gc.collect()
     missing_tile_paths = get_missing_tile_paths(missing)
 
     # Write each channel individually and free its slice to avoid keeping
     # the full multi-channel mosaic in memory while writing.
     if ch is None:
         for c in range(image.shape[2]):
-            slice_path = os.path.join(output_dir, "stitched_ch{}".format(c), data['slice_fname'] + "_{}.tif".format(c))
+            slice_path = os.path.join(
+                output_dir, "stitched_ch{}".format(c), data["slice_fname"] + "_{}.tif".format(c)
+            )
             print(f"  {C_SUCCESS}Saved:{C_RESET} {C_PATH}{slice_path}{C_RESET}")
             write_output(image[:, :, c], slice_path)
     else:
-        slice_path = os.path.join(output_dir, "stitched_ch{}".format(ch), data['slice_fname'] + "_{}.tif".format(ch))
+        slice_path = os.path.join(
+            output_dir, "stitched_ch{}".format(ch), data["slice_fname"] + "_{}.tif".format(ch)
+        )
         print(f"  {C_SUCCESS}Saved:{C_RESET} {C_PATH}{slice_path}{C_RESET}")
         write_output(image[:, :, ch], slice_path)
-    del image; gc.collect()
+    del image
+    gc.collect()
 
 
 def _preview_one_image(tif_path: str, dst_dir: str, scale: float):
@@ -964,10 +1039,8 @@ def _preview_one_image(tif_path: str, dst_dir: str, scale: float):
     nz = im[im > 0].ravel()
     if len(nz) > 1000:
         q25 = float(np.percentile(nz, 25))
-        hist_c, hist_e = np.histogram(
-            nz, bins=50, range=(0, max(q25 * 2, 30)))
-        bg_mode = (hist_e[int(np.argmax(hist_c))]
-                   + hist_e[int(np.argmax(hist_c)) + 1]) / 2.0
+        hist_c, hist_e = np.histogram(nz, bins=50, range=(0, max(q25 * 2, 30)))
+        bg_mode = (hist_e[int(np.argmax(hist_c))] + hist_e[int(np.argmax(hist_c)) + 1]) / 2.0
         p_lo = max(p_lo, bg_mode + 2)
 
     # Enforce minimum display range to avoid extreme amplification
@@ -988,18 +1061,21 @@ def _preview_one_image(tif_path: str, dst_dir: str, scale: float):
     display_range = p_hi - p_lo
     if display_range < _LOW_RANGE_THRESH:
         from scipy.ndimage import gaussian_filter, median_filter
+
         im = median_filter(im, size=3)
         im = gaussian_filter(im.astype(np.float32), sigma=3.0)
 
-    stretched = np.clip((im.astype(np.float32) - p_lo) / (p_hi - p_lo) * 255.0,
-                        0, 255).astype(np.uint8)
+    stretched = np.clip((im.astype(np.float32) - p_lo) / (p_hi - p_lo) * 255.0, 0, 255).astype(
+        np.uint8
+    )
 
     out_name = os.path.splitext(os.path.basename(tif_path))[0] + ".png"
     cv2.imwrite(os.path.join(dst_dir, out_name), stretched)
 
 
-def generate_preview_images(output_dir: str, n_channels: int,
-                           channel: int = None, scale: float = 0.15):
+def generate_preview_images(
+    output_dir: str, n_channels: int, channel: int = None, scale: float = 0.15
+):
     """Generate contrast-stretched 8-bit PNG previews of stitched sections.
 
     Reads each stitched TIFF, downscales, applies 1st-99th percentile
@@ -1031,18 +1107,18 @@ def generate_preview_images(output_dir: str, n_channels: int,
 
         max_workers = min(8, len(tif_files))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [
-                executor.submit(_preview_one_image, p, dst_dir, scale)
-                for p in tif_files
-            ]
+            futures = [executor.submit(_preview_one_image, p, dst_dir, scale) for p in tif_files]
             for f in futures:
                 f.result()  # propagate any exceptions
 
-        print(f"  {C_SUCCESS}Preview:{C_RESET} {C_PATH}{dst_dir}{C_RESET}  ({len(tif_files)} images)")
+        print(
+            f"  {C_SUCCESS}Preview:{C_RESET} {C_PATH}{dst_dir}{C_RESET}  ({len(tif_files)} images)"
+        )
 
 
-def _mask_preview_one_image(tif_path: str, preview_dir: str, mask_dir: str,
-                            noise_floor: float, scale: float):
+def _mask_preview_one_image(
+    tif_path: str, preview_dir: str, mask_dir: str, noise_floor: float, scale: float
+):
     """Generate a mask overlay preview for one stitched TIFF.
 
     Loads the corresponding preview PNG (already contrast-stretched),
@@ -1051,8 +1127,7 @@ def _mask_preview_one_image(tif_path: str, preview_dir: str, mask_dir: str,
     to preview resolution, and overlays background regions in
     transparent red.
     """
-    from scipy.ndimage import (binary_fill_holes, binary_closing,
-                                binary_opening, label)
+    from scipy.ndimage import binary_fill_holes, binary_closing, binary_opening, label
 
     # Load the preview PNG
     base_name = os.path.splitext(os.path.basename(tif_path))[0] + ".png"
@@ -1074,8 +1149,7 @@ def _mask_preview_one_image(tif_path: str, preview_dir: str, mask_dir: str,
     tissue_mask = small > noise_floor
 
     # Open to remove isolated noise pixels in the background
-    kern_open = cv2.getStructuringElement(
-        cv2.MORPH_ELLIPSE, (5, 5)).astype(bool)
+    kern_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)).astype(bool)
     opened = binary_opening(tissue_mask, structure=kern_open)
 
     # Keep only large connected components (actual brain sections)
@@ -1098,8 +1172,7 @@ def _mask_preview_one_image(tif_path: str, preview_dir: str, mask_dir: str,
     # Downscale the mask to preview resolution
     ph, pw = preview.shape[:2]
     mask_preview = cv2.resize(
-        filled.astype(np.uint8), (pw, ph),
-        interpolation=cv2.INTER_NEAREST
+        filled.astype(np.uint8), (pw, ph), interpolation=cv2.INTER_NEAREST
     ).astype(bool)
 
     # Convert grayscale preview to BGR for the red overlay
@@ -1113,19 +1186,25 @@ def _mask_preview_one_image(tif_path: str, preview_dir: str, mask_dir: str,
     bg = ~mask_preview
     overlay = preview_bgr.copy()
     overlay[bg, 2] = np.clip(
-        overlay[bg, 2].astype(np.float32) * (1 - alpha) + 255 * alpha,
-        0, 255).astype(np.uint8)  # Red channel
-    overlay[bg, 1] = (overlay[bg, 1].astype(np.float32) * (1 - alpha)
-                      ).astype(np.uint8)  # Green channel
-    overlay[bg, 0] = (overlay[bg, 0].astype(np.float32) * (1 - alpha)
-                      ).astype(np.uint8)  # Blue channel
+        overlay[bg, 2].astype(np.float32) * (1 - alpha) + 255 * alpha, 0, 255
+    ).astype(np.uint8)  # Red channel
+    overlay[bg, 1] = (overlay[bg, 1].astype(np.float32) * (1 - alpha)).astype(
+        np.uint8
+    )  # Green channel
+    overlay[bg, 0] = (overlay[bg, 0].astype(np.float32) * (1 - alpha)).astype(
+        np.uint8
+    )  # Blue channel
 
     cv2.imwrite(os.path.join(mask_dir, base_name), overlay)
 
 
-def generate_mask_previews(output_dir: str, n_channels: int,
-                           noise_thresholds: list,
-                           channel: int = None, scale: float = 0.15):
+def generate_mask_previews(
+    output_dir: str,
+    n_channels: int,
+    noise_thresholds: list,
+    channel: int = None,
+    scale: float = 0.15,
+):
     """Generate mask overlay previews showing background vs brain regions.
 
     For each stitched TIFF, overlays the brain mask in transparent red
@@ -1145,10 +1224,7 @@ def generate_mask_previews(output_dir: str, n_channels: int,
     # When noise_thresholds is None (e.g. single-section runs or
     # vignetting correction disabled), fall back to a sensible default.
     if noise_thresholds is not None:
-        seam_noise_floors = [
-            nt.get('pixel_threshold', 30.0) + 5.0
-            for nt in noise_thresholds
-        ]
+        seam_noise_floors = [nt.get("pixel_threshold", 30.0) + 5.0 for nt in noise_thresholds]
     else:
         seam_noise_floors = [35.0] * n_channels
 
@@ -1173,49 +1249,69 @@ def generate_mask_previews(output_dir: str, n_channels: int,
         max_workers = min(8, len(tif_files))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [
-                executor.submit(_mask_preview_one_image, p, preview_dir,
-                                mask_dir, nf, scale)
+                executor.submit(_mask_preview_one_image, p, preview_dir, mask_dir, nf, scale)
                 for p in tif_files
             ]
             for f in futures:
                 f.result()
 
-        print(f"  {C_SUCCESS}Mask preview:{C_RESET} {C_PATH}{mask_dir}{C_RESET}  ({len(tif_files)} images)")
+        print(
+            f"  {C_SUCCESS}Mask preview:{C_RESET} {C_PATH}{mask_dir}{C_RESET}  ({len(tif_files)} images)"
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Setup import setting
     joblib_backend = None
-    if sys.platform == 'win32':
-        joblib_backend = 'multiprocessing'
+    if sys.platform == "win32":
+        joblib_backend = "multiprocessing"
 
     # Run main
-    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    parser = argparse.ArgumentParser(description='TissueCyte stitching pipeline')
-    parser.add_argument('--input_dir', type=str, required=True)
-    parser.add_argument('--output_dir', type=str, required=True)
-    parser.add_argument('--bezier_path', type=str, default=None,
-                        help='Path to bezier patch .pkl file (default: data/stitching_parameters/bezier16x.pkl)')
-    parser.add_argument('--sectionNum', default=-1, type=int)
-    parser.add_argument('--n_threads', default=8, type=int,
-                        help='Number of parallel jobs (default: 8; use -1 for all CPUs)')
-    parser.add_argument('--save_undistorted', action='store_true',
-                        help='Save undistorted images')
-    parser.add_argument('--linear_blend', action='store_true',
-                        help='Use simple linear blending instead of multi-band Laplacian pyramid (default: multiband)')
-    parser.add_argument('--no_vignetting', action='store_true',
-                        help='Disable average tile vignetting correction (enabled by default)')
-    parser.add_argument('--no_seam_correction', action='store_true',
-                        help='Disable tile equalization and seam corrections (enabled by default)')
-    parser.add_argument('--zero_background', action='store_true',
-                        help='[Beta] Zero pixels outside the brain boundary for uniform black '
-                             'background. Uses morphological brain mask to preserve dark '
-                             'internal structures (ventricles, fiber tracts).')
+    logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    parser = argparse.ArgumentParser(description="TissueCyte stitching pipeline")
+    parser.add_argument("--input_dir", type=str, required=True)
+    parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument(
+        "--bezier_path",
+        type=str,
+        default=None,
+        help="Path to bezier patch .pkl file (default: data/stitching_parameters/bezier16x.pkl)",
+    )
+    parser.add_argument("--sectionNum", default=-1, type=int)
+    parser.add_argument(
+        "--n_threads",
+        default=8,
+        type=int,
+        help="Number of parallel jobs (default: 8; use -1 for all CPUs)",
+    )
+    parser.add_argument("--save_undistorted", action="store_true", help="Save undistorted images")
+    parser.add_argument(
+        "--linear_blend",
+        action="store_true",
+        help="Use simple linear blending instead of multi-band Laplacian pyramid (default: multiband)",
+    )
+    parser.add_argument(
+        "--no_vignetting",
+        action="store_true",
+        help="Disable average tile vignetting correction (enabled by default)",
+    )
+    parser.add_argument(
+        "--no_seam_correction",
+        action="store_true",
+        help="Disable tile equalization and seam corrections (enabled by default)",
+    )
+    parser.add_argument(
+        "--zero_background",
+        action="store_true",
+        help="[Beta] Zero pixels outside the brain boundary for uniform black "
+        "background. Uses morphological brain mask to preserve dark "
+        "internal structures (ventricles, fiber tracts).",
+    )
     args = parser.parse_args()
 
     n_threads = args.n_threads
     channel = None
-    blend_mode = 'linear' if args.linear_blend else 'multiband'
+    blend_mode = "linear" if args.linear_blend else "multiband"
     save_undistorted = args.save_undistorted
     vignetting_correction = not args.no_vignetting
     seam_correction = not args.no_seam_correction
@@ -1227,7 +1323,12 @@ if __name__ == '__main__':
     if bezier_path is None:
         # Try default locations
         for candidate in [
-            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "stitching_parameters", "bezier16x.pkl"),
+            os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "data",
+                "stitching_parameters",
+                "bezier16x.pkl",
+            ),
             "bezier16x.pkl",
             os.path.join("data", "stitching_parameters", "bezier16x.pkl"),
         ]:
@@ -1239,25 +1340,27 @@ if __name__ == '__main__':
         sys.exit(1)
 
     # Print startup banner
-    print(f"\n{C_HEADER}{'='*70}{C_RESET}")
+    print(f"\n{C_HEADER}{'=' * 70}{C_RESET}")
     print(f"{C_HEADER}{'XuLab Stitching Pipeline':^70}{C_RESET}")
-    print(f"{C_HEADER}{'='*70}{C_RESET}\n")
+    print(f"{C_HEADER}{'=' * 70}{C_RESET}\n")
 
     print(f"{C_INFO}STARTUP PARAMETERS{C_RESET}")
-    print(f"{'-'*50}")
+    print(f"{'-' * 50}")
     print(f"  Input directory:   {C_PATH}{args.input_dir}{C_RESET}")
     print(f"  Output directory:  {C_PATH}{args.output_dir}{C_RESET}")
     print(f"  Bezier patch:      {C_PATH}{bezier_path}{C_RESET}")
-    print(f"  Section number:    {C_VALUE}{args.sectionNum if args.sectionNum != -1 else 'All'}{C_RESET}")
+    print(
+        f"  Section number:    {C_VALUE}{args.sectionNum if args.sectionNum != -1 else 'All'}{C_RESET}"
+    )
     print(f"  Parallel jobs:     {C_VALUE}{n_threads}{C_RESET}")
     print(f"  Save undistorted:  {C_VALUE}{'Yes' if save_undistorted else 'No'}{C_RESET}")
     print(f"  Vignetting corr:   {C_VALUE}{'Yes' if vignetting_correction else 'No'}{C_RESET}")
     print(f"  Seam correction:   {C_VALUE}{'Yes' if seam_correction else 'No'}{C_RESET}")
     print(f"  Zero background:   {C_VALUE}{'Yes' if zero_background else 'No'}{C_RESET}")
     print(f"  Blending mode:     {C_VALUE}{blend_mode.capitalize()}{C_RESET}")
-    print(f"{'-'*50}")
+    print(f"{'-' * 50}")
     print(f"  Started at:        {C_VALUE}{time.strftime('%Y-%m-%d %H:%M:%S')}{C_RESET}")
-    print(f"{'-'*50}\n")
+    print(f"{'-' * 50}\n")
 
     pipeline_start = time.time()
 
@@ -1273,28 +1376,29 @@ if __name__ == '__main__':
     # Double the size to preserve sampling, need to downsample later
     pX_, pY_ = get_deformation_map(gridp.shape[0], gridp.shape[1], kx, ky)
 
-    root_dir = os.path.join(args.input_dir, '')
+    root_dir = os.path.join(args.input_dir, "")
 
     # Create a timestamped subfolder inside the output directory so each
     # run is isolated:  <output_dir>/YYYYMMDD_HHMMSS_<brain_name>/
     # Skip when the provided path already looks like a timestamped run
     # folder (e.g. the GUI already created one).
     import re as _re_ts
-    base_output = os.path.join(args.output_dir, '')
+
+    base_output = os.path.join(args.output_dir, "")
     if not os.path.isdir(base_output):
         os.makedirs(base_output, exist_ok=True)
     _dir_leaf = os.path.basename(os.path.normpath(base_output))
-    if _re_ts.match(r'\d{8}_\d{6}_', _dir_leaf):
+    if _re_ts.match(r"\d{8}_\d{6}_", _dir_leaf):
         # Already a timestamped run folder — use it directly
         output_dir = base_output
     else:
         brain_name = os.path.basename(os.path.normpath(args.input_dir))
-        timestamp = time.strftime('%Y%m%d_%H%M%S')
-        output_dir = os.path.join(base_output, f"{timestamp}_{brain_name}", '')
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        output_dir = os.path.join(base_output, f"{timestamp}_{brain_name}", "")
     os.makedirs(output_dir, exist_ok=True)
 
     # Mirror all console output to a log file (ANSI codes stripped)
-    _tee = _Tee(os.path.join(output_dir, 'console.log'))
+    _tee = _Tee(os.path.join(output_dir, "console.log"))
     sys.stdout = _tee
 
     print(f"{C_STEP}Step 1/5:{C_RESET} {C_INFO}Parsing mosaic data...{C_RESET}")
@@ -1303,12 +1407,16 @@ if __name__ == '__main__':
 
     # Derive actual channel count from tile files, not mosaic metadata
     # (the mosaic file may report more channels than exist on disk).
-    channel_count = max(len(sj['channels']) for sj in section_jsons) if section_jsons else int(mosaic_data['channels'])
+    channel_count = (
+        max(len(sj["channels"]) for sj in section_jsons)
+        if section_jsons
+        else int(mosaic_data["channels"])
+    )
     print(f"  {C_INFO}Channels: {C_VALUE}{channel_count}{C_RESET}")
 
     print(f"\n{C_STEP}Step 2/5:{C_RESET} {C_INFO}Creating output directories...{C_RESET}")
     for ch in range(channel_count):
-        ch_dir  = os.path.join(output_dir, "stitched_ch{}".format(ch),"")
+        ch_dir = os.path.join(output_dir, "stitched_ch{}".format(ch), "")
         if not os.path.isdir(ch_dir):
             os.mkdir(ch_dir)
 
@@ -1319,7 +1427,7 @@ if __name__ == '__main__':
             os.mkdir(undistorted_dir)
 
         for ch in range(channel_count):
-            ch_dir = os.path.join(undistorted_dir, "ch{}".format(ch),"")
+            ch_dir = os.path.join(undistorted_dir, "ch{}".format(ch), "")
             if not os.path.isdir(ch_dir):
                 os.mkdir(ch_dir)
 
@@ -1330,32 +1438,57 @@ if __name__ == '__main__':
     average_tiles = []
     noise_thresholds = None
     if vignetting_correction and sectionNum == -1:
-        print(f"\n{C_STEP}Step 3/5:{C_RESET} {C_INFO}Generating average tiles for vignetting correction...{C_RESET}")
+        print(
+            f"\n{C_STEP}Step 3/5:{C_RESET} {C_INFO}Generating average tiles for vignetting correction...{C_RESET}"
+        )
         avg_tiles_dir = os.path.join(output_dir, "avg_tiles")
-        noise_thresholds = generate_avg_tiles(section_jsons, avg_tiles_dir, n_threads,
-                                              n_channels=channel_count)
+        noise_thresholds = generate_avg_tiles(
+            section_jsons, avg_tiles_dir, n_threads, n_channels=channel_count
+        )
         for i in range(channel_count):
-            dark = noise_thresholds[i].get('dark_level', 0) if noise_thresholds and i < len(noise_thresholds) else 0
-            average_tiles.append(load_average_tile(os.path.join(avg_tiles_dir, f"avg_tile_{i}.tif"),
-                                                   dark_level=dark))
+            dark = (
+                noise_thresholds[i].get("dark_level", 0)
+                if noise_thresholds and i < len(noise_thresholds)
+                else 0
+            )
+            average_tiles.append(
+                load_average_tile(os.path.join(avg_tiles_dir, f"avg_tile_{i}.tif"), dark_level=dark)
+            )
         print(f"  {C_SUCCESS}Average tiles generated ({channel_count} channels).{C_RESET}")
     else:
         if not vignetting_correction:
-            print(f"\n{C_STEP}Step 3/5:{C_RESET} {C_INFO}Skipping vignetting correction (disabled){C_RESET}")
+            print(
+                f"\n{C_STEP}Step 3/5:{C_RESET} {C_INFO}Skipping vignetting correction (disabled){C_RESET}"
+            )
         else:
-            print(f"\n{C_STEP}Step 3/5:{C_RESET} {C_INFO}Skipping vignetting correction (single section){C_RESET}")
+            print(
+                f"\n{C_STEP}Step 3/5:{C_RESET} {C_INFO}Skipping vignetting correction (single section){C_RESET}"
+            )
         for i in range(channel_count):
             average_tiles.append(np.ones((832, 832)))
 
-    print(f"\n{C_STEP}Step 4/5:{C_RESET} {C_INFO}Stitching {C_VALUE}{len(section_jsons)}{C_RESET}{C_INFO} sections ({blend_mode} blending)...{C_RESET}")
-    #Parallel(n_jobs=1, backend=joblib_backend)(delayed(stitch_section)(section_json,average_tiles, output_dir) for section_json in tqdm(section_jsons))
-    Parallel(n_jobs=n_threads, verbose=13)(delayed(stitch_section)(section_json, average_tiles, output_dir,
-                                                                   H, pX_, pY_, channel, save_undistorted,
-                                                                   blend_mode,
-                                                                   vignetting_correction,
-                                                                   noise_thresholds,
-                                                                   seam_correction,
-                                                                   zero_background) for section_json in section_jsons)
+    print(
+        f"\n{C_STEP}Step 4/5:{C_RESET} {C_INFO}Stitching {C_VALUE}{len(section_jsons)}{C_RESET}{C_INFO} sections ({blend_mode} blending)...{C_RESET}"
+    )
+    # Parallel(n_jobs=1, backend=joblib_backend)(delayed(stitch_section)(section_json,average_tiles, output_dir) for section_json in tqdm(section_jsons))
+    Parallel(n_jobs=n_threads, verbose=13)(
+        delayed(stitch_section)(
+            section_json,
+            average_tiles,
+            output_dir,
+            H,
+            pX_,
+            pY_,
+            channel,
+            save_undistorted,
+            blend_mode,
+            vignetting_correction,
+            noise_thresholds,
+            seam_correction,
+            zero_background,
+        )
+        for section_json in section_jsons
+    )
 
     # Generate contrast-stretched preview images for quick QC
     print(f"\n{C_STEP}Step 5/5:{C_RESET} {C_INFO}Generating preview images...{C_RESET}")
@@ -1364,19 +1497,18 @@ if __name__ == '__main__':
     # Generate mask overlay previews when background zeroing is enabled
     if zero_background:
         print(f"\n{C_INFO}Generating mask overlay previews...{C_RESET}")
-        generate_mask_previews(output_dir, channel_count, noise_thresholds,
-                               channel)
+        generate_mask_previews(output_dir, channel_count, noise_thresholds, channel)
 
     # Print completion summary
     elapsed = time.time() - pipeline_start
     minutes = int(elapsed // 60)
     seconds = int(elapsed % 60)
-    print(f"\n{C_HEADER}{'='*70}{C_RESET}")
+    print(f"\n{C_HEADER}{'=' * 70}{C_RESET}")
     print(f"{C_SUCCESS}Stitching complete!{C_RESET}")
     print(f"  {C_INFO}Sections stitched: {C_VALUE}{len(section_jsons)}{C_RESET}")
     print(f"  {C_INFO}Output directory:  {C_PATH}{output_dir}{C_RESET}")
     print(f"  {C_INFO}Elapsed time:      {C_VALUE}{minutes}m {seconds}s{C_RESET}")
-    print(f"{C_HEADER}{'='*70}{C_RESET}")
+    print(f"{C_HEADER}{'=' * 70}{C_RESET}")
 
     # Close console.log
     _tee.close()
@@ -1386,14 +1518,15 @@ if __name__ == '__main__':
     if sys.stdin.isatty() and sys.stdout.isatty():
         try:
             answer = input(f"\nOpen output folder? [Y/n] ").strip().lower()
-            if answer in ('', 'y', 'yes'):
+            if answer in ("", "y", "yes"):
                 import subprocess
+
                 abs_dir = os.path.abspath(output_dir)
-                if sys.platform == 'win32':
+                if sys.platform == "win32":
                     os.startfile(abs_dir)
-                elif sys.platform == 'darwin':
-                    subprocess.Popen(['open', abs_dir])
+                elif sys.platform == "darwin":
+                    subprocess.Popen(["open", abs_dir])
                 else:
-                    subprocess.Popen(['xdg-open', abs_dir])
+                    subprocess.Popen(["xdg-open", abs_dir])
         except (EOFError, KeyboardInterrupt):
             pass

@@ -30,11 +30,25 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-import cv2
 import nibabel as nib
 import numpy as np
 from scipy.ndimage import affine_transform
 from scipy.spatial.transform import Rotation
+
+
+def _require_cv2():
+    """Lazy import of OpenCV — kept off module top-level so test/unit lanes
+    that don't pip-install opencv-python can still import this module
+    (e.g. just to use the lightweight matrix-IO helpers below).
+    """
+    try:
+        import cv2  # noqa: PLC0415
+    except ImportError as exc:  # pragma: no cover
+        raise RuntimeError(
+            "axis alignment requires OpenCV. Install with: pip install opencv-python"
+        ) from exc
+    return cv2
+
 
 try:
     from scripts.logging_setup import get_logger
@@ -64,6 +78,7 @@ def _centre_column_bounds(slice_u8: np.ndarray, ratio: float) -> tuple[float, fl
     Otsu-threshold → largest contour → bounding box midpoint ± ``ratio`` × width.
     Returns ``None`` if no tissue contour is found.
     """
+    cv2 = _require_cv2()
     _, thresh = cv2.threshold(slice_u8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     cnts = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
@@ -93,6 +108,7 @@ def _hough_lines(
     blur_kernel_size: int = 0,
 ) -> np.ndarray | None:
     """Canny + probabilistic Hough → Nx1x4 array of (x1,y1,x2,y2), or None."""
+    cv2 = _require_cv2()
     img = slice_u8
     if blur_kernel_size > 0:
         img = cv2.GaussianBlur(img, (blur_kernel_size, blur_kernel_size), 0)

@@ -67,7 +67,7 @@ def _build_ome_zarr(volume, output_dir, spacing_um, name="volume") -> str:
     except ImportError as exc:
         raise RuntimeError(
             "OME-Zarr conversion requires the 'neuroglancer' extras. "
-            "Install with: pip install -e \".[neuroglancer]\""
+            'Install with: pip install -e ".[neuroglancer]"'
         ) from exc
 
     zarr_path = os.path.join(output_dir, f"{name}.zarr")
@@ -89,7 +89,7 @@ def _build_ome_zarr(volume, output_dir, spacing_um, name="volume") -> str:
     n_levels = 5
     coord_transforms = []
     for level in range(n_levels):
-        factor = 2 ** level
+        factor = 2**level
         coord_transforms.append(
             [{"type": "scale", "scale": [1, 1, z_um, y_um * factor, x_um * factor]}]
         )
@@ -235,7 +235,8 @@ def convert_auto(
     p = Path(str(input_path))
     if p.is_dir():
         return convert_tiff_dir(
-            p, output_dir,
+            p,
+            output_dir,
             spacing_um=spacing_um,
             orient=orient,
             axes_order=axes_order,
@@ -246,7 +247,8 @@ def convert_auto(
     suffix = p.suffix.lower()
     if suffix in (".nii",) or str(p).lower().endswith(".nii.gz"):
         return convert_nii(
-            p, output_dir,
+            p,
+            output_dir,
             spacing_um=spacing_um,
             axes_order=axes_order,
             axes_flips=axes_flips,
@@ -254,7 +256,8 @@ def convert_auto(
         )
     if suffix in (".tif", ".tiff"):
         return convert_tiff_selection(
-            [p], output_dir,
+            [p],
+            output_dir,
             spacing_um=spacing_um,
             orient=orient,
             axes_order=axes_order,

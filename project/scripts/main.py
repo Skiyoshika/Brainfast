@@ -635,9 +635,7 @@ def _quantify_against_exported_truth(
                         registration_method="3d_truth_export",
                     )
                 )
-            mapped = (
-                pd.concat(legacy_rows, ignore_index=True) if legacy_rows else mapped
-            )
+            mapped = pd.concat(legacy_rows, ignore_index=True) if legacy_rows else mapped
 
     deduped, _stats = apply_dedup_kdtree(
         mapped,

@@ -80,7 +80,7 @@ def _require_neuroglancer():
     except ImportError as exc:
         raise RuntimeError(
             "Neuroglancer viewer requires the 'neuroglancer' extras. "
-            "Install with: pip install -e \".[neuroglancer]\""
+            'Install with: pip install -e ".[neuroglancer]"'
         ) from exc
     return neuroglancer
 
@@ -89,7 +89,9 @@ def _make_dimensions(spacing_um):
     neuroglancer = _require_neuroglancer()
     z, y, x = spacing_um
     return neuroglancer.CoordinateSpace(
-        names=["z", "y", "x"], units=["um", "um", "um"], scales=[z, y, x],
+        names=["z", "y", "x"],
+        units=["um", "um", "um"],
+        scales=[z, y, x],
     )
 
 
@@ -120,7 +122,7 @@ def _load_volume_from_zarr(zarr_path) -> np.ndarray:
     except ImportError as exc:
         raise RuntimeError(
             "OME-Zarr loading requires the 'neuroglancer' extras. "
-            "Install with: pip install -e \".[neuroglancer]\""
+            'Install with: pip install -e ".[neuroglancer]"'
         ) from exc
     root = _zarr.open(str(zarr_path), mode="r")
     if "0" in root:
@@ -183,7 +185,8 @@ def add_points_layer(state, name, points, color="#ff0000"):
         for i, pt in enumerate(points)
     ]
     layer = neuroglancer.AnnotationLayer(
-        annotations=annotations, annotation_color=color,
+        annotations=annotations,
+        annotation_color=color,
     )
     state.layers.append(name=name, layer=layer)
     return layer
@@ -246,9 +249,7 @@ def launch_viewer(
             try:
                 pts = load_points(ppath)
                 pts_sorted = pts[pts[:, 0].argsort()[::-1]]
-                points_data.append(
-                    (os.path.splitext(os.path.basename(ppath))[0], pts_sorted)
-                )
+                points_data.append((os.path.splitext(os.path.basename(ppath))[0], pts_sorted))
                 print(f"Loaded {len(pts_sorted)} points from {ppath}")
             except Exception as e:  # noqa: BLE001
                 print(f"Warning: could not load points from {ppath}: {e}")

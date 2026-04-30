@@ -44,12 +44,14 @@ def _deps_available() -> tuple[bool, str | None]:
 @bp.get("/available")
 def ng_available():
     ok, err = _deps_available()
-    return jsonify({
-        "ok": True,
-        "available": ok,
-        "missing": (err.split("No module named ")[-1].strip("'\"") if err else None),
-        "install": "pip install -e \".[neuroglancer]\"",
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "available": ok,
+            "missing": (err.split("No module named ")[-1].strip("'\"") if err else None),
+            "install": 'pip install -e ".[neuroglancer]"',
+        }
+    )
 
 
 @bp.post("/convert")
@@ -59,22 +61,26 @@ def ng_convert():
     raw_input = (payload.get("inputPath") or "").strip()
     raw_output = (payload.get("outputDir") or "").strip()
     if not raw_input or not raw_output:
-        return jsonify({"ok": False, "error": "missing inputPath/outputDir",
-                        "error_code": ERR_INVALID_INPUT}), 400
+        return jsonify(
+            {"ok": False, "error": "missing inputPath/outputDir", "error_code": ERR_INVALID_INPUT}
+        ), 400
 
     inp = Path(raw_input).expanduser()
     out = Path(raw_output).expanduser()
     if not inp.exists():
-        return jsonify({"ok": False, "error": f"input not found: {inp}",
-                        "error_code": ERR_NOT_FOUND}), 404
+        return jsonify(
+            {"ok": False, "error": f"input not found: {inp}", "error_code": ERR_NOT_FOUND}
+        ), 404
 
     ok, err = _deps_available()
     if not ok:
-        return jsonify({
-            "ok": False,
-            "error": "Neuroglancer deps missing. Install with: pip install -e \".[neuroglancer]\"",
-            "missing_module": (err.split("No module named ")[-1].strip("'\"") if err else None),
-        }), 501
+        return jsonify(
+            {
+                "ok": False,
+                "error": 'Neuroglancer deps missing. Install with: pip install -e ".[neuroglancer]"',
+                "missing_module": (err.split("No module named ")[-1].strip("'\"") if err else None),
+            }
+        ), 501
 
     from project.scripts.ng_converter import convert_auto
 
@@ -97,11 +103,13 @@ def ng_launch():
 
     ok, err = _deps_available()
     if not ok:
-        return jsonify({
-            "ok": False,
-            "error": "Neuroglancer deps missing. Install with: pip install -e \".[neuroglancer]\"",
-            "missing_module": (err.split("No module named ")[-1].strip("'\"") if err else None),
-        }), 501
+        return jsonify(
+            {
+                "ok": False,
+                "error": 'Neuroglancer deps missing. Install with: pip install -e ".[neuroglancer]"',
+                "missing_module": (err.split("No module named ")[-1].strip("'\"") if err else None),
+            }
+        ), 501
 
     image_inputs = payload.get("imageInputs") or []
     points_inputs = payload.get("pointsInputs") or []

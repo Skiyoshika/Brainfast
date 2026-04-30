@@ -215,7 +215,9 @@ def _build_run_config(payload: dict) -> dict:
     use_cell_to_ccf_mapping = bool(payload.get("useCellToCcfMapping", False))
     fixed_max_dim_raw = payload.get("fixedMaxDim")
     try:
-        fixed_max_dim = int(fixed_max_dim_raw) if fixed_max_dim_raw not in (None, "", 0, "0") else None
+        fixed_max_dim = (
+            int(fixed_max_dim_raw) if fixed_max_dim_raw not in (None, "", 0, "0") else None
+        )
     except (TypeError, ValueError):
         fixed_max_dim = None
 

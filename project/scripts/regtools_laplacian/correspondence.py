@@ -20,6 +20,7 @@ Performance optimizations:
 - CG solver with diagonal (Jacobi) preconditioner (replaces LGMRES)
 - Threaded parallel solves for independent RHS vectors
 """
+
 import os
 import time
 import numpy as np
@@ -38,13 +39,14 @@ from skimage import measure
 from .utils import laplacianA3D, propagate_dirichlet_rhs
 
 
-def _default_log(msg, level='info'):
+def _default_log(msg, level="info"):
     print(msg)
 
 
 # ============================================================================
 # Parallel helpers (module-level so they are picklable by loky)
 # ============================================================================
+
 
 def _find_slice_correspondences(sno, templateimage, dataimage):
     """Find correspondences for a single slice (process-safe, no closures)."""
@@ -61,6 +63,7 @@ def _find_slice_correspondences(sno, templateimage, dataimage):
 # Contour Extraction
 # ============================================================================
 
+
 def getDataContours(dataImage):
     """
     Calculates internal and outer contours for data image.
@@ -70,12 +73,12 @@ def getDataContours(dataImage):
     dataImage : 2D image slice
     """
     dataImage = np.array(dataImage)  # writable copy (loky may deserialize as read-only)
-    dataImage[dataImage>500] = 500
-    dataImage[dataImage<0] = 0
+    dataImage[dataImage > 500] = 500
+    dataImage[dataImage < 0] = 0
 
-    data = skimage.exposure.equalize_adapthist(dataImage.astype(np.uint16))*255
+    data = skimage.exposure.equalize_adapthist(dataImage.astype(np.uint16)) * 255
     local_thresh = skimage.filters.threshold_otsu(data)
-    binary = data>local_thresh
+    binary = data > local_thresh
 
     edges = feature.canny(binary, sigma=3)
     all_labels = measure.label(edges)
@@ -88,6 +91,7 @@ def getDataContours(dataImage):
 
     return edges, binary
 
+
 def getTemplateContours(templateImage):
     """
     Calculates internal and outer contours for template image.
@@ -98,7 +102,7 @@ def getTemplateContours(templateImage):
     """
 
     local_thresh = skimage.filters.threshold_otsu(templateImage)
-    binary = templateImage>local_thresh
+    binary = templateImage > local_thresh
     edges = feature.canny(binary, sigma=3)
     edges = skimage.morphology.thin(edges)
 
@@ -109,7 +113,8 @@ def getTemplateContours(templateImage):
             edges[all_labels == label] = 0
     return edges, binary
 
-def getContours(templateImage , dataImage):
+
+def getContours(templateImage, dataImage):
     """
     Should generalise both the functions
     """
@@ -123,18 +128,20 @@ def getContours(templateImage , dataImage):
 # Normal Estimation
 # ============================================================================
 
+
 def estimate_normal(point, neighbours):
     """Estimate the surface normal at *point* from its *neighbours* via SVD."""
-    centroid = np.mean(neighbours,axis=0)
-    p_centered = neighbours -centroid
+    centroid = np.mean(neighbours, axis=0)
+    p_centered = neighbours - centroid
     point = point - centroid
 
     try:
         v = np.linalg.svd(p_centered - point)[-1]
-        n =v[-1]
+        n = v[-1]
     except Exception:
         return None
     return n
+
 
 def orient_normals_nd(points, normals, volume, k=9):
     """Orient normals toward low-intensity side of the volume.
@@ -178,10 +185,10 @@ def orient_normals_nd(points, normals, volume, k=9):
     left_sum = np.zeros(len(points))
     right_sum = np.zeros(len(points))
     for step in range(1, k + 1):
-        fwd = (points + step * normals).astype(int).T   # (ndim, N)
+        fwd = (points + step * normals).astype(int).T  # (ndim, N)
         bwd = (points - step * normals).astype(int).T
-        left_sum  += flat[np.ravel_multi_index(fwd, volume.shape, mode='clip')]
-        right_sum += flat[np.ravel_multi_index(bwd, volume.shape, mode='clip')]
+        left_sum += flat[np.ravel_multi_index(fwd, volume.shape, mode="clip")]
+        right_sum += flat[np.ravel_multi_index(bwd, volume.shape, mode="clip")]
 
     # Flip normals toward low intensity
     flip = np.where(left_sum >= right_sum, -1.0, 1.0)
@@ -194,8 +201,7 @@ def orient2Dnormals(points, normals, section):
     return orient_normals_nd(points, normals, section, k=9)
 
 
-
-def estimate2Dnormals(points,binarySection=None , radius = 3,pkdtree = None,  progressbar= False):
+def estimate2Dnormals(points, binarySection=None, radius=3, pkdtree=None, progressbar=False):
     """
     Estimate surface normals for 2D edge points using local PCA.
 
@@ -242,8 +248,9 @@ def estimate2Dnormals(points,binarySection=None , radius = 3,pkdtree = None,  pr
     return points, normals
 
 
-def get2DCorrespondences_batch(fpoints, fnormals, mpoints, mnormals,
-                               degree_thresh=5, k_neighbours=30):
+def get2DCorrespondences_batch(
+    fpoints, fnormals, mpoints, mnormals, degree_thresh=5, k_neighbours=30
+):
     """
     Batch correspondence matching — queries all source points at once.
 
@@ -285,14 +292,14 @@ def get2DCorrespondences_batch(fpoints, fnormals, mpoints, mnormals,
     finite_mask = np.isfinite(dists)  # (Nf, k)
     # Replace inf with nan for nanpercentile; rows with no finite values stay unmatched
     dists_safe = np.where(finite_mask, dists, np.nan)
-    with np.errstate(invalid='ignore'):
+    with np.errstate(invalid="ignore"):
         p90 = np.nanpercentile(dists_safe, 90, axis=1)  # (Nf,)
 
     # For each source point, compute cosine similarity with all k target normals at once
     # target_normals shape: (Nf, k, 2)
     target_normals = mnormals[indices]
     # Dot product of each source normal with its k target normals: (Nf, k)
-    sims = np.einsum('ij,ikj->ik', fnormals, target_normals)
+    sims = np.einsum("ij,ikj->ik", fnormals, target_normals)
 
     # Build combined mask: finite distance, within 90th percentile, and normal similarity above threshold
     valid = finite_mask & (dists < p90[:, None]) & (sims >= cos_thresh)
@@ -320,22 +327,21 @@ def get2DCorrespondences(fsection, msection, fbinary, mbinary, inner=True):
 
     # Use batch correspondence matching
     correspondences = get2DCorrespondences_batch(
-        fpoints, fnormals, mpoints, mnormals,
-        degree_thresh=5, k_neighbours=30
+        fpoints, fnormals, mpoints, mnormals, degree_thresh=5, k_neighbours=30
     )
 
-    c = correspondences!=-1
-    cid = fpoints[c,0]* fsection.shape[1] + fpoints[c,1]
+    c = correspondences != -1
+    cid = fpoints[c, 0] * fsection.shape[1] + fpoints[c, 1]
 
-    if len(cid) <5:
+    if len(cid) < 5:
         return [], []
 
     cindices = cid.astype(int)
 
-    dx = mpoints[correspondences[c],0] - fpoints[c,0]
-    dy = mpoints[correspondences[c],1] - fpoints[c,1]
+    dx = mpoints[correspondences[c], 0] - fpoints[c, 0]
+    dy = mpoints[correspondences[c], 1] - fpoints[c, 1]
 
-    #print(np.mean(dx), np.percentile(dx,90), np.max(dx))
+    # print(np.mean(dx), np.percentile(dx,90), np.max(dx))
 
     # Filter out NaN values before percentile calculation to avoid warnings
     dx_abs = np.abs(dx)
@@ -353,18 +359,32 @@ def get2DCorrespondences(fsection, msection, fbinary, mbinary, inner=True):
     valid_idx = dx_abs < dx_thresh
     valid_idy = dy_abs < dy_thresh
 
-    valid_id = np.array(valid_idx.astype(int)+valid_idy.astype(int)) ==2
-    #print(np.sum(valid_id) , )
+    valid_id = np.array(valid_idx.astype(int) + valid_idy.astype(int)) == 2
+    # print(np.sum(valid_id) , )
     f_ = fpoints[c]
     m_ = mpoints[correspondences[c]]
-    return f_[valid_id] , m_[valid_id]
+    return f_[valid_id], m_[valid_id]
 
 
 # ============================================================================
 # Slice-to-Slice Laplacian Registration
 # ============================================================================
 
-def sliceToSlice3DLaplacian(fixedImage, movingImage, sliceMatchList="same", axis=0, output_dir=None, rtol=1e-2, maxiter=1000, return_residuals=False, spacing=None, solver_dtype='float64', solver_method='cg', log_fn=None):
+
+def sliceToSlice3DLaplacian(
+    fixedImage,
+    movingImage,
+    sliceMatchList="same",
+    axis=0,
+    output_dir=None,
+    rtol=1e-2,
+    maxiter=1000,
+    return_residuals=False,
+    spacing=None,
+    solver_dtype="float64",
+    solver_method="cg",
+    log_fn=None,
+):
     """
     Perform slice-to-slice 3D Laplacian registration.
 
@@ -437,8 +457,11 @@ def sliceToSlice3DLaplacian(fixedImage, movingImage, sliceMatchList="same", axis
     n0, n1, n2 = fdata.shape
     nd = len(fdata.shape)
 
-    log(f"Laplacian refinement: Processing volume of shape ({n0}, {n1}, {n2}) along axis {axis}", 'header')
-    log(f"Finding slice-to-slice correspondences for {fdata.shape[axis]} slices...", 'info')
+    log(
+        f"Laplacian refinement: Processing volume of shape ({n0}, {n1}, {n2}) along axis {axis}",
+        "header",
+    )
+    log(f"Finding slice-to-slice correspondences for {fdata.shape[axis]} slices...", "info")
 
     # --- Parallelised correspondence finding (process-based) ---
     # Pre-extract 2D slices so each worker receives only a small payload
@@ -476,7 +499,7 @@ def sliceToSlice3DLaplacian(fixedImage, movingImage, sliceMatchList="same", axis
     del results
 
     if len(flist) == 0:
-        log("Warning: No correspondence points found. Returning zero deformation.", 'warn')
+        log("Warning: No correspondence points found. Returning zero deformation.", "warn")
         return np.zeros((nd, n0, n1, n2))
 
     fpoints = np.concatenate(flist)
@@ -491,12 +514,12 @@ def sliceToSlice3DLaplacian(fixedImage, movingImage, sliceMatchList="same", axis
         # Save boundary condition points as fast binary .npy
         np.save(os.path.join(boundary_dir, "fpoints.npy"), fpoints)
         np.save(os.path.join(boundary_dir, "mpoints.npy"), mpoints)
-        log(f"Saved boundary conditions to {boundary_dir}", 'path')
+        log(f"Saved boundary conditions to {boundary_dir}", "path")
 
     # Compute flat indices for boundary points (single array, not 3 copies)
     fIndices = (fpoints[:, 0] * n1 * n2 + fpoints[:, 1] * n2 + fpoints[:, 2]).astype(int)
 
-    _dtype = np.float32 if solver_dtype == 'float32' else np.float64
+    _dtype = np.float32 if solver_dtype == "float32" else np.float64
 
     flen = n0 * n1 * n2
     Yd = np.zeros(flen, dtype=_dtype)
@@ -508,7 +531,10 @@ def sliceToSlice3DLaplacian(fixedImage, movingImage, sliceMatchList="same", axis
     boundary_indices = np.unique(fIndices)
     del fIndices
 
-    log(f"Laplacian refinement: Found {len(fpoints)} correspondence points ({len(boundary_indices)} unique boundary voxels).", 'value')
+    log(
+        f"Laplacian refinement: Found {len(fpoints)} correspondence points ({len(boundary_indices)} unique boundary voxels).",
+        "value",
+    )
     del fpoints, mpoints
 
     # Propagate boundary displacements to non-boundary neighbours so the
@@ -516,25 +542,26 @@ def sliceToSlice3DLaplacian(fixedImage, movingImage, sliceMatchList="same", axis
     propagate_dirichlet_rhs((n0, n1, n2), boundary_indices, Yd, Xd, spacing=spacing)
 
     # --- Build Laplacian matrix ---
-    log("Building Laplacian matrix...", 'info')
+    log("Building Laplacian matrix...", "info")
     if spacing is not None:
-        _sp = '(' + ', '.join(f'{v:.4g}' for v in spacing) + ')'
-        log(f"Using spacing-weighted stencil: {_sp}", 'value')
+        _sp = "(" + ", ".join(f"{v:.4g}" for v in spacing) + ")"
+        log(f"Using spacing-weighted stencil: {_sp}", "value")
     start = time.time()
     A = laplacianA3D((n0, n1, n2), boundary_indices, spacing=spacing, dtype=_dtype, log_fn=log)
     del boundary_indices
-    log(f"Laplacian matrix built in {round(time.time() - start)} sec", 'success')
+    log(f"Laplacian matrix built in {round(time.time() - start)} sec", "success")
 
     # --- Solve with selected method ---
-    _use_cg = solver_method.lower() != 'lgmres'
-    _solver_label = 'CG+Jacobi' if _use_cg else 'LGMRES'
+    _use_cg = solver_method.lower() != "lgmres"
+    _solver_label = "CG+Jacobi" if _use_cg else "LGMRES"
 
     M = None
     if _use_cg:
         from scipy.sparse import diags as sparse_diags
+
         diag_vals = A.diagonal()
         diag_vals[diag_vals == 0] = 1.0
-        M = sparse_diags(1.0 / diag_vals, format='csr')
+        M = sparse_diags(1.0 / diag_vals, format="csr")
         del diag_vals
 
     _bytes_per_val = 4 if _dtype == np.float32 else 8
@@ -543,13 +570,16 @@ def sliceToSlice3DLaplacian(fixedImage, movingImage, sliceMatchList="same", axis
     mem_sparse_gb = nnz * (_bytes_per_val + 4) / (1024**3)
     mem_vectors_gb = (4 * N * _bytes_per_val) / (1024**3)
     mem_total_gb = mem_sparse_gb + mem_vectors_gb
-    log(f"Solving for dy, dx displacement fields ({_solver_label})...", 'info')
-    log(f"Convergence threshold: rtol={rtol:.0e}, "
+    log(f"Solving for dy, dx displacement fields ({_solver_label})...", "info")
+    log(
+        f"Convergence threshold: rtol={rtol:.0e}, "
         f"maxiter={maxiter}, "
         f"precision={solver_dtype}, "
-        f"matrix: {N/1e6:.1f}M DOFs, "
-        f"{nnz/1e6:.0f}M non-zeros, "
-        f"est. memory: {mem_total_gb:.2f} GB", 'value')
+        f"matrix: {N / 1e6:.1f}M DOFs, "
+        f"{nnz / 1e6:.0f}M non-zeros, "
+        f"est. memory: {mem_total_gb:.2f} GB",
+        "value",
+    )
 
     _print_lock = threading.Lock()
 
@@ -558,6 +588,7 @@ def sliceToSlice3DLaplacian(fixedImage, movingImage, sliceMatchList="same", axis
         iters = [0]
         rhs_norm = np.linalg.norm(rhs)
         residual_history = []
+
         def _progress(xk):
             iters[0] += 1
             if iters[0] % 10 == 0 or iters[0] == 1:
@@ -567,9 +598,13 @@ def sliceToSlice3DLaplacian(fixedImage, movingImage, sliceMatchList="same", axis
                 elapsed = time.time() - t0
                 rate = iters[0] / elapsed if elapsed > 0 else 0
                 with _print_lock:
-                    log(f"{label}: iter {iters[0]}/{maxiter}, "
+                    log(
+                        f"{label}: iter {iters[0]}/{maxiter}, "
                         f"rel_resid={rel:.2e}, {elapsed:.0f}s elapsed "
-                        f"({rate:.1f} it/s)", 'progress')
+                        f"({rate:.1f} it/s)",
+                        "progress",
+                    )
+
         if _use_cg:
             x, info = cg(A, rhs, rtol=rtol, maxiter=maxiter, M=M, callback=_progress)
         else:
@@ -581,8 +616,11 @@ def sliceToSlice3DLaplacian(fixedImage, movingImage, sliceMatchList="same", axis
             residual_history.append((iters[0], final_rel))
         with _print_lock:
             if info != 0:
-                log(f"{label}: {_solver_label} stopped after {iters[0]} iters (info={info}), using best iterate", 'warn')
-            log(f"{label} done: {iters[0]} iters in {elapsed:.1f} sec", 'success')
+                log(
+                    f"{label}: {_solver_label} stopped after {iters[0]} iters (info={info}), using best iterate",
+                    "warn",
+                )
+            log(f"{label} done: {iters[0]} iters in {elapsed:.1f} sec", "success")
         return x, residual_history
 
     # Solve dy and dx in parallel threads (both CG and LGMRES release GIL during BLAS calls)
@@ -594,7 +632,7 @@ def sliceToSlice3DLaplacian(fixedImage, movingImage, sliceMatchList="same", axis
     del M
 
     del A, Yd, Xd
-    log(f"Solves completed in {round(time.time() - start)} sec total", 'success')
+    log(f"Solves completed in {round(time.time() - start)} sec total", "success")
 
     deformationField = np.zeros((nd, n0, n1, n2), dtype=np.float32)
     deformationField[0] = np.zeros((n0, n1, n2), dtype=np.float32)
@@ -603,5 +641,5 @@ def sliceToSlice3DLaplacian(fixedImage, movingImage, sliceMatchList="same", axis
     del dx, dy
 
     if return_residuals:
-        return deformationField, {'dy': resid_dy, 'dx': resid_dx}
+        return deformationField, {"dy": resid_dy, "dx": resid_dx}
     return deformationField

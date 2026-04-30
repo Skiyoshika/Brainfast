@@ -4,7 +4,6 @@ Code provided from Allen Institute
 Multi-band Laplacian pyramid blending added by Andy Thai.
 """
 
-
 import logging
 import operator as op
 from collections import defaultdict
@@ -35,8 +34,8 @@ def initialize_images(image_dimensions, n_channels):
     stitched_indicator : np.ndarray, shape (rows, cols, n_channels), dtype uint8
         Binary mask (0/1) recording which pixels have been written.
     """
-    rows = int(image_dimensions['row'])
-    cols = int(image_dimensions['column'])
+    rows = int(image_dimensions["row"])
+    cols = int(image_dimensions["column"])
     slice_image = np.zeros((rows, cols, n_channels), dtype=_BLEND_DTYPE)
     # uint8 instead of float64 — uses 8x less memory for the indicator
     stitched_indicator = np.zeros((rows, cols, n_channels), dtype=np.uint8)
@@ -44,15 +43,19 @@ def initialize_images(image_dimensions, n_channels):
 
 
 class Stitcher(object):
+    def __init__(
+        self,
+        image_dimensions,
+        tiles,
+        channels,
+        blend_mode="multiband",
+        noise_floors=None,
+        seam_correction=True,
+        zero_background=False,
+    ):
 
-
-    def __init__(self, image_dimensions, tiles, channels, blend_mode='multiband',
-                 noise_floors=None, seam_correction=True,
-                 zero_background=False):
-
-        logging.info('image_dimensions: {0}'.format(image_dimensions))
+        logging.info("image_dimensions: {0}".format(image_dimensions))
         self.image_dimensions = image_dimensions
-
 
         self.tiles = tiles
         self.channels = channels
@@ -67,19 +70,18 @@ class Stitcher(object):
         else:
             self._noise_floors = None
 
-
     def run(self, cb=np.array):
 
-        slice_image, stitched_indicator = initialize_images(self.image_dimensions, len(self.channels))
+        slice_image, stitched_indicator = initialize_images(
+            self.image_dimensions, len(self.channels)
+        )
         missing_tiles = {}
 
         # Compute geometry-dependent seam correction parameters once
         self._seam_params = _derive_seam_params(self.tiles)
 
         for tile in self.tiles:
-
             if tile.is_missing:
-
                 missing_tiles[tile.index] = tile.get_missing_path()
                 tile.initialize_image()
 
@@ -98,8 +100,7 @@ class Stitcher(object):
             # Run BEFORE seam corrections so it doesn't interfere with the
             # local seam repairs.  Only activates for channels with small
             # P90/P10 spread (near-noise-floor signal with tile artifacts).
-            _equalize_tile_grid(slice_image, self.tiles,
-                                noise_floors=self._noise_floors)
+            _equalize_tile_grid(slice_image, self.tiles, noise_floors=self._noise_floors)
 
             # === Seam correction (vertical then horizontal) ===
             # Two destripe passes per axis: the first pass corrects the
@@ -107,21 +108,28 @@ class Stitcher(object):
             # residuals that only become visible after the first
             # correction shifts neighbouring columns/rows.
             _DESTRIPE_PASSES = 2
-            for axis in ('column', 'row'):
-                _equalize_seam_steps(slice_image, self.tiles, axis=axis,
-                                     noise_floors=self._noise_floors,
-                                     seam_params=sp)
+            for axis in ("column", "row"):
+                _equalize_seam_steps(
+                    slice_image,
+                    self.tiles,
+                    axis=axis,
+                    noise_floors=self._noise_floors,
+                    seam_params=sp,
+                )
                 for _ in range(_DESTRIPE_PASSES):
-                    _destripe_seams(slice_image, self.tiles, axis=axis,
-                                    noise_floors=self._noise_floors,
-                                    seam_params=sp)
+                    _destripe_seams(
+                        slice_image,
+                        self.tiles,
+                        axis=axis,
+                        noise_floors=self._noise_floors,
+                        seam_params=sp,
+                    )
 
         # === Background zeroing ===
         if self._zero_background:
             _zero_background(slice_image, noise_floors=self._noise_floors)
 
         return slice_image, missing_tiles
-
 
     def stitch(self, slice_image, stitched_indicator, tile, cb=np.array):
 
@@ -131,22 +139,22 @@ class Stitcher(object):
         indicator_region = stitched_indicator[region[0], region[1], region[2]]
 
         # Equalize tile intensity to already-stitched mosaic before blending
-        ch_noise = (self._noise_floors[tile.channel]
-                    if self._noise_floors is not None
-                    and tile.channel < len(self._noise_floors)
-                    else None)
-        taper = self._seam_params['gain_taper_px'] if hasattr(self, '_seam_params') else 200
+        ch_noise = (
+            self._noise_floors[tile.channel]
+            if self._noise_floors is not None and tile.channel < len(self._noise_floors)
+            else None
+        )
+        taper = self._seam_params["gain_taper_px"] if hasattr(self, "_seam_params") else 200
         tile.image = _overlap_gain_compensate(
-            tile.image, current_region, indicator_region,
-            noise_floor=ch_noise, taper_px=taper
+            tile.image, current_region, indicator_region, noise_floor=ch_noise, taper_px=taper
         )
 
-        stup = (tile.size['row'], tile.size['column'])
+        stup = (tile.size["row"], tile.size["column"])
         if stup not in self._meshgrid_cache:
-            self._meshgrid_cache[stup] = np.meshgrid(*map(np.arange, stup), indexing='ij')
+            self._meshgrid_cache[stup] = np.meshgrid(*map(np.arange, stup), indexing="ij")
         blend_mask = get_blend(indicator_region, stup, cb, meshes=self._meshgrid_cache[stup])
 
-        if self.blend_mode == 'multiband':
+        if self.blend_mode == "multiband":
             blended = multiband_blend(tile.image, current_region, blend_mask)
         else:
             blended = linear_blend(tile.image, current_region, blend_mask)
@@ -174,13 +182,13 @@ class Stitcher(object):
 # BEFORE blending, so the multiband blend only needs to reconcile the
 # remaining high-frequency texture differences.
 
-_GAIN_COMP_NOISE = _BLEND_DTYPE(30.0)     # noise floor (~2× camera dark level)
-_GAIN_COMP_MIN_PX = 100                   # min signal pixels for stable ratio
-_GAIN_COMP_CLAMP = (0.70, 1.42)           # safety clamp on ratio
+_GAIN_COMP_NOISE = _BLEND_DTYPE(30.0)  # noise floor (~2× camera dark level)
+_GAIN_COMP_MIN_PX = 100  # min signal pixels for stable ratio
+_GAIN_COMP_CLAMP = (0.70, 1.42)  # safety clamp on ratio
 
 # ---- Fractional/ratio safety limits (hardware-independent) ----
-_DESTRIPE_MAX_CORR = 0.20      # max fractional correction (±20%)
-_STEP_MAX_CORR_HALF = 0.10     # max correction per side (10%)
+_DESTRIPE_MAX_CORR = 0.20  # max fractional correction (±20%)
+_STEP_MAX_CORR_HALF = 0.10  # max correction per side (10%)
 
 
 def _estimate_tile_geometry(tiles):
@@ -208,13 +216,12 @@ def _estimate_tile_geometry(tiles):
 
     result = {}
     for axis, key_size, key_pitch, key_ov in [
-        ('column', 'tile_w', 'tile_pitch_col', 'overlap_col'),
-        ('row',    'tile_h', 'tile_pitch_row', 'overlap_row'),
+        ("column", "tile_w", "tile_pitch_col", "overlap_col"),
+        ("row", "tile_h", "tile_pitch_row", "overlap_row"),
     ]:
-        spans = sorted({
-            (int(t.bounds[axis]['start']), int(t.bounds[axis]['end']))
-            for t in ch_tiles
-        })
+        spans = sorted(
+            {(int(t.bounds[axis]["start"]), int(t.bounds[axis]["end"])) for t in ch_tiles}
+        )
         widths = [e - s for s, e in spans]
         tile_size = float(np.median(widths)) if widths else 800.0
 
@@ -246,46 +253,50 @@ def _derive_seam_params(tiles):
     """
     geom = _estimate_tile_geometry(tiles)
     if geom is None:
-        geom = {'tile_w': 756.0, 'tile_h': 774.0,
-                'tile_pitch_col': 731.0, 'tile_pitch_row': 731.0,
-                'overlap_col': 25.0, 'overlap_row': 43.0}
+        geom = {
+            "tile_w": 756.0,
+            "tile_h": 774.0,
+            "tile_pitch_col": 731.0,
+            "tile_pitch_row": 731.0,
+            "overlap_col": 25.0,
+            "overlap_row": 43.0,
+        }
 
-    avg_overlap = (geom['overlap_col'] + geom['overlap_row']) / 2.0
-    avg_tile = (geom['tile_w'] + geom['tile_h']) / 2.0
-    avg_pitch = (geom['tile_pitch_col'] + geom['tile_pitch_row']) / 2.0
+    avg_overlap = (geom["overlap_col"] + geom["overlap_row"]) / 2.0
+    avg_tile = (geom["tile_w"] + geom["tile_h"]) / 2.0
+    avg_pitch = (geom["tile_pitch_col"] + geom["tile_pitch_row"]) / 2.0
 
     return {
         # Gain comp: spatial taper ≈ 27% of tile pitch
-        'gain_taper_px': int(round(avg_pitch * 0.274)),
-
+        "gain_taper_px": int(round(avg_pitch * 0.274)),
         # Destripe: zone around boundary ≈ 1.2× average overlap
-        'destripe_zone_half': max(10, int(round(avg_overlap * 1.2))),
+        "destripe_zone_half": max(10, int(round(avg_overlap * 1.2))),
         # Reference zone: starts just outside destripe zone
-        'destripe_ref_near': max(15, int(round(avg_overlap * 1.33))),
+        "destripe_ref_near": max(15, int(round(avg_overlap * 1.33))),
         # Reference zone far edge ≈ 16% of tile size
-        'destripe_ref_far': max(30, int(round(avg_tile * 0.157))),
+        "destripe_ref_far": max(30, int(round(avg_tile * 0.157))),
         # Vertical band height ≈ 52% of tile size
-        'destripe_band_h': max(50, int(round(avg_tile * 0.523))),
-        'destripe_band_stride': max(25, int(round(avg_tile * 0.26))),
-        'destripe_band_min_px': max(10, int(round(avg_overlap * 0.9))),
-        'destripe_smooth_sigma': max(30.0, avg_tile * 0.262),
-
+        "destripe_band_h": max(50, int(round(avg_tile * 0.523))),
+        "destripe_band_stride": max(25, int(round(avg_tile * 0.26))),
+        "destripe_band_min_px": max(10, int(round(avg_overlap * 0.9))),
+        "destripe_smooth_sigma": max(30.0, avg_tile * 0.262),
         # Step eq: near ref ≈ 1.18× overlap (was 40px for 34px overlap)
-        'step_meas_near': max(15, int(round(avg_overlap * 1.18))),
-        'step_meas_far': max(30, int(round(avg_tile * 0.157))),
+        "step_meas_near": max(15, int(round(avg_overlap * 1.18))),
+        "step_meas_far": max(30, int(round(avg_tile * 0.157))),
         # Taper width ≈ 41% of tile pitch
-        'step_taper_px': max(30, int(round(avg_pitch * 0.41))),
+        "step_taper_px": max(30, int(round(avg_pitch * 0.41))),
         # S-transition ≈ 4% of tile pitch
-        'step_trans_px': max(5, int(round(avg_pitch * 0.041))),
-        'step_band_h': max(50, int(round(avg_tile * 0.523))),
-        'step_band_stride': max(25, int(round(avg_tile * 0.26))),
-        'step_band_min_px': max(10, int(round(avg_overlap * 1.5))),
-        'step_smooth_sigma': max(30.0, avg_tile * 0.392),
+        "step_trans_px": max(5, int(round(avg_pitch * 0.041))),
+        "step_band_h": max(50, int(round(avg_tile * 0.523))),
+        "step_band_stride": max(25, int(round(avg_tile * 0.26))),
+        "step_band_min_px": max(10, int(round(avg_overlap * 1.5))),
+        "step_smooth_sigma": max(30.0, avg_tile * 0.392),
     }
 
 
-def _overlap_gain_compensate(tile_image, current_region, indicator_region,
-                             noise_floor=None, taper_px=200):
+def _overlap_gain_compensate(
+    tile_image, current_region, indicator_region, noise_floor=None, taper_px=200
+):
     """Scale tile signal near the overlap to match the existing mosaic.
 
     Computes the ratio of medians for signal pixels (well above the noise
@@ -337,7 +348,7 @@ def _overlap_gain_compensate(tile_image, current_region, indicator_region,
     # at ~25–36 to be corrected.
     min_signal = _BLEND_DTYPE(float(nf) + 5.0)
 
-    exist_vals = current_region[overlap]                        # float32
+    exist_vals = current_region[overlap]  # float32
     new_vals = np.asarray(tile_image, dtype=_BLEND_DTYPE)[overlap]
 
     # Restrict to pixels with real signal (both sides must be well above noise)
@@ -359,10 +370,10 @@ def _overlap_gain_compensate(tile_image, current_region, indicator_region,
     trim_mask = (ev >= p05) & (ev <= p40) & (nv >= p05) & (nv <= p40)
     if int(trim_mask.sum()) >= _GAIN_COMP_MIN_PX:
         med_exist = float(np.median(ev[trim_mask]))
-        med_new   = float(np.median(nv[trim_mask]))
+        med_new = float(np.median(nv[trim_mask]))
     else:
         med_exist = float(np.median(ev))
-        med_new   = float(np.median(nv))
+        med_new = float(np.median(nv))
 
     # Both medians must be well above noise — otherwise we're comparing
     # amplified noise to tissue and the ratio is meaningless.
@@ -372,7 +383,7 @@ def _overlap_gain_compensate(tile_image, current_region, indicator_region,
     ratio = med_exist / med_new
     ratio = max(_GAIN_COMP_CLAMP[0], min(_GAIN_COMP_CLAMP[1], ratio))
 
-    if abs(ratio - 1.0) < 0.005:       # skip trivial corrections (<0.5%)
+    if abs(ratio - 1.0) < 0.005:  # skip trivial corrections (<0.5%)
         return tile_image
 
     # --- Spatial taper: full correction at/near overlap, fading into interior ---
@@ -384,7 +395,8 @@ def _overlap_gain_compensate(tile_image, current_region, indicator_region,
     dist = cv2.distanceTransform(inv_ov, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
     spatial = np.clip(
         _BLEND_DTYPE(1.0) - dist.astype(_BLEND_DTYPE) / _BLEND_DTYPE(taper_px),
-        _BLEND_DTYPE(0.0), _BLEND_DTYPE(1.0),
+        _BLEND_DTYPE(0.0),
+        _BLEND_DTYPE(1.0),
     )
     del inv_ov, dist
 
@@ -396,7 +408,8 @@ def _overlap_gain_compensate(tile_image, current_region, indicator_region,
     tile_f = np.asarray(tile_image, dtype=_BLEND_DTYPE)
     t = np.clip(
         (tile_f - nf) / max(nf * _BLEND_DTYPE(0.5), _BLEND_DTYPE(5.0)),
-        _BLEND_DTYPE(0.0), _BLEND_DTYPE(1.0),
+        _BLEND_DTYPE(0.0),
+        _BLEND_DTYPE(1.0),
     )
     delta = _BLEND_DTYPE(ratio - 1.0)
     return tile_f * (_BLEND_DTYPE(1.0) + t * spatial * delta)
@@ -421,10 +434,10 @@ def _overlap_gain_compensate(tile_image, current_region, indicator_region,
 # correction map.  This avoids chain drift and provides full-tile
 # coverage.  Only activates when tile-level CV exceeds a threshold.
 
-_TILE_EQ_MAX_SPREAD = 2.0    # max P90/P10 ratio to trigger equalization
-_TILE_EQ_MIN_TISSUE_PX = 200 # minimum tissue pixels per tile region
-_TILE_EQ_CLAMP = (0.70, 1.42) # safety clamp on correction ratios
-_TILE_EQ_MEAS_BUFFER = 5.0   # extra margin above noise floor for measurement
+_TILE_EQ_MAX_SPREAD = 2.0  # max P90/P10 ratio to trigger equalization
+_TILE_EQ_MIN_TISSUE_PX = 200  # minimum tissue pixels per tile region
+_TILE_EQ_CLAMP = (0.70, 1.42)  # safety clamp on correction ratios
+_TILE_EQ_MEAS_BUFFER = 5.0  # extra margin above noise floor for measurement
 
 
 def _equalize_tile_grid(mosaic, tiles, noise_floors=None):
@@ -456,8 +469,8 @@ def _equalize_tile_grid(mosaic, tiles, noise_floors=None):
     _default_noise = float(_GAIN_COMP_NOISE)
 
     # Collect column and row tile boundaries
-    col_bnds = _collect_boundaries(tiles, axis='column')
-    row_bnds = _collect_boundaries(tiles, axis='row')
+    col_bnds = _collect_boundaries(tiles, axis="column")
+    row_bnds = _collect_boundaries(tiles, axis="row")
     if not col_bnds or not row_bnds:
         return
 
@@ -472,8 +485,11 @@ def _equalize_tile_grid(mosaic, tiles, noise_floors=None):
         else:
             channel = mosaic
 
-        nf = (noise_floors[ch] if noise_floors is not None
-              and ch < len(noise_floors) else _default_noise)
+        nf = (
+            noise_floors[ch]
+            if noise_floors is not None and ch < len(noise_floors)
+            else _default_noise
+        )
         nf = float(nf)
         # Use a higher threshold for *measuring* tissue medians so
         # that background scatter (noise_floor < val < noise_floor+5)
@@ -508,8 +524,7 @@ def _equalize_tile_grid(mosaic, tiles, noise_floors=None):
                 c0, c1 = col_edges[ci], col_edges[ci + 1]
                 region = channel[r0:r1, c0:c1]
                 tile_area = (r1 - r0) * (c1 - c0)
-                min_px = max(_TILE_EQ_MIN_TISSUE_PX,
-                             int(tile_area * 0.05))
+                min_px = max(_TILE_EQ_MIN_TISSUE_PX, int(tile_area * 0.05))
                 tissue = region[region > nf_meas]
                 if len(tissue) >= min_px:
                     # Use 10th-30th percentile trimmed mean to measure
@@ -548,8 +563,7 @@ def _equalize_tile_grid(mosaic, tiles, noise_floors=None):
                 m = medians[ri, ci]
                 if np.isfinite(m) and m > nf_meas:
                     ratios[ri, ci] = target / m
-        np.clip(ratios, _TILE_EQ_CLAMP[0], _TILE_EQ_CLAMP[1],
-                out=ratios)
+        np.clip(ratios, _TILE_EQ_CLAMP[0], _TILE_EQ_CLAMP[1], out=ratios)
 
         # Leave outermost tile rows/columns uncorrected — edge
         # tiles have unreliable medians (partial tissue, artifacts).
@@ -560,21 +574,19 @@ def _equalize_tile_grid(mosaic, tiles, noise_floors=None):
 
         # Fill invalid positions with nearest valid ratio.
         from scipy.ndimage import distance_transform_edt
+
         valid_r = ~np.isnan(ratios)
         if valid_r.any():
             _, nearest_idx = distance_transform_edt(
-                ~valid_r, return_distances=True,
-                return_indices=True)
+                ~valid_r, return_distances=True, return_indices=True
+            )
             ratios[:] = ratios[tuple(nearest_idx)]
         else:
             ratios[:] = 1.0
 
         # --- Smooth the coarse ratio grid ---
-        smooth = gaussian_filter(
-            ratios.astype(np.float64), sigma=0.3
-        ).astype(np.float32)
-        np.clip(smooth, _TILE_EQ_CLAMP[0], _TILE_EQ_CLAMP[1],
-                out=smooth)
+        smooth = gaussian_filter(ratios.astype(np.float64), sigma=0.3).astype(np.float32)
+        np.clip(smooth, _TILE_EQ_CLAMP[0], _TILE_EQ_CLAMP[1], out=smooth)
 
         # --- Build per-pixel correction map ---
         h, w = channel.shape
@@ -589,8 +601,7 @@ def _equalize_tile_grid(mosaic, tiles, noise_floors=None):
         if np.max(np.abs(corr_map - 1.0)) > 0.003:
             nf32 = np.float32(nf)
             sig = channel > nf32
-            channel[sig] = np.clip(
-                channel[sig] * corr_map[sig], 0, 65535)
+            channel[sig] = np.clip(channel[sig] * corr_map[sig], 0, 65535)
         del corr_map
 
 
@@ -617,6 +628,7 @@ def _equalize_tile_grid(mosaic, tiles, noise_floors=None):
 # Background Zeroing
 # ============================================================================
 
+
 def _zero_background(mosaic, noise_floors=None):
     """Zero out background pixels while preserving dark brain regions.
 
@@ -633,8 +645,7 @@ def _zero_background(mosaic, noise_floors=None):
     noise_floors : list[float] | None
         Per-channel noise floor values.  Falls back to ``_GAIN_COMP_NOISE``.
     """
-    from scipy.ndimage import (binary_fill_holes, binary_closing,
-                                binary_opening, label)
+    from scipy.ndimage import binary_fill_holes, binary_closing, binary_opening, label
 
     n_ch = mosaic.shape[2] if mosaic.ndim >= 3 else 1
     _default_noise = float(_GAIN_COMP_NOISE)
@@ -648,8 +659,7 @@ def _zero_background(mosaic, noise_floors=None):
     H, W = mosaic.shape[:2]
 
     for ch in range(n_ch):
-        nf = (noise_floors[ch] if ch < len(noise_floors)
-              else _default_noise)
+        nf = noise_floors[ch] if ch < len(noise_floors) else _default_noise
         nf = float(nf)
 
         if mosaic.ndim >= 3:
@@ -665,8 +675,7 @@ def _zero_background(mosaic, noise_floors=None):
         # 2. Morphological OPEN to remove isolated noise pixels in the
         #    background.  Small kernel — just enough to clean up noise
         #    without eroding real tissue edges.
-        kern_open = cv2.getStructuringElement(
-            cv2.MORPH_ELLIPSE, (5, 5)).astype(bool)
+        kern_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)).astype(bool)
         opened = binary_opening(tissue_mask, structure=kern_open)
 
         # 3. Connected component analysis — keep only components larger
@@ -694,17 +703,16 @@ def _zero_background(mosaic, noise_floors=None):
 
         # 6. Upscale the mask back to full resolution via nearest-neighbor
         mask_full = cv2.resize(
-            filled.astype(np.uint8), (W, H),
-            interpolation=cv2.INTER_NEAREST
+            filled.astype(np.uint8), (W, H), interpolation=cv2.INTER_NEAREST
         ).astype(bool)
 
         # 7. Zero only pixels outside the brain mask
         channel[~mask_full] = 0.0
 
-    logging.info('Background zeroing applied (morphological brain mask).')
+    logging.info("Background zeroing applied (morphological brain mask).")
 
 
-def _collect_boundaries(tiles, axis='column'):
+def _collect_boundaries(tiles, axis="column"):
     """Return sorted overlap-centre positions along the given axis.
 
     Only returns boundaries where the overlap between adjacent tile
@@ -719,10 +727,13 @@ def _collect_boundaries(tiles, axis='column'):
     if not tiles:
         return []
     first_ch = min(int(t.channel) for t in tiles)
-    spans = sorted({
-        (int(t.bounds[axis]['start']), int(t.bounds[axis]['end']))
-        for t in tiles if int(t.channel) == first_ch
-    })
+    spans = sorted(
+        {
+            (int(t.bounds[axis]["start"]), int(t.bounds[axis]["end"]))
+            for t in tiles
+            if int(t.channel) == first_ch
+        }
+    )
 
     # Only keep overlaps that are narrow (real inter-column seams).
     # Within-column tile overlaps span almost the full tile width
@@ -755,8 +766,7 @@ def _collect_boundaries(tiles, axis='column'):
     return merged
 
 
-def _destripe_seams(mosaic, tiles, axis='column', noise_floors=None,
-                    seam_params=None):
+def _destripe_seams(mosaic, tiles, axis="column", noise_floors=None, seam_params=None):
     """Row-adaptive correction of narrow artefacts at tile boundaries.
 
     After step equalization has removed the wide brightness step between
@@ -788,20 +798,20 @@ def _destripe_seams(mosaic, tiles, axis='column', noise_floors=None,
     # Extract parameters (use seam_params if provided, else compute)
     if seam_params is None:
         seam_params = _derive_seam_params(tiles)
-    zone_half = seam_params['destripe_zone_half']
-    ref_near = seam_params['destripe_ref_near']
-    ref_far = seam_params['destripe_ref_far']
-    band_h = seam_params['destripe_band_h']
-    band_stride = seam_params['destripe_band_stride']
-    band_min_px = seam_params['destripe_band_min_px']
-    smooth_sigma = seam_params['destripe_smooth_sigma']
+    zone_half = seam_params["destripe_zone_half"]
+    ref_near = seam_params["destripe_ref_near"]
+    ref_far = seam_params["destripe_ref_far"]
+    band_h = seam_params["destripe_band_h"]
+    band_stride = seam_params["destripe_band_stride"]
+    band_min_px = seam_params["destripe_band_min_px"]
+    smooth_sigma = seam_params["destripe_smooth_sigma"]
 
     # For row boundaries, transpose so the same column logic works.
     # numpy transpose returns a *view*, so in-place edits propagate.
-    if axis == 'row':
-        work = mosaic.transpose(1, 0, 2)            # (W, H, C)
+    if axis == "row":
+        work = mosaic.transpose(1, 0, 2)  # (W, H, C)
     else:
-        work = mosaic                                # (H, W, C)
+        work = mosaic  # (H, W, C)
 
     h, w, n_ch = work.shape
     _default_noise = float(_GAIN_COMP_NOISE)
@@ -813,12 +823,15 @@ def _destripe_seams(mosaic, tiles, axis='column', noise_floors=None,
     # Cosine-bell taper: 1 at centre, 0 at ±zone edges
     zone_full = 2 * zone_half
     taper_1d = np.cos(np.linspace(-np.pi / 2, np.pi / 2, zone_full))
-    taper_1d = (taper_1d ** 2).astype(np.float64)
+    taper_1d = (taper_1d**2).astype(np.float64)
 
     for ch in range(n_ch):
         channel = work[:, :, ch]
-        noise_floor = (noise_floors[ch] if noise_floors is not None
-                       and ch < len(noise_floors) else _default_noise)
+        noise_floor = (
+            noise_floors[ch]
+            if noise_floors is not None and ch < len(noise_floors)
+            else _default_noise
+        )
 
         for bc in bndry:
             zL = max(0, bc - zone_half)
@@ -881,25 +894,21 @@ def _destripe_seams(mosaic, tiles, axis='column', noise_floors=None,
                 # the reference zone measurement above.
                 zone_band = band[:, zL:zR]
                 tissue_mask = zone_band > noise_floor
-                col_counts = tissue_mask.sum(axis=0)       # (zone_w,)
+                col_counts = tissue_mask.sum(axis=0)  # (zone_w,)
                 zone_f = zone_band.astype(np.float64)
                 zone_f[~tissue_mask] = np.nan
                 import warnings
+
                 with warnings.catch_warnings():
-                    warnings.simplefilter('ignore', RuntimeWarning)
+                    warnings.simplefilter("ignore", RuntimeWarning)
                     actuals = np.nanpercentile(zone_f, 25, axis=0)  # (zone_w,)
 
                 ratio_vec = np.ones(zone_w, dtype=np.float64)
-                valid_cols = ((col_counts >= band_min_px)
-                              & (actuals > noise_floor))
-                ratio_vec[valid_cols] = (baseline[valid_cols]
-                                         / np.maximum(actuals[valid_cols],
-                                                      1.0))
+                valid_cols = (col_counts >= band_min_px) & (actuals > noise_floor)
+                ratio_vec[valid_cols] = baseline[valid_cols] / np.maximum(actuals[valid_cols], 1.0)
 
                 # Clamp to safety range
-                ratio_vec = np.clip(ratio_vec,
-                                    1.0 - _DESTRIPE_MAX_CORR,
-                                    1.0 + _DESTRIPE_MAX_CORR)
+                ratio_vec = np.clip(ratio_vec, 1.0 - _DESTRIPE_MAX_CORR, 1.0 + _DESTRIPE_MAX_CORR)
 
                 band_centres.append((y0 + y1) / 2.0)
                 band_ratios.append(ratio_vec)
@@ -909,34 +918,29 @@ def _destripe_seams(mosaic, tiles, axis='column', noise_floors=None,
 
             # --- Smooth band ratios, then interpolate to per-row ---
             centres = np.array(band_centres)
-            ratios_arr = np.array(band_ratios)          # (n_bands, zone_w)
+            ratios_arr = np.array(band_ratios)  # (n_bands, zone_w)
 
             # Smooth at band level (57 pts, sigma≈1) instead of full
             # resolution (11K pts, sigma=200).  Same spatial scale
             # because band_stride ≈ smooth_sigma.
             band_sigma = smooth_sigma / max(band_stride, 1)
             if ratios_arr.shape[0] > 2:
-                ratios_arr = gaussian_filter1d(
-                    ratios_arr, sigma=band_sigma, axis=0)
+                ratios_arr = gaussian_filter1d(ratios_arr, sigma=band_sigma, axis=0)
 
-            np.clip(ratios_arr, 1.0 - _DESTRIPE_MAX_CORR,
-                    1.0 + _DESTRIPE_MAX_CORR, out=ratios_arr)
+            np.clip(ratios_arr, 1.0 - _DESTRIPE_MAX_CORR, 1.0 + _DESTRIPE_MAX_CORR, out=ratios_arr)
 
             all_rows = np.arange(h, dtype=np.float64)
             corr_2d = np.ones((h, zone_w), dtype=np.float64)
             for ci in range(zone_w):
-                corr_2d[:, ci] = np.interp(all_rows, centres,
-                                           ratios_arr[:, ci])
+                corr_2d[:, ci] = np.interp(all_rows, centres, ratios_arr[:, ci])
 
             # Light post-interp smooth to remove interpolation artifacts
             # (~15% of original sigma — 6× cheaper than full-resolution
             # smoothing but eliminates band-transition edges).
             post_sigma = smooth_sigma * 0.15
             if post_sigma > 5:
-                corr_2d = gaussian_filter1d(
-                    corr_2d, sigma=post_sigma, axis=0)
-                np.clip(corr_2d, 1.0 - _DESTRIPE_MAX_CORR,
-                        1.0 + _DESTRIPE_MAX_CORR, out=corr_2d)
+                corr_2d = gaussian_filter1d(corr_2d, sigma=post_sigma, axis=0)
+                np.clip(corr_2d, 1.0 - _DESTRIPE_MAX_CORR, 1.0 + _DESTRIPE_MAX_CORR, out=corr_2d)
 
             # Skip if negligible
             if np.max(np.abs(corr_2d - 1.0)) < 0.003:
@@ -971,8 +975,7 @@ def _destripe_seams(mosaic, tiles, axis='column', noise_floors=None,
 # Vertical shape: δ(y) is the locally-measured (and smoothed) half-step.
 
 
-def _equalize_seam_steps(mosaic, tiles, axis='column', noise_floors=None,
-                         seam_params=None):
+def _equalize_seam_steps(mosaic, tiles, axis="column", noise_floors=None, seam_params=None):
     """Row-adaptive step equalization at tile boundaries.
 
     Measures the brightness step at each boundary in overlapping
@@ -1001,17 +1004,17 @@ def _equalize_seam_steps(mosaic, tiles, axis='column', noise_floors=None,
 
     if seam_params is None:
         seam_params = _derive_seam_params(tiles)
-    meas_near = seam_params['step_meas_near']
-    meas_far = seam_params['step_meas_far']
-    taper_px = seam_params['step_taper_px']
-    trans_px = seam_params['step_trans_px']
-    s_band_h = seam_params['step_band_h']
-    s_band_stride = seam_params['step_band_stride']
-    s_band_min_px = seam_params['step_band_min_px']
-    s_smooth_sigma = seam_params['step_smooth_sigma']
+    meas_near = seam_params["step_meas_near"]
+    meas_far = seam_params["step_meas_far"]
+    taper_px = seam_params["step_taper_px"]
+    trans_px = seam_params["step_trans_px"]
+    s_band_h = seam_params["step_band_h"]
+    s_band_stride = seam_params["step_band_stride"]
+    s_band_min_px = seam_params["step_band_min_px"]
+    s_smooth_sigma = seam_params["step_smooth_sigma"]
 
     # For row boundaries, transpose so the same column logic works.
-    if axis == 'row':
+    if axis == "row":
         work = mosaic.transpose(1, 0, 2)
     else:
         work = mosaic
@@ -1027,8 +1030,11 @@ def _equalize_seam_steps(mosaic, tiles, axis='column', noise_floors=None,
 
     for ch in range(n_ch):
         channel = work[:, :, ch]
-        noise_floor = (noise_floors[ch] if noise_floors is not None
-                       and ch < len(noise_floors) else _default_noise)
+        noise_floor = (
+            noise_floors[ch]
+            if noise_floors is not None and ch < len(noise_floors)
+            else _default_noise
+        )
 
         for bc in bndry:
             zL = max(0, bc - taper_px)
@@ -1058,10 +1064,8 @@ def _equalize_seam_steps(mosaic, tiles, axis='column', noise_floors=None,
                 y1 = min(y0 + s_band_h, h)
                 band = channel[y0:y1, :]
 
-                left_strip = band[:, max(0, bc - meas_far):
-                                     max(0, bc - meas_near)]
-                right_strip = band[:, min(w, bc + meas_near):
-                                      min(w, bc + meas_far)]
+                left_strip = band[:, max(0, bc - meas_far) : max(0, bc - meas_near)]
+                right_strip = band[:, min(w, bc + meas_near) : min(w, bc + meas_far)]
 
                 left_tissue_mask = left_strip > noise_floor
                 right_tissue_mask = right_strip > noise_floor
@@ -1098,24 +1102,18 @@ def _equalize_seam_steps(mosaic, tiles, axis='column', noise_floors=None,
             centres = np.array(band_centres)
             steps = np.array(band_steps)
 
-            step_per_row = np.interp(np.arange(h, dtype=np.float64),
-                                     centres, steps)
+            step_per_row = np.interp(np.arange(h, dtype=np.float64), centres, steps)
 
-            step_per_row = gaussian_filter1d(step_per_row,
-                                             sigma=s_smooth_sigma)
+            step_per_row = gaussian_filter1d(step_per_row, sigma=s_smooth_sigma)
 
-            corr_half = np.clip(step_per_row / 2.0,
-                                -_STEP_MAX_CORR_HALF,
-                                _STEP_MAX_CORR_HALF)
+            corr_half = np.clip(step_per_row / 2.0, -_STEP_MAX_CORR_HALF, _STEP_MAX_CORR_HALF)
 
             if np.max(np.abs(corr_half)) < 0.001:
                 continue
 
             corr_map = corr_half[:, np.newaxis] * shape_curve[np.newaxis, :]
 
-            channel[:, zL:zR] *= (
-                _BLEND_DTYPE(1.0) + corr_map.astype(_BLEND_DTYPE)
-            )
+            channel[:, zL:zR] *= _BLEND_DTYPE(1.0) + corr_map.astype(_BLEND_DTYPE)
 
 
 # ============================================================================
@@ -1259,9 +1257,9 @@ def multiband_blend(new_tile, existing_region, blend_mask):
 
 
 def get_indicator_bound_point(indicator, lg, axis):
-    '''Finds the index of first change in a binary mask
+    """Finds the index of first change in a binary mask
     along a specified axis in a specified direction
-    '''
+    """
 
     delta = np.diff(indicator, axis=axis)
     points = np.where(lg(delta, 0))
@@ -1277,9 +1275,9 @@ def get_indicator_bound_point(indicator, lg, axis):
 
 
 def blend_component_from_point(point, mesh, lg):
-    '''Obtains a normalized component of the blend, which describes depth of
+    """Obtains a normalized component of the blend, which describes depth of
     overlap along a specified axis in a specified direction
-    '''
+    """
 
     # this has the effect that the shallowest part of the blend
     # is always 0 - symmetric with the deepest after normalization.
@@ -1294,8 +1292,7 @@ def blend_component_from_point(point, mesh, lg):
 
 
 def get_blend_component(indicator, lg, axis, meshes):
-    '''
-    '''
+    """ """
 
     point = get_indicator_bound_point(indicator, lg, axis)
     if point is None:
@@ -1305,8 +1302,7 @@ def get_blend_component(indicator, lg, axis, meshes):
 
 
 def get_overall_blend(indicator, meshes):
-    '''
-    '''
+    """ """
 
     blends = []
 
@@ -1320,11 +1316,10 @@ def get_overall_blend(indicator, meshes):
 
 
 def get_blend(indicator_region, stup, cb=np.array, meshes=None):
-    '''
-    '''
+    """ """
 
     if meshes is None:
-        meshes = np.meshgrid(*map(np.arange, stup), indexing='ij')
+        meshes = np.meshgrid(*map(np.arange, stup), indexing="ij")
     blend = get_overall_blend(indicator_region, meshes)
 
     return cb(np.multiply(blend, indicator_region))

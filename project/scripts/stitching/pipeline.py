@@ -38,6 +38,7 @@ from scripts.stitching.core import run_tissuecyte_stitching_classic
 # Enable ANSI escape sequences on Windows
 import colorama
 from colorama import Fore, Style
+
 colorama.init()
 
 C_HEADER = Fore.CYAN + Style.BRIGHT
@@ -51,11 +52,17 @@ C_ERROR = Fore.RED + Style.BRIGHT
 C_RESET = Style.RESET_ALL
 
 
-def stitch_pipeline(input_dir, output_dir, section_num=-1,
-                    channel=None, bezier_path=None,
-                    n_threads=-3,
-                    save_undistorted=False, vignetting_correction=True,
-                    verbose=True):
+def stitch_pipeline(
+    input_dir,
+    output_dir,
+    section_num=-1,
+    channel=None,
+    bezier_path=None,
+    n_threads=-3,
+    save_undistorted=False,
+    vignetting_correction=True,
+    verbose=True,
+):
     """Run the full stitching pipeline.
 
     Parameters
@@ -87,9 +94,9 @@ def stitch_pipeline(input_dir, output_dir, section_num=-1,
     start_time = time.time()
 
     if verbose:
-        print(f"\n{C_HEADER}{'='*60}{C_RESET}")
+        print(f"\n{C_HEADER}{'=' * 60}{C_RESET}")
         print(f"{C_HEADER}STITCHING PIPELINE{C_RESET}")
-        print(f"{C_HEADER}{'='*60}{C_RESET}")
+        print(f"{C_HEADER}{'=' * 60}{C_RESET}")
         print(f"  Input:  {C_PATH}{input_dir}{C_RESET}")
         print(f"  Output: {C_PATH}{output_dir}{C_RESET}")
 
@@ -111,8 +118,8 @@ def stitch_pipeline(input_dir, output_dir, section_num=-1,
         gridp.shape[0], gridp.shape[1], kx, ky
     )
 
-    root_dir = os.path.join(input_dir, '')
-    output_dir = os.path.join(output_dir, '')
+    root_dir = os.path.join(input_dir, "")
+    output_dir = os.path.join(output_dir, "")
     os.makedirs(output_dir, exist_ok=True)
 
     # Get section data
@@ -124,9 +131,15 @@ def stitch_pipeline(input_dir, output_dir, section_num=-1,
     )
 
     # Derive actual channel count from tile files, not mosaic metadata
-    channel_count = max(len(sj['channels']) for sj in section_jsons) if section_jsons else int(mosaic_data['channels'])
+    channel_count = (
+        max(len(sj["channels"]) for sj in section_jsons)
+        if section_jsons
+        else int(mosaic_data["channels"])
+    )
     if verbose:
-        print(f"  Found {C_VALUE}{len(section_jsons)}{C_RESET} section(s), {C_VALUE}{channel_count}{C_RESET} channel(s)")
+        print(
+            f"  Found {C_VALUE}{len(section_jsons)}{C_RESET} section(s), {C_VALUE}{channel_count}{C_RESET} channel(s)"
+        )
 
     # Create output directories
     for ch in range(channel_count):
@@ -140,22 +153,26 @@ def stitch_pipeline(input_dir, output_dir, section_num=-1,
 
     # Generate average tiles for vignetting correction
     if verbose:
-        print(f"\n{C_STEP}Step 2:{C_RESET} {C_INFO}Generating average tiles for vignetting correction...{C_RESET}")
+        print(
+            f"\n{C_STEP}Step 2:{C_RESET} {C_INFO}Generating average tiles for vignetting correction...{C_RESET}"
+        )
 
     average_tiles = []
     noise_thresholds = None
     if vignetting_correction and section_num == -1:
         avg_tiles_dir = os.path.join(output_dir, "avg_tiles")
         noise_thresholds = run_tissuecyte_stitching_classic.generate_avg_tiles(
-            section_jsons, avg_tiles_dir, n_threads,
-            n_channels=channel_count
+            section_jsons, avg_tiles_dir, n_threads, n_channels=channel_count
         )
         for i in range(channel_count):
-            dark = noise_thresholds[i].get('dark_level', 0) if noise_thresholds and i < len(noise_thresholds) else 0
+            dark = (
+                noise_thresholds[i].get("dark_level", 0)
+                if noise_thresholds and i < len(noise_thresholds)
+                else 0
+            )
             average_tiles.append(
                 run_tissuecyte_stitching_classic.load_average_tile(
-                    os.path.join(avg_tiles_dir, f"avg_tile_{i}.tif"),
-                    dark_level=dark
+                    os.path.join(avg_tiles_dir, f"avg_tile_{i}.tif"), dark_level=dark
                 )
             )
     else:
@@ -166,61 +183,77 @@ def stitch_pipeline(input_dir, output_dir, section_num=-1,
     if verbose:
         print(f"\n{C_STEP}Step 3:{C_RESET} {C_INFO}Stitching sections...{C_RESET}")
 
-    joblib_backend = 'multiprocessing' if sys.platform == 'win32' else None
+    joblib_backend = "multiprocessing" if sys.platform == "win32" else None
 
     Parallel(n_jobs=n_threads, verbose=13 if verbose else 0)(
         delayed(run_tissuecyte_stitching_classic.stitch_section)(
-            section_json, average_tiles, output_dir,
-            H, pX_, pY_, channel, save_undistorted,
-            'multiband', vignetting_correction,
-            noise_thresholds
-        ) for section_json in section_jsons
+            section_json,
+            average_tiles,
+            output_dir,
+            H,
+            pX_,
+            pY_,
+            channel,
+            save_undistorted,
+            "multiband",
+            vignetting_correction,
+            noise_thresholds,
+        )
+        for section_json in section_jsons
     )
 
     # Generate contrast-stretched preview images for quick QC
     if verbose:
         print(f"\n{C_STEP}Generating preview images...{C_RESET}")
-    run_tissuecyte_stitching_classic.generate_preview_images(
-        output_dir, channel_count, channel
-    )
+    run_tissuecyte_stitching_classic.generate_preview_images(output_dir, channel_count, channel)
 
     elapsed = time.time() - start_time
     minutes, seconds = divmod(elapsed, 60)
 
     if verbose:
-        print(f"\n{C_SUCCESS}{'='*60}{C_RESET}")
+        print(f"\n{C_SUCCESS}{'=' * 60}{C_RESET}")
         print(f"{C_SUCCESS}Stitching completed in {int(minutes)}m {seconds:.1f}s{C_RESET}")
-        print(f"{C_SUCCESS}{'='*60}{C_RESET}")
+        print(f"{C_SUCCESS}{'=' * 60}{C_RESET}")
         print(f"Output: {C_PATH}{output_dir}{C_RESET}\n")
 
     return output_dir
 
 
-if __name__ == '__main__':
-    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+if __name__ == "__main__":
+    logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     parser = argparse.ArgumentParser(description="Stitching pipeline for brain section tiles")
-    parser.add_argument('--input_dir', type=str, required=True,
-                        help='Input directory containing tile data and Mosaic file')
-    parser.add_argument('--output_dir', type=str, required=True,
-                        help='Output directory for stitched images')
-    parser.add_argument('--section', type=int, default=-1,
-                        help='Specific section number to stitch (-1 for all)')
-    parser.add_argument('--channel', type=int, default=None,
-                        help='Specific channel to stitch (default: all channels)')
-    parser.add_argument('--bezier', type=str, default=None,
-                        help='Path to Bezier patch .pkl file')
-    parser.add_argument('--threads', type=int, default=-3,
-                        help='Number of parallel threads (default: -3)')
-    parser.add_argument('--save_undistorted', action='store_true',
-                        help='Save undistorted images')
+    parser.add_argument(
+        "--input_dir",
+        type=str,
+        required=True,
+        help="Input directory containing tile data and Mosaic file",
+    )
+    parser.add_argument(
+        "--output_dir", type=str, required=True, help="Output directory for stitched images"
+    )
+    parser.add_argument(
+        "--section", type=int, default=-1, help="Specific section number to stitch (-1 for all)"
+    )
+    parser.add_argument(
+        "--channel",
+        type=int,
+        default=None,
+        help="Specific channel to stitch (default: all channels)",
+    )
+    parser.add_argument("--bezier", type=str, default=None, help="Path to Bezier patch .pkl file")
+    parser.add_argument(
+        "--threads", type=int, default=-3, help="Number of parallel threads (default: -3)"
+    )
+    parser.add_argument("--save_undistorted", action="store_true", help="Save undistorted images")
 
     args = parser.parse_args()
 
     # Mirror console output to log file
     os.makedirs(args.output_dir, exist_ok=True)
     from scripts.stitching.core.run_tissuecyte_stitching_classic import _Tee
-    _tee = _Tee(os.path.join(args.output_dir, 'console.log'))
+
+    _tee = _Tee(os.path.join(args.output_dir, "console.log"))
     sys.stdout = _tee
 
     stitch_pipeline(

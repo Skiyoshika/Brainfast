@@ -189,6 +189,7 @@ transform_used = None
 reg = None
 FIXED_MAX_DIM = 256  # pre-resample fixed/moving to keep SyN warp field <OOM
 
+
 def _maybe_downsample(img, max_dim: int):
     current = max(int(s) for s in img.shape)
     if current <= max_dim:

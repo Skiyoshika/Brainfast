@@ -107,6 +107,28 @@ def _resolve_structure_source(project_root: Path) -> Path:
     )
 
 
+def _resolve_axis_align_matrix(volume_meta: dict | None, outputs_dir: Path) -> np.ndarray | None:
+    if not volume_meta:
+        return None
+
+    inline_matrix = volume_meta.get("axis_align_matrix")
+    if inline_matrix is not None:
+        return np.asarray(inline_matrix, dtype=np.float32)
+
+    candidate_paths = [
+        volume_meta.get("axis_align_matrix_path"),
+        volume_meta.get("axis_align_path"),
+        Path(outputs_dir) / "axis_alignment" / "axisAlignA.npy",
+    ]
+    for candidate in candidate_paths:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if path.exists():
+            return np.asarray(np.load(str(path)), dtype=np.float32)
+    return None
+
+
 def _load_tuned_overlay_params(
     outputs_dir: Path, *, project_root: Path | None = None
 ) -> tuple[dict, str, int]:
@@ -435,6 +457,8 @@ def _quantify_against_exported_truth(
     truth_rows: list[dict],
     cfg: dict,
     outputs_dir: Path,
+    ants_meta: dict | None = None,
+    volume_meta: dict | None = None,
     **_kwargs,
 ) -> dict:
     outputs_dir = Path(outputs_dir)
@@ -443,12 +467,28 @@ def _quantify_against_exported_truth(
 
     truth_rows = list(truth_rows or [])
     input_cfg = cfg.get("input", {})
+    reg_cfg = cfg.get("registration", {}) or {}
     dedup_cfg = cfg.get("dedup", {})
     pixel_size_um = float(input_cfg.get("pixel_size_um_xy", 25.0))
     slice_spacing_um = float(input_cfg.get("slice_spacing_um", 25.0))
     slicing_plane = str(input_cfg.get("slicing_plane", "coronal")).lower()
     neighbor_slices = int(dedup_cfg.get("neighbor_slices", 1))
     r_xy_um = float(dedup_cfg.get("r_xy_um", 6.0))
+
+    # Xu Lab-canonical cell→CCF mapping toggle. When True + ants_meta + volume_meta
+    # are available, cells are transformed into CCF space once (via
+    # ``cell_to_ccf.map_cells_via_ccf_transform``) and looked up in the native
+    # annotation. The legacy per-slice registered-label TIF lookup below remains
+    # valid for 2D per-slice workflows where each truth_row's label is a faithful
+    # per-slice annotation.
+    use_cell_to_ccf = bool(reg_cfg.get("use_cell_to_ccf_mapping", False))
+    ccf_paths_ok = (
+        use_cell_to_ccf
+        and ants_meta is not None
+        and volume_meta is not None
+        and bool(ants_meta.get("inverse_transforms"))
+        and Path(volume_meta.get("volume_path", "")).exists()
+    )
 
     mapped_rows: list[pd.DataFrame] = []
     registration_rows: list[dict] = []
@@ -481,17 +521,21 @@ def _quantify_against_exported_truth(
             detections["slice_id"] = slice_id
             detections["cell_id"] = range(next_id, next_id + len(detections))
             next_id += len(detections)
-            mapped_rows.append(
-                map_cells_with_registered_label_slice(
-                    detections,
-                    registered_label_tif=registered_label_path,
-                    structure_csv=structure_csv,
-                    atlas_slice_index=slice_id,
-                    slicing_plane=slicing_plane,
-                    registration_score=reg_score,
-                    registration_method="3d_truth_export",
+            if ccf_paths_ok:
+                # Xu Lab-canonical path: accumulate, map once at the end.
+                mapped_rows.append(detections)
+            else:
+                mapped_rows.append(
+                    map_cells_with_registered_label_slice(
+                        detections,
+                        registered_label_tif=registered_label_path,
+                        structure_csv=structure_csv,
+                        atlas_slice_index=slice_id,
+                        slicing_plane=slicing_plane,
+                        registration_score=reg_score,
+                        registration_method="3d_truth_export",
+                    )
                 )
-            )
             detection_count = len(detections)
 
         registration_rows.append(
@@ -533,6 +577,65 @@ def _quantify_against_exported_truth(
                 "structure_source",
             ]
         )
+
+    # Xu Lab-canonical cell→CCF batch mapping (if use_cell_to_ccf_mapping flag).
+    # Single ants.apply_transforms_to_points call for all cells, then native
+    # CCF annotation lookup. Anatomically more faithful than per-slice
+    # registered-label lookup on 3D whole-brain pipelines (avoids the Z-
+    # downsampling leaf-region loss).
+    if ccf_paths_ok and not mapped.empty and "region_id" not in mapped.columns:
+        from scripts.atlas_mapper import _attach_structure_metadata
+        from scripts.cell_to_ccf import map_cells_via_ccf_transform
+
+        try:
+            ccf_template_path = reg_cfg.get("template_path") or ants_meta.get("fixed_image")
+            ccf_annotation_path = reg_cfg.get("annotation_path") or ""
+            if not ccf_template_path or not Path(str(ccf_template_path)).exists():
+                raise FileNotFoundError(f"ccf template not found: {ccf_template_path!r}")
+            if not ccf_annotation_path or not Path(str(ccf_annotation_path)).exists():
+                raise FileNotFoundError(f"ccf annotation not found: {ccf_annotation_path!r}")
+
+            mapped = map_cells_via_ccf_transform(
+                mapped[["cell_id", "slice_id", "x", "y"]].copy(),
+                sample_volume_path=Path(volume_meta["volume_path"]),
+                ccf_annotation_path=Path(ccf_annotation_path),
+                inverse_transforms=list(ants_meta["inverse_transforms"]),
+                pixel_size_um=pixel_size_um,
+                ccf_template_path=Path(ccf_template_path),
+                axis_align_matrix=_resolve_axis_align_matrix(volume_meta, outputs_dir),
+            )
+            # Preserve score/detector/area_px columns from the original detections
+            original = pd.concat(mapped_rows, ignore_index=True)
+            for col in ("score", "detector", "area_px"):
+                if col in original.columns and col not in mapped.columns:
+                    mapped[col] = original[col].to_numpy()
+            mapped = _attach_structure_metadata(mapped, structure_csv)
+            mapped["registration_method"] = "cell_to_ccf"
+            mapped["slicing_plane"] = slicing_plane
+            print(
+                f"[quantify] cell_to_ccf mapped {len(mapped)} cells "
+                f"({mapped[mapped['region_id'] != 0]['region_id'].nunique()} unique regions)"
+            )
+        except Exception as exc:  # noqa: BLE001 — fall back to legacy on any error
+            print(f"[quantify] cell_to_ccf failed ({exc}); falling back to per-slice labels")
+            legacy_rows: list[pd.DataFrame] = []
+            for fallback_index, truth_row in enumerate(truth_rows):
+                slice_id = int(truth_row.get("slice_id", fallback_index))
+                registered_label_path = Path(truth_row["registered_label_path"])
+                batch = mapped[mapped["slice_id"] == slice_id]
+                if batch.empty:
+                    continue
+                legacy_rows.append(
+                    map_cells_with_registered_label_slice(
+                        batch,
+                        registered_label_tif=registered_label_path,
+                        structure_csv=structure_csv,
+                        atlas_slice_index=slice_id,
+                        slicing_plane=slicing_plane,
+                        registration_method="3d_truth_export",
+                    )
+                )
+            mapped = pd.concat(legacy_rows, ignore_index=True) if legacy_rows else mapped
 
     deduped, _stats = apply_dedup_kdtree(
         mapped,

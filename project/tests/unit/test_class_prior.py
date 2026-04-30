@@ -136,6 +136,46 @@ def test_sample_log_appends_jsonl(tmp_path):
     assert first["metrics"] == {"NCC": 0.3}
 
 
+def test_repeated_update_for_same_sample_is_idempotent(tmp_path):
+    """A sample can be saved more than once from the UI, but it should only
+    contribute once to the learned prior and readiness threshold.
+    """
+    from project.scripts.class_prior import ClassPriorStore
+
+    store = ClassPriorStore(class_name="ChATe27", priors_root=tmp_path)
+    store.update("same_sample", _pairs_from([(100, 50, 80, 55, 82)]))
+    store.update("same_sample", _pairs_from([(100, 50, 80, 65, 92)]))
+
+    entries = store.entries()
+    assert len(entries) == 1
+    assert entries[0].n == 1
+    assert entries[0].mean_dy == pytest.approx(5.0)
+    assert entries[0].mean_dx == pytest.approx(2.0)
+    assert store.sample_count() == 1
+
+
+def test_sample_count_ignores_qc_done_history_rows(tmp_path):
+    from project.scripts.class_prior import ClassPriorStore
+
+    store = ClassPriorStore(class_name="ChATe27", priors_root=tmp_path)
+    store.update("sample35", _pairs_from([(100, 50, 80, 55, 82)]))
+    log_path = tmp_path / "ChATe27" / "sample_log.jsonl"
+    with log_path.open("a", encoding="utf-8") as fh:
+        fh.write(
+            json.dumps(
+                {
+                    "kind": "qc_done",
+                    "sample_id": "sample35",
+                    "pair_count": 1,
+                    "metrics": {"NCC": 0.55},
+                }
+            )
+            + "\n"
+        )
+
+    assert store.sample_count() == 1
+
+
 def test_persisted_entries_survive_reopen(tmp_path):
     from project.scripts.class_prior import ClassPriorStore
 

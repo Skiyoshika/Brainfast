@@ -138,7 +138,7 @@
         <span data-i18n="nav.training">Model Training</span>
       </button>
       <button class="nav-btn" data-tab="projects">
-        <span class="nav-icon">📁</span>
+        <span class="nav-icon"><i data-lucide="folder"></i></span>
         <span data-i18n="nav.projects">Projects</span>
       </button>
     </nav>
@@ -817,6 +817,40 @@
           </div>
         </div>
 
+        <!-- Step 2a: Advanced (Xu Lab parity) toggles -->
+        <details style="margin-top:12px; padding:10px; border:1px dashed var(--border,#333); border-radius:6px;">
+          <summary style="cursor:pointer; font-weight:600;" data-i18n="newsample.advanced">
+            Advanced (Xu Lab parity)
+          </summary>
+          <div class="form-row" style="gap:14px; margin-top:10px; flex-wrap:wrap;">
+            <label style="display:flex;flex-direction:column;gap:4px;">
+              <span data-i18n="newsample.antsTransform">ANTs transform</span>
+              <select id="wizAntsTransform" style="width:140px;">
+                <option value="SyNRA">SyNRA (default)</option>
+                <option value="SyN">SyN</option>
+                <option value="Affine">Affine only</option>
+                <option value="Rigid">Rigid only</option>
+              </select>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;">
+              <span data-i18n="newsample.fixedMaxDim">Fixed max dim (SyN memory)</span>
+              <input id="wizFixedMaxDim" type="number" step="1" min="0"
+                     placeholder="e.g. 256" style="width:140px;" />
+              <span class="field-hint" data-i18n="newsample.fixedMaxDimHint">
+                Downsample fixed side so longest axis ≤ this before SyN. Empty = full-res.
+              </span>
+            </label>
+            <label style="display:flex; gap:6px; align-items:center; margin-top:18px;">
+              <input type="checkbox" id="wizAxisAlign" />
+              <span data-i18n="newsample.axisAlign">Pre-align axes via midline fissure</span>
+            </label>
+            <label style="display:flex; gap:6px; align-items:center; margin-top:18px;">
+              <input type="checkbox" id="wizCellToCcf" />
+              <span data-i18n="newsample.cellToCcf">Xu Lab cell→CCF mapping</span>
+            </label>
+          </div>
+        </details>
+
         <!-- Step 2b: Optional second channel (dual-channel) -->
         <div id="wizSecondChannelBlock" style="margin-top:14px; padding:10px; border:1px dashed var(--border,#333); border-radius:6px;">
           <div class="form-row" style="gap:10px; align-items:center;">
@@ -978,6 +1012,80 @@
           <span id="volumeQcSource" class="qc-count-badge"></span>
         </div>
         <div id="volumeQcSummary" class="volume-qc-summary"></div>
+      </section>
+
+      <!-- Stitching launcher (optional; requires the stitching extras — TissueCyte tile data) -->
+      <section class="panel" id="stitchingSection" style="display:none">
+        <div class="results-toolbar">
+          <h2 data-i18n="stitch.title">Stitching (TissueCyte)</h2>
+          <span id="stitchStatus" class="hint-text"></span>
+        </div>
+        <p class="hint-text" data-i18n="stitch.hint">
+          Stitch raw TissueCyte mosaic tiles into full sections before running the pipeline.
+          Deps: <code>pip install -e ".[stitching]"</code>.
+        </p>
+        <div class="form-row" style="gap:10px; flex-wrap:wrap;">
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span data-i18n="stitch.inputDir">Tile input directory</span>
+            <input id="stitchInputDir" type="text" style="width:340px;"
+                   placeholder="raw TissueCyte tiles dir (contains Mosaic file)" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span data-i18n="stitch.outputDir">Output directory</span>
+            <input id="stitchOutputDir" type="text" style="width:340px;"
+                   placeholder="where stitched sections will be written" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span data-i18n="stitch.bezierPath">Bezier calibration file</span>
+            <input id="stitchBezierPath" type="text" style="width:340px;"
+                   placeholder="optional if default asset exists" />
+          </label>
+          <button type="button" id="stitchStartBtn" class="btn btn-primary"
+                  style="align-self:end;" disabled>
+            <i data-lucide="layers" class="btn-icon"></i>
+            <span data-i18n="stitch.start">Start stitching</span>
+          </button>
+        </div>
+        <div id="stitchJobBlock" style="display:none; margin-top:10px; font-family:monospace; font-size:0.85em;">
+          <span data-i18n="stitch.jobId">Job:</span>
+          <span id="stitchJobId"></span>
+          &nbsp;·&nbsp;
+          <span data-i18n="stitch.jobStatus">Status:</span>
+          <span id="stitchJobStatus">queued</span>
+        </div>
+      </section>
+
+      <!-- Neuroglancer 3D viewer launcher (optional; requires the neuroglancer extras) -->
+      <section class="panel" id="neuroglancerSection" style="display:none">
+        <div class="results-toolbar">
+          <h2 data-i18n="ng.title">Neuroglancer 3D Viewer</h2>
+          <span id="ngStatus" class="hint-text"></span>
+        </div>
+        <p class="hint-text" data-i18n="ng.hint">
+          Launch a self-hosted Neuroglancer instance to browse the registered volume and CCF
+          annotation overlay in 3D. Deps: <code>pip install -e ".[neuroglancer]"</code>.
+        </p>
+        <div class="form-row" style="gap:10px; flex-wrap:wrap;">
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span data-i18n="ng.volumePath">Volume NIfTI</span>
+            <input id="ngVolumePath" type="text" style="width:340px;"
+                   placeholder="outputs/&lt;run&gt;/3d/ants_result.nii.gz" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span data-i18n="ng.segPath">Segmentation NIfTI</span>
+            <input id="ngSegPath" type="text" style="width:340px;"
+                   placeholder="outputs/&lt;run&gt;/3d/annotation_in_sample_space.nii.gz" />
+          </label>
+          <button type="button" id="ngLaunchBtn" class="btn btn-primary"
+                  style="align-self:end;" disabled>
+            <i data-lucide="external-link" class="btn-icon"></i>
+            <span data-i18n="ng.launch">Launch Neuroglancer</span>
+          </button>
+        </div>
+        <div id="ngUrlBlock" style="display:none; margin-top:10px;">
+          <span data-i18n="ng.urlReady">Viewer ready:</span>
+          <a id="ngUrlLink" href="#" target="_blank" rel="noopener"></a>
+        </div>
       </section>
 
       <!-- Annotated Slice: region labels on best slice -->
@@ -1430,6 +1538,10 @@
 
         <!-- QC done sign-off (#11) -->
         <div class="form-row" style="gap:12px; align-items:center; margin-top:14px; padding-top:10px; border-top:1px dashed var(--border,#333);">
+          <label style="display:flex;gap:6px;align-items:center;">
+            <span data-i18n="liquify3d.qcNote">QC note</span>
+            <input id="liq3dQcNote" type="text" placeholder="optional" style="width:180px;" />
+          </label>
           <button type="button" class="btn" id="liq3dQcDoneBtn" title="Mark this job as user-approved and persist sign-off metrics">
             <i data-lucide="badge-check" class="btn-icon"></i>
             <span data-i18n="liquify3d.qcDone">Mark QC done</span>
@@ -1471,8 +1583,8 @@
         </div>
 
         <div style="margin-top:14px;">
-          <h3 style="font-size:14px;margin:0 0 6px 0;" data-i18n="liquify3d.pairsTitle">
-            Landmark pairs (<span id="liq3dPairCount">0</span>)
+          <h3 style="font-size:14px;margin:0 0 6px 0;">
+            <span data-i18n="liquify3d.pairsTitle">Landmark pairs</span> (<span id="liq3dPairCount">0</span>)
           </h3>
           <div id="liq3dPairsWrap" style="max-height:320px; overflow:auto; border:1px solid var(--border, #333); border-radius:4px;">
             <table style="width:100%; border-collapse:collapse; font-size:12px;">

@@ -119,7 +119,6 @@ def finalize_liquify_to_cell_counts(
     truth_dir = outputs_dir / _TRUTH_DIR_NAME
     truth_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Re-export per-slice registered-label TIFs from the refined annotation.
     _emit(
         "export_truth",
         1,

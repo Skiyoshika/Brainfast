@@ -22,6 +22,12 @@ def _tissue_mask(arr: np.ndarray, threshold: float = 0.1) -> np.ndarray:
     return arr > threshold
 
 
+def _ants_image_to_numpy(img) -> np.ndarray:
+    if hasattr(img, "numpy"):
+        return np.asarray(img.numpy(), dtype=np.float32)
+    return np.asarray(img, dtype=np.float32)
+
+
 def _nmi_histogram(fixed: np.ndarray, moving: np.ndarray, bins: int = 64) -> float:
     """Normalized Mutual Information via joint histogram.
 
@@ -127,9 +133,40 @@ def run_ants_registration(
     fixed_path: Path,
     moving_path: Path,
     out_dir: Path,
-    transform: str = "SyN",
+    transform: str = "SyNRA",
     random_seed: int = 42,
+    *,
+    aff_metric: str | None = "mattes",
+    syn_metric: str | None = "mattes",
+    syn_sampling: int | None = 32,
+    reg_iterations: tuple[int, ...] | None = None,
+    fixed_max_dim: int | None = None,
 ) -> dict[str, object]:
+    """Run ANTs registration — Xu Lab convention with a Brainfast cross-modality patch.
+
+    Defaults match Xu Lab's ``method='ants_synra'`` variant (Rigid + Affine +
+    SyN) with one addition: Mattes MI as both the affine and SyN metric. Xu
+    Lab defaults to CC, which fails in our env on cross-modality fluorescence-
+    vs-Nissl pairs (ANTs exit code 1). Mattes MI handles the intensity
+    distribution mismatch without changing the alignment algorithm.
+
+    The previous Brainfast override of ``reg_iterations=(200, 200, 100, 50)``
+    is gone — we now trust ANTs's default multi-resolution schedule unless
+    the caller explicitly passes one. This keeps behaviour closer to Xu Lab's
+    ``ants.registration`` call and avoids over-fitting at coarse resolution.
+
+    Pass ``aff_metric=None`` / ``syn_metric=None`` to drop the Mattes override
+    and use ANTs defaults (same as Xu Lab).
+
+    ``fixed_max_dim`` (optional, memory-saver): when set, fixed and moving are
+    resampled to a coarser voxel spacing before registration so the longest axis
+    of the fixed image is ≤ this size. ANTs transforms are stored in physical
+    coordinates, so transforms produced at the downsampled grid apply cleanly
+    to full-resolution inputs downstream (``apply_transforms`` resamples the
+    warp field to the target grid automatically). Use this to get SyN through
+    OOM on tight-memory machines — a value of ~256 typically drops peak memory
+    4-8× vs the default 528-slice CCF template.
+    """
     # Patch matplotlib compatibility for ANTsPy (matplotlib >=3.10 removed dedent_interpd)
     try:
         import matplotlib._docstring as _mpl_ds
@@ -148,33 +185,51 @@ def run_ants_registration(
     fixed_img = ants.image_read(str(fixed_path))
     moving_img = ants.image_read(str(moving_path))
 
-    # Use SyNRA (SyN + Rigid + Affine) with brain-optimised parameters.
-    # For cross-modality registration (fluorescence vs Nissl), Mattes MI
-    # is far more robust than CC (which assumes linear intensity relationship).
-    if transform.lower() in ("syn", "synra"):
-        import logging as _alog
+    if fixed_max_dim is not None and fixed_max_dim > 0:
+        current_max = max(int(s) for s in fixed_img.shape)
+        if current_max > int(fixed_max_dim):
+            factor = current_max / float(fixed_max_dim)
+            new_fixed_spacing = tuple(float(s) * factor for s in fixed_img.spacing)
+            new_moving_spacing = tuple(float(s) * factor for s in moving_img.spacing)
+            import logging as _alog
 
-        _alog.getLogger(__name__).info(
-            "Running ANTs SyNRA with Mattes MI metric (cross-modality optimised)"
-        )
-        reg = ants.registration(
-            fixed=fixed_img,
-            moving=moving_img,
-            type_of_transform="SyNRA",
-            aff_metric="mattes",
-            syn_metric="mattes",
-            syn_sampling=32,
-            reg_iterations=(200, 200, 100, 50),
-            random_seed=int(random_seed),
-            verbose=False,
-        )
-    else:
-        reg = ants.registration(
-            fixed=fixed_img,
-            moving=moving_img,
-            type_of_transform=str(transform),
-            random_seed=int(random_seed),
-        )
+            _alog.getLogger(__name__).info(
+                "ANTs pre-downsample: fixed %s@%s -> spacing %s; moving %s@%s -> spacing %s "
+                "(factor %.2f, target max dim %d)",
+                fixed_img.shape,
+                fixed_img.spacing,
+                new_fixed_spacing,
+                moving_img.shape,
+                moving_img.spacing,
+                new_moving_spacing,
+                factor,
+                int(fixed_max_dim),
+            )
+            fixed_img = ants.resample_image(fixed_img, new_fixed_spacing, False, 0)
+            moving_img = ants.resample_image(moving_img, new_moving_spacing, False, 0)
+
+    reg_kwargs: dict[str, object] = dict(
+        fixed=fixed_img,
+        moving=moving_img,
+        type_of_transform=str(transform),
+        random_seed=int(random_seed),
+        verbose=False,
+    )
+    if aff_metric is not None:
+        reg_kwargs["aff_metric"] = aff_metric
+    if syn_metric is not None:
+        reg_kwargs["syn_metric"] = syn_metric
+    if syn_sampling is not None:
+        reg_kwargs["syn_sampling"] = int(syn_sampling)
+    if reg_iterations is not None:
+        reg_kwargs["reg_iterations"] = tuple(int(v) for v in reg_iterations)
+
+    import logging as _alog
+
+    _alog.getLogger(__name__).info(
+        "ANTs %s (aff_metric=%s syn_metric=%s)", transform, aff_metric, syn_metric
+    )
+    reg = ants.registration(**reg_kwargs)
 
     registered_volume = out_dir / "ants_result.nii.gz"
     ants.image_write(reg["warpedmovout"], str(registered_volume))
@@ -215,7 +270,7 @@ def run_ants_registration(
             _log.warning("Could not persist inverse transform %s: %s", tf, exc)
             saved_inv.append(str(tf))
 
-    fixed_arr = np.asarray(nib.load(str(fixed_path)).dataobj, dtype=np.float32)
+    fixed_arr = _ants_image_to_numpy(fixed_img)
     registered_arr = np.asarray(nib.load(str(registered_volume)).dataobj, dtype=np.float32)
     metrics = compute_registration_metrics(fixed_arr, registered_arr)
 

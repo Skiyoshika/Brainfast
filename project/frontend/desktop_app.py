@@ -20,7 +20,9 @@ import time
 import webbrowser
 from pathlib import Path
 
-if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+IS_FROZEN = bool(getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"))
+
+if IS_FROZEN:
     FRONTEND = Path(sys._MEIPASS)
 else:
     FRONTEND = Path(__file__).resolve().parent
@@ -49,6 +51,10 @@ _update_state: dict[str, object] = {
     "latest_version": "",
     "latest_url": "",
 }
+
+
+def _resource_project_root() -> Path:
+    return FRONTEND if IS_FROZEN else FRONTEND.parent
 
 
 def _make_icon(size: int = 64, highlight: bool = False):
@@ -147,14 +153,14 @@ def _check_updates(icon, *, interactive: bool = False):
             "error": "",
             "has_update": False,
             "latest_version": "",
-            "latest_url": latest_release_url(FRONTEND.parent),
+            "latest_url": latest_release_url(_resource_project_root()),
         }
         if interactive:
             icon.notify("Automatic update checks are disabled.", APP_NAME)
         return
 
     try:
-        result = check_for_update(FRONTEND.parent)
+        result = check_for_update(_resource_project_root())
         _update_state = {
             "checked": True,
             "error": "",
@@ -175,7 +181,7 @@ def _check_updates(icon, *, interactive: bool = False):
             "error": str(exc),
             "has_update": False,
             "latest_version": "",
-            "latest_url": latest_release_url(FRONTEND.parent),
+            "latest_url": latest_release_url(_resource_project_root()),
         }
         if interactive:
             icon.notify(f"Update check failed: {exc}", APP_NAME)
@@ -204,7 +210,11 @@ def main():
         from project.scripts.asset_bootstrap import ensure_atlas_assets
 
         _update_splash("Checking atlas assets...")
-        ensure_atlas_assets(FRONTEND.parent, logger=_update_splash)
+        ensure_atlas_assets(
+            _resource_project_root(),
+            allow_download=not IS_FROZEN,
+            logger=_update_splash,
+        )
     except Exception as exc:
         splash.destroy()
         import tkinter as tk
@@ -249,13 +259,16 @@ def main():
     from pystray import Menu
     from pystray import MenuItem as Item
 
-    version_info = read_version_info(FRONTEND.parent)
+    version_info = read_version_info(_resource_project_root())
 
     def on_open(_icon, _item):
         webbrowser.open(f"http://{HOST}:{PORT}")
 
     def on_open_releases(_icon, _item):
-        webbrowser.open(str(_update_state.get("latest_url") or latest_release_url(FRONTEND.parent)))
+        latest_url = _update_state.get("latest_url") or latest_release_url(
+            _resource_project_root()
+        )
+        webbrowser.open(str(latest_url))
 
     def on_check_updates(_icon, _item):
         threading.Thread(

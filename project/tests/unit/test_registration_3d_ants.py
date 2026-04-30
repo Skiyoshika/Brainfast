@@ -17,35 +17,87 @@ from project.scripts.registration_3d_ants import (
 )
 
 
+class _FakeAntsImage:
+    """Minimal ants-like image wrapper for testing fixed_max_dim resample path."""
+
+    def __init__(self, arr: np.ndarray, spacing: tuple[float, float, float] = (1.0, 1.0, 1.0)):
+        self._arr = np.asarray(arr, dtype=np.float32)
+        self.spacing = tuple(float(s) for s in spacing)
+
+    def numpy(self):
+        return self._arr
+
+    @property
+    def shape(self):
+        return self._arr.shape
+
+
 class _FakeAntsModule:
     def __init__(self):
         self.registration_calls: list[dict[str, object]] = []
+        self.resample_calls: list[dict[str, object]] = []
 
     def image_read(self, path):
-        return nib.load(str(path)).get_fdata().astype(np.float32)
+        arr = nib.load(str(path)).get_fdata().astype(np.float32)
+        return _FakeAntsImage(arr)
 
     def image_write(self, arr, path):
-        img = nib.Nifti1Image(np.asarray(arr, dtype=np.float32), np.eye(4))
+        data = arr.numpy() if hasattr(arr, "numpy") else np.asarray(arr, dtype=np.float32)
+        img = nib.Nifti1Image(data.astype(np.float32), np.eye(4))
         nib.save(img, str(path))
 
+    def resample_image(self, img, new_spacing, use_voxels, interp_type):
+        """Fake resample — record the call and pass through (same shape + data,
+        updated spacing). Real ANTs shrinks the array; for unit tests we only
+        care that the call happened with the right parameters, and preserving
+        shape keeps downstream metrics code happy.
+        """
+        self.resample_calls.append(
+            {
+                "input_shape": img.shape,
+                "input_spacing": img.spacing,
+                "new_spacing": tuple(float(s) for s in new_spacing),
+                "use_voxels": use_voxels,
+                "interp_type": interp_type,
+            }
+        )
+        return _FakeAntsImage(img.numpy(), new_spacing)
+
     def registration(self, fixed, moving, type_of_transform="SyN", random_seed=42, **kwargs):
+        fixed_arr = fixed.numpy() if hasattr(fixed, "numpy") else np.asarray(fixed, dtype=np.float32)
+        moving_arr = (
+            moving.numpy() if hasattr(moving, "numpy") else np.asarray(moving, dtype=np.float32)
+        )
         self.registration_calls.append(
             {
                 "type_of_transform": type_of_transform,
                 "random_seed": random_seed,
-                "fixed_shape": np.shape(fixed),
-                "moving_shape": np.shape(moving),
+                "fixed_shape": fixed_arr.shape,
+                "moving_shape": moving_arr.shape,
                 **kwargs,
             }
         )
-        warped = (
-            np.asarray(moving, dtype=np.float32) * 0.5 + np.asarray(fixed, dtype=np.float32) * 0.5
-        )
+        warped = fixed_arr * 0.5 + moving_arr * 0.5
         return {
-            "warpedmovout": warped,
+            "warpedmovout": _FakeAntsImage(warped),
             "fwdtransforms": [f"{type_of_transform}_{random_seed}_fwd.mat"],
             "invtransforms": [f"{type_of_transform}_{random_seed}_inv.mat"],
         }
+
+
+class _FakeAntsModuleWithRealResample(_FakeAntsModule):
+    def resample_image(self, img, new_spacing, use_voxels, interp_type):
+        self.resample_calls.append(
+            {
+                "input_shape": img.shape,
+                "input_spacing": img.spacing,
+                "new_spacing": tuple(float(s) for s in new_spacing),
+                "use_voxels": use_voxels,
+                "interp_type": interp_type,
+            }
+        )
+        factor = max(1, int(round(float(new_spacing[0]) / float(img.spacing[0]))))
+        return _FakeAntsImage(img.numpy()[::factor, ::factor, ::factor], new_spacing)
 
 
 def test_norm_returns_float32_and_clips_to_unit_interval():
@@ -152,6 +204,83 @@ def test_compute_registration_metrics_normal_path_returns_finite_values():
     assert all(np.isfinite(value) for value in metrics.values())
     assert 0.0 <= metrics["Dice"] < 1.0
     assert metrics["MSE"] > 0.0
+
+
+def test_fixed_max_dim_skipped_when_shape_already_small(tmp_path, monkeypatch):
+    """If the fixed image's longest axis is <= fixed_max_dim, no resample happens."""
+    fake_ants = _FakeAntsModule()
+    monkeypatch.setitem(sys.modules, "ants", fake_ants)
+    fixed_path = tmp_path / "fixed.nii.gz"
+    moving_path = tmp_path / "moving.nii.gz"
+    nib.save(nib.Nifti1Image(np.zeros((8, 8, 8), dtype=np.float32), np.eye(4)), str(fixed_path))
+    nib.save(nib.Nifti1Image(np.zeros((8, 8, 8), dtype=np.float32), np.eye(4)), str(moving_path))
+    run_ants_registration(fixed_path, moving_path, tmp_path / "out", fixed_max_dim=16)
+    assert fake_ants.resample_calls == []
+
+
+def test_fixed_max_dim_triggers_resample_when_shape_too_large(tmp_path, monkeypatch):
+    """When fixed > fixed_max_dim, both fixed and moving are resampled to coarser spacing."""
+    fake_ants = _FakeAntsModule()
+    monkeypatch.setitem(sys.modules, "ants", fake_ants)
+    fixed_path = tmp_path / "fixed.nii.gz"
+    moving_path = tmp_path / "moving.nii.gz"
+    nib.save(
+        nib.Nifti1Image(np.zeros((20, 10, 10), dtype=np.float32), np.eye(4)),
+        str(fixed_path),
+    )
+    nib.save(
+        nib.Nifti1Image(np.zeros((20, 10, 10), dtype=np.float32), np.eye(4)),
+        str(moving_path),
+    )
+    run_ants_registration(fixed_path, moving_path, tmp_path / "out", fixed_max_dim=10)
+    # Both fixed + moving get resampled → 2 calls
+    assert len(fake_ants.resample_calls) == 2
+    # Factor = max(20, 10, 10) / 10 = 2.0; each axis spacing doubles
+    call0 = fake_ants.resample_calls[0]
+    assert all(abs(s - 2.0) < 1e-9 for s in call0["new_spacing"])
+
+
+def test_fixed_max_dim_metrics_use_resampled_fixed_grid(tmp_path, monkeypatch):
+    """Metrics must compare the registered output against the ANTs fixed grid.
+
+    Real ANTs resampling shrinks the fixed image when fixed_max_dim is active.
+    The registered output is written on that downsampled grid, so comparing it
+    against the original fixed NIfTI raises a broadcast error.
+    """
+    fake_ants = _FakeAntsModuleWithRealResample()
+    monkeypatch.setitem(sys.modules, "ants", fake_ants)
+    fixed_path = tmp_path / "fixed.nii.gz"
+    moving_path = tmp_path / "moving.nii.gz"
+    out_dir = tmp_path / "out"
+    fixed = np.zeros((20, 10, 10), dtype=np.float32)
+    fixed[4:16, 2:8, 2:8] = 1.0
+    moving = np.zeros((20, 10, 10), dtype=np.float32)
+    moving[5:17, 3:9, 3:9] = 1.0
+    nib.save(nib.Nifti1Image(fixed, np.eye(4)), str(fixed_path))
+    nib.save(nib.Nifti1Image(moving, np.eye(4)), str(moving_path))
+
+    result = run_ants_registration(fixed_path, moving_path, out_dir, fixed_max_dim=10)
+
+    registered_shape = nib.load(str(result["registered_volume"])).shape
+    assert registered_shape == (10, 5, 5)
+    assert Path(result["metrics_csv"]).exists()
+
+
+def test_fixed_max_dim_none_skips_resample(tmp_path, monkeypatch):
+    fake_ants = _FakeAntsModule()
+    monkeypatch.setitem(sys.modules, "ants", fake_ants)
+    fixed_path = tmp_path / "fixed.nii.gz"
+    moving_path = tmp_path / "moving.nii.gz"
+    nib.save(
+        nib.Nifti1Image(np.zeros((100, 100, 100), dtype=np.float32), np.eye(4)),
+        str(fixed_path),
+    )
+    nib.save(
+        nib.Nifti1Image(np.zeros((100, 100, 100), dtype=np.float32), np.eye(4)),
+        str(moving_path),
+    )
+    run_ants_registration(fixed_path, moving_path, tmp_path / "out", fixed_max_dim=None)
+    assert fake_ants.resample_calls == []
 
 
 def test_run_ants_registration_succeeds_when_transform_copy_fails(tmp_path, monkeypatch):

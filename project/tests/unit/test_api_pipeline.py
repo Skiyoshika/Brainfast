@@ -9,9 +9,9 @@ REPO_ROOT = PROJECT_ROOT.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import project.frontend.server_context as ctx
-from project.frontend.server import app
-from project.scripts.paths import RunPaths
+import project.frontend.server_context as ctx  # noqa: E402
+from project.frontend.server import app  # noqa: E402
+from project.scripts.paths import RunPaths  # noqa: E402
 
 
 def _minimal_cfg(input_dir: Path) -> dict:
@@ -319,15 +319,24 @@ def test_runpaths_state_root_overridable_via_env(tmp_path: Path, monkeypatch) ->
 
 
 def test_info_reads_version_json() -> None:
-    # Ensure PROJECT_ROOT points to the real project dir so version.json is found
+    # Ensure PROJECT_ROOT points to the real project dir so version.json is found.
+    # Read the expected version dynamically — the contract here is "/api/info
+    # echoes whatever version.json says", not "version.json is some specific
+    # string"; legitimate version bumps shouldn't require touching this test.
+    import json
+
     import project.frontend.server_context as ctx
+
     saved = ctx.PROJECT_ROOT
     ctx.PROJECT_ROOT = Path(__file__).resolve().parents[2]
     try:
+        version_payload = json.loads(
+            (ctx.PROJECT_ROOT / "version.json").read_text(encoding="utf-8")
+        )
         with app.test_client() as client:
             resp = client.get("/api/info")
             assert resp.status_code == 200
             data = resp.get_json()
-            assert data["version"] == "1.0.0-rc1"
+            assert data["version"] == version_payload["version"]
     finally:
         ctx.PROJECT_ROOT = saved

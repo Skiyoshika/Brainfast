@@ -45,6 +45,19 @@ def export_registered_truth_slices(
     ``fit_mode`` and ``edge_smooth_iter`` are caller-controlled so a UI-learned
     calibration can reach the default whole-brain path. Previously these were
     hard-coded to ``"cover"`` / ``0`` which silently bypassed calibration.
+
+    The annotation volume is assumed to already be in sample space (the 3D
+    ANTs registration has warped it there). ``render_overlay`` is called with
+    ``prewarped_label=True`` to do only a nearest-neighbor resize to the
+    real-image pixel grid, skipping the in-plane 2D warp.
+
+    For the Xu Lab-canonical alternative (warp cell points into CCF instead
+    of warping annotation into sample space), see
+    :func:`scripts.cell_to_ccf.map_cells_via_ccf_transform`. The old
+    ``annotation_sampling_mode='per_slice_native'`` toggle and its
+    ``annotation_prewarped=False`` downstream flag were spike work addressing
+    symptoms of a stale RAS affine bug in legacy ``input_volume.nii.gz``
+    files; the root-cause fix lives in :mod:`scripts.migrate_volume_affine`.
     """
     annotation_img = nib.load(str(annotation_volume_path))
     volume = np.asarray(annotation_img.dataobj, dtype=np.int32)
@@ -90,14 +103,11 @@ def export_registered_truth_slices(
 
         imwrite(str(label_path), label_slice)
 
-        # Use prewarped_label=True: the 3D ANTs registration already provides
-        # spatial alignment, so we only need nearest-neighbour resize to match
-        # the real image.  The tissue-guided 2D warp (prewarped_label=False)
-        # destroys the fine-grained region boundaries established by ANTs.
-        #
-        # warped_label_out=label_path: render_overlay writes the final
-        # (resized/masked) label back to disk so that the mapping step uses
-        # the same canonical raster shown in the overlay.
+        # The 3D ANTs registration already placed annotation in sample space;
+        # we only need a nearest-neighbor resize. ``warped_label_out=label_path``
+        # tells render_overlay to rewrite the resized label back to disk so the
+        # downstream mapping step uses the same canonical raster shown in the
+        # overlay.
         _, diagnostic = render_overlay(
             real_slice_path=real_slice_path,
             label_slice_path=label_path,

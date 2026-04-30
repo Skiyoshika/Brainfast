@@ -533,6 +533,26 @@ const LANGS = {
     'newsample.secondChannelHint': 'Runs only detection (~15 min) on the 2nd channel — reuses the first channel\'s registration. Both channels become overlay-able in 3D Liquify.',
     'newsample.secondSource': '2nd source path (directory or multi-page TIFF)',
     'newsample.secondChannel': '2nd channel',
+    'newsample.advanced': 'Advanced (Xu Lab parity)',
+    'newsample.antsTransform': 'ANTs transform',
+    'newsample.fixedMaxDim': 'Fixed max dim (SyN memory)',
+    'newsample.fixedMaxDimHint': 'Downsample fixed side so longest axis \u2264 this before SyN. Empty = full-res.',
+    'newsample.axisAlign': 'Pre-align axes via midline fissure',
+    'newsample.cellToCcf': 'Xu Lab cell\u2192CCF mapping',
+    'ng.title': 'Neuroglancer 3D Viewer',
+    'ng.hint': 'Launch a self-hosted Neuroglancer instance to browse the registered volume and CCF annotation overlay in 3D. Requires the neuroglancer extras.',
+    'ng.volumePath': 'Volume NIfTI',
+    'ng.segPath': 'Segmentation NIfTI',
+    'ng.launch': 'Launch Neuroglancer',
+    'ng.urlReady': 'Viewer ready:',
+    'stitch.title': 'Stitching (TissueCyte)',
+    'stitch.hint': 'Stitch raw TissueCyte mosaic tiles into full sections before running the pipeline. Requires the stitching extras.',
+    'stitch.inputDir': 'Tile input directory',
+    'stitch.outputDir': 'Output directory',
+    'stitch.bezierPath': 'Bezier calibration file',
+    'stitch.start': 'Start stitching',
+    'stitch.jobId': 'Job:',
+    'stitch.jobStatus': 'Status:',
     // ----- 3D Liquify -----
     'nav.liquify3d': '3D Liquify',
     'liquify3d.title': '3D Landmark Liquify',
@@ -552,6 +572,7 @@ const LANGS = {
     'liquify3d.realHdr': 'Real (y, x)',
     'liquify3d.finalize': 'Finalize & re-export cell counts',
     'liquify3d.qcDone': 'Mark QC done',
+    'liquify3d.qcNote': 'QC note',
     'liquify3d.classLabel': 'Class',
     'liquify3d.priorStatus': 'Prior status',
     'liquify3d.saveToPrior': 'Save job → class prior',
@@ -1089,6 +1110,26 @@ const LANGS = {
     'newsample.secondChannelHint': '仅对第二通道跑检测（约 15 分钟）— 复用第一通道的配准结果。两个通道都能在 3D Liquify 里叠加查看。',
     'newsample.secondSource': '第二通道源路径（目录或多页 TIFF）',
     'newsample.secondChannel': '第二通道',
+    'newsample.advanced': '高级（与 Xu Lab 对齐）',
+    'newsample.antsTransform': 'ANTs 变换类型',
+    'newsample.fixedMaxDim': '固定侧最大尺寸（SyN 省内存）',
+    'newsample.fixedMaxDimHint': '将固定侧最长轴降采样到该值再跑 SyN。留空则原分辨率。',
+    'newsample.axisAlign': '按中线裂预对齐主轴',
+    'newsample.cellToCcf': 'Xu Lab 细胞\u2192CCF 映射',
+    'ng.title': 'Neuroglancer 三维查看器',
+    'ng.hint': '启动本地 Neuroglancer 实例，在浏览器里 3D 浏览配准体积 + CCF 注释叠加。需要装 neuroglancer 附加依赖。',
+    'ng.volumePath': '体积 NIfTI',
+    'ng.segPath': '分割 NIfTI',
+    'ng.launch': '启动 Neuroglancer',
+    'ng.urlReady': '查看器就绪：',
+    'stitch.title': '拼接（TissueCyte）',
+    'stitch.hint': '把 TissueCyte 原始瓦片拼成完整切片，再跑后续管线。需要装 stitching 附加依赖。',
+    'stitch.inputDir': '瓦片输入目录',
+    'stitch.outputDir': '输出目录',
+    'stitch.bezierPath': 'Bezier 标定文件',
+    'stitch.start': '开始拼接',
+    'stitch.jobId': '任务 ID：',
+    'stitch.jobStatus': '状态：',
     // ----- 3D 液化 -----
     'nav.liquify3d': '3D 液化',
     'liquify3d.title': '3D 地标液化',
@@ -1108,6 +1149,7 @@ const LANGS = {
     'liquify3d.realHdr': '实际 (y, x)',
     'liquify3d.finalize': '完成并重新导出细胞计数',
     'liquify3d.qcDone': '标记 QC 完成',
+    'liquify3d.qcNote': 'QC 备注',
     'liquify3d.classLabel': '类别',
     'liquify3d.priorStatus': '先验状态',
     'liquify3d.saveToPrior': '把作业存入类别先验',
@@ -1219,6 +1261,7 @@ const quickExportBtn = document.getElementById('quickExportBtn');
 const quickExportFormatEl = document.getElementById('quickExportFormat');
 const methodsModalTitleEl = document.getElementById('methodsModalTitle');
 const methodsModalDescEl = document.getElementById('methodsModalDesc');
+const errorPanel = document.getElementById('errorPanel');
 const errorPanelToggle = document.getElementById('errorPanelToggle');
 const errorPanelBody = document.getElementById('errorPanelBody');
 const errorPanelList = document.getElementById('errorPanelList');
@@ -1248,7 +1291,6 @@ const overlayJobState = {
   jobId: localStorage.getItem('brainfast.overlayJobId') || '',
 };
 
-state.frontendErrors = loadFrontendErrors();
 renderErrorPanel();
 
 if (errorPanelToggle) {
@@ -1318,27 +1360,6 @@ const FIELD_INPUT_MAP = {
   atlasPath: 'atlasPath',
   structPath: 'structPath',
 };
-const FRONTEND_ERRORS_KEY = 'brainfast.frontendErrors';
-
-function loadFrontendErrors() {
-  try {
-    const raw = sessionStorage.getItem(FRONTEND_ERRORS_KEY);
-    const items = raw ? JSON.parse(raw) : [];
-    return Array.isArray(items) ? items : [];
-  } catch {
-    return [];
-  }
-}
-
-function persistFrontendErrors() {
-  try {
-    sessionStorage.setItem(
-      FRONTEND_ERRORS_KEY,
-      JSON.stringify((state.frontendErrors || []).slice(-50)),
-    );
-  } catch {}
-}
-
 function normalizeFieldKey(field) {
   const raw = String(field || '').trim();
   if (!raw) return '';
@@ -1400,6 +1421,7 @@ function renderErrorPanel() {
     errorBadge.textContent = String(merged.length);
     errorBadge.classList.toggle('hidden', merged.length <= 0);
   }
+  errorPanel?.classList.toggle('has-errors', merged.length > 0);
 }
 
 function pushPersistentError(message, opts = {}) {
@@ -1412,7 +1434,6 @@ function pushPersistentError(message, opts = {}) {
   };
   if (!item.message) return;
   state.frontendErrors = [...(state.frontendErrors || []), item].slice(-50);
-  persistFrontendErrors();
   renderErrorPanel();
   if (errorPanelBody) {
     errorPanelBody.classList.remove('hidden');
@@ -2916,6 +2937,185 @@ async function refreshQcAll() {
   refreshZContinuity();
 }
 document.getElementById('refreshQcAllBtn').onclick = refreshQcAll;
+
+// ----------------------------------------------------------------
+// NEUROGLANCER VIEWER (optional; requires neuroglancer extras)
+// ----------------------------------------------------------------
+async function probeNeuroglancerAvailability() {
+  const section = document.getElementById('neuroglancerSection');
+  const status = document.getElementById('ngStatus');
+  const launchBtn = document.getElementById('ngLaunchBtn');
+  if (!section) return;
+  try {
+    const resp = await fetch('/api/neuroglancer/available');
+    const data = await resp.json();
+    if (data.available) {
+      section.style.display = '';
+      launchBtn.disabled = false;
+      if (status) status.textContent = '';
+    } else {
+      section.style.display = '';
+      launchBtn.disabled = true;
+      if (status) {
+        status.textContent = `Missing: ${data.missing || 'neuroglancer'} — run ${data.install}`;
+      }
+    }
+  } catch (err) {
+    section.style.display = 'none';
+  }
+}
+
+async function launchNeuroglancerViewer() {
+  const volume = document.getElementById('ngVolumePath')?.value?.trim();
+  const seg = document.getElementById('ngSegPath')?.value?.trim();
+  const launchBtn = document.getElementById('ngLaunchBtn');
+  const urlBlock = document.getElementById('ngUrlBlock');
+  const urlLink = document.getElementById('ngUrlLink');
+  const status = document.getElementById('ngStatus');
+  if (!volume) {
+    if (status) status.textContent = 'Provide a Volume NIfTI path first.';
+    return;
+  }
+  launchBtn.disabled = true;
+  if (status) status.textContent = 'Starting viewer…';
+  try {
+    const payload = {
+      imageInputs: [{ path: volume, type: 'nii', name: 'Registered Volume' }],
+    };
+    if (seg) payload.segmentationPath = seg;
+    const resp = await fetch('/api/neuroglancer/launch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      if (status) status.textContent = 'Launch failed: ' + (data.error || resp.status);
+      launchBtn.disabled = false;
+      return;
+    }
+    if (urlLink) {
+      urlLink.href = data.url;
+      urlLink.textContent = data.url;
+    }
+    if (urlBlock) urlBlock.style.display = '';
+    if (status) status.textContent = 'Viewer ready — click the URL to open it.';
+    window.open(data.url, '_blank', 'noopener');
+  } catch (err) {
+    if (status) status.textContent = 'Launch failed: ' + err.message;
+  } finally {
+    launchBtn.disabled = false;
+  }
+}
+
+document.getElementById('ngLaunchBtn')?.addEventListener('click', launchNeuroglancerViewer);
+probeNeuroglancerAvailability();
+
+// ----------------------------------------------------------------
+// STITCHING (TissueCyte) (optional; requires stitching extras)
+// ----------------------------------------------------------------
+async function probeStitchingAvailability() {
+  const section = document.getElementById('stitchingSection');
+  const status = document.getElementById('stitchStatus');
+  const startBtn = document.getElementById('stitchStartBtn');
+  const bezierInput = document.getElementById('stitchBezierPath');
+  if (!section) return;
+  try {
+    const resp = await fetch('/api/stitching/available');
+    const data = await resp.json();
+    section.style.display = '';
+    if (bezierInput && data.defaultBezierPath) {
+      bezierInput.placeholder = data.requiresBezierPath
+        ? `Required: ${data.defaultBezierPath}`
+        : `Default: ${data.defaultBezierPath}`;
+    }
+    if (data.available) {
+      startBtn.disabled = false;
+      if (status) {
+        status.textContent = data.requiresBezierPath
+          ? 'Bezier calibration required; provide a bezierPath before starting.'
+          : '';
+      }
+    } else {
+      startBtn.disabled = true;
+      if (status) status.textContent = `Missing: ${data.missing || 'cv2'} — run ${data.install}`;
+    }
+  } catch (err) {
+    section.style.display = 'none';
+  }
+}
+
+let _stitchPollTimer = null;
+async function pollStitchingStatus(jobId) {
+  const statusSpan = document.getElementById('stitchJobStatus');
+  try {
+    const resp = await fetch(`/api/stitching/status?jobId=${encodeURIComponent(jobId)}`);
+    const data = await resp.json();
+    if (!data.ok) {
+      if (statusSpan) statusSpan.textContent = 'unknown';
+      clearInterval(_stitchPollTimer);
+      return;
+    }
+    if (statusSpan) statusSpan.textContent = data.status;
+    if (data.status === 'done' || data.status === 'error') {
+      clearInterval(_stitchPollTimer);
+      const status = document.getElementById('stitchStatus');
+      if (status) {
+        status.textContent = data.status === 'done'
+          ? 'Stitching finished.'
+          : 'Stitching failed: ' + (data.error || 'unknown error');
+      }
+    }
+  } catch (err) {
+    clearInterval(_stitchPollTimer);
+  }
+}
+
+async function startStitching() {
+  const inputDir = document.getElementById('stitchInputDir')?.value?.trim();
+  const outputDir = document.getElementById('stitchOutputDir')?.value?.trim();
+  const bezierPath = document.getElementById('stitchBezierPath')?.value?.trim();
+  const startBtn = document.getElementById('stitchStartBtn');
+  const status = document.getElementById('stitchStatus');
+  const jobBlock = document.getElementById('stitchJobBlock');
+  const jobIdSpan = document.getElementById('stitchJobId');
+  const statusSpan = document.getElementById('stitchJobStatus');
+  if (!inputDir || !outputDir) {
+    if (status) status.textContent = 'Provide both input + output directories.';
+    return;
+  }
+  startBtn.disabled = true;
+  if (status) status.textContent = 'Starting stitch job…';
+  try {
+    const resp = await fetch('/api/stitching/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        inputDir,
+        outputDir,
+        ...(bezierPath ? { bezierPath } : {}),
+      }),
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      if (status) status.textContent = 'Start failed: ' + (data.error || resp.status);
+      startBtn.disabled = false;
+      return;
+    }
+    if (jobIdSpan) jobIdSpan.textContent = data.jobId;
+    if (statusSpan) statusSpan.textContent = data.status || 'queued';
+    if (jobBlock) jobBlock.style.display = '';
+    if (status) status.textContent = 'Job started; polling status every 5s.';
+    if (_stitchPollTimer) clearInterval(_stitchPollTimer);
+    _stitchPollTimer = setInterval(() => pollStitchingStatus(data.jobId), 5000);
+  } catch (err) {
+    if (status) status.textContent = 'Start failed: ' + err.message;
+    startBtn.disabled = false;
+  }
+}
+
+document.getElementById('stitchStartBtn')?.addEventListener('click', startStitching);
+probeStitchingAvailability();
 
 // ----------------------------------------------------------------
 // Z-CONTINUITY SVG CHART
@@ -6139,25 +6339,25 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
 
   const STEPS = [
     {
-      target: '#inputDir',
+      target: '#oneClickSourcePath',
       titleKey: 'tour.step1.title',
       bodyKey:  'tour.step1.body',
       tab: 'workflow',
     },
     {
-      target: '#atlasPath',
+      target: '#oneClickAtlasVersion',
       titleKey: 'tour.step2.title',
       bodyKey:  'tour.step2.body',
       tab: 'workflow',
     },
     {
-      target: '#confidenceThreshold',
+      target: '#oneClickRegMode',
       titleKey: 'tour.step3.title',
       bodyKey:  'tour.step3.body',
       tab: 'workflow',
     },
     {
-      target: '#runBtn',
+      target: '#oneClickStartBtn',
       titleKey: 'tour.step4.title',
       bodyKey:  'tour.step4.body',
       tab: 'workflow',
@@ -6174,6 +6374,17 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   let _highlight = null;
   let _tooltip = null;
   let _stepIdx = 0;
+
+  function _isVisibleTourTarget(el) {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const style = window.getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+  }
+
+  function _handleTourKeydown(ev) {
+    if (ev.key === 'Escape') _endTour(false);
+  }
 
   function _switchTab(tabName) {
     document.querySelectorAll('.nav-btn[data-tab]').forEach(b => b.classList.remove('active'));
@@ -6208,8 +6419,9 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
 
     const targetEl = document.querySelector(step.target);
     if (!targetEl) { _showStep(idx + 1); return; }  // skip missing elements
+    if (!_isVisibleTourTarget(targetEl)) { _showStep(idx + 1); return; }
 
-    targetEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    targetEl.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
 
     // Position highlight
     setTimeout(() => {
@@ -6247,23 +6459,22 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       _overlay.className   = 'tour-overlay';
       _highlight.className = 'tour-highlight';
       _tooltip.className   = 'tour-tooltip';
+      _overlay.addEventListener('click', () => _endTour(false));
       document.body.append(_overlay, _highlight, _tooltip);
     }
     _overlay.style.display = _highlight.style.display = _tooltip.style.display = '';
+    document.addEventListener('keydown', _handleTourKeydown);
     _showStep(0);
   }
 
   function _endTour(completed) {
     if (_overlay) { _overlay.style.display = _highlight.style.display = _tooltip.style.display = 'none'; }
+    document.removeEventListener('keydown', _handleTourKeydown);
     if (completed) localStorage.setItem(TOUR_KEY, '1');
   }
 
-  // Trigger on first visit
-  if (!localStorage.getItem(TOUR_KEY)) {
-    setTimeout(startTour, 1200);
-  }
-
-  // "?" button in sidebar
+  // Tour is opt-in via the "?" button in the sidebar. Auto-start made first-run
+  // users think the app was stuck when a target was offscreen or hidden.
   document.getElementById('startTourBtn')?.addEventListener('click', startTour);
 })();
 
@@ -6825,7 +7036,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   }
 
   qcDoneBtn?.addEventListener('click', async () => {
-    const note = prompt('Optional note for this QC sign-off (press Enter to skip):', '') || '';
+    const note = el('liq3dQcNote')?.value?.trim() || '';
     qcDoneBtn.disabled = true;
     qcStatus.textContent = 'Recording sign-off…';
     try {
@@ -7287,13 +7498,24 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       ? `Launching dual-channel pipeline (${channels.join(' + ')})…`
       : 'Launching pipeline…';
     try {
+      const advAntsTransform = document.getElementById('wizAntsTransform')?.value || 'SyNRA';
+      const advFixedMaxDimRaw = document.getElementById('wizFixedMaxDim')?.value;
+      const advFixedMaxDim = advFixedMaxDimRaw ? parseInt(advFixedMaxDimRaw, 10) : null;
+      const advAxisAlign = !!document.getElementById('wizAxisAlign')?.checked;
+      const advCellToCcf = !!document.getElementById('wizCellToCcf')?.checked;
       const payload = {
         sampleId: sampleId.value.trim(),
         pixelSizeUm: parseFloat(pixelUm.value),
         zSpacingUm: parseFloat(zUm.value),
         channels,
         atlasHemisphere: hemi.value,
+        antsTransform: advAntsTransform,
+        axisAlignmentEnabled: advAxisAlign,
+        useCellToCcfMapping: advCellToCcf,
       };
+      if (advFixedMaxDim && Number.isFinite(advFixedMaxDim) && advFixedMaxDim > 0) {
+        payload.fixedMaxDim = advFixedMaxDim;
+      }
       // Keep single-channel shape backwards compatible: inputDir (str) for
       // legacy jobs; inputDirs (dict) when multiple channels are declared.
       if (channels.length > 1) {

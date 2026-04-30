@@ -89,7 +89,7 @@ def _is_cellpose_model(name: str) -> bool:
     (like 'log', 'peak', 'threshold', 'reporter_positive', 'none').
     """
     s = str(name or "").strip().lower()
-    if not s or s == "none":
+    if not s or s in ("none", "disabled", "off", "skip"):
         return False
     if s in _BUILTIN_CELLPOSE_NAMES:
         return True

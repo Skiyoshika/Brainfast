@@ -5,12 +5,19 @@ from pathlib import Path
 
 import nibabel as nib
 import numpy as np
+import pytest
 
-from project.scripts.laplacian_refine_3d import refine_registered_volume
 from project.scripts.registration_3d_ants import compute_registration_metrics
 
 
 def test_refine_registered_volume_writes_field_and_final_volume(tmp_path):
+    # refine_registered_volume calls Xu Lab sliceToSlice3DLaplacian which
+    # imports joblib + tqdm + skimage.feature at module level.  The Py 3.10
+    # CI lane installs the lighter dep set, so the underlying machinery
+    # isn't available there — skip rather than error.
+    pytest.importorskip("joblib")
+    pytest.importorskip("skimage.feature")
+    from project.scripts.laplacian_refine_3d import refine_registered_volume
     fixed_path = tmp_path / "fixed.nii.gz"
     moving_path = tmp_path / "moving.nii.gz"
     out_dir = tmp_path / "refined"

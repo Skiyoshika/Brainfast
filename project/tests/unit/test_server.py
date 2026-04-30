@@ -7,6 +7,7 @@ not Flask's dev server. The dev server is only used when BRAINFAST_DEV=1.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -100,3 +101,35 @@ def test_ensure_port_available_raises_on_taken_port():
             server.ensure_port_available(port)
     finally:
         s.close()
+
+
+def test_resolve_runtime_paths_for_source_tree():
+    server = _import_server_main()
+    file_path = Path("D:/repo/project/frontend/server.py")
+
+    root, project_root, writable_root = server._resolve_runtime_paths(
+        frozen=False,
+        file_path=file_path,
+        executable=Path("D:/repo/.venv/Scripts/python.exe"),
+    )
+
+    assert root == Path("D:/repo/project/frontend")
+    assert project_root == Path("D:/repo/project")
+    assert writable_root == project_root
+
+
+def test_resolve_runtime_paths_for_frozen_onedir():
+    server = _import_server_main()
+    meipass = Path("D:/app/BrainfastUI/_internal")
+    executable = Path("D:/app/BrainfastUI/BrainfastUI.exe")
+
+    root, project_root, writable_root = server._resolve_runtime_paths(
+        frozen=True,
+        meipass=meipass,
+        executable=executable,
+        file_path=Path("unused/server.py"),
+    )
+
+    assert root == meipass
+    assert project_root == meipass
+    assert writable_root == Path("D:/app/BrainfastUI")

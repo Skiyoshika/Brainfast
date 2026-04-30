@@ -450,6 +450,29 @@ def test_qc_done_appends_to_class_prior_sample_log_when_class_provided(
     assert len(qc_records) == 1, f"expected 1 qc-done record in sample log, got: {lines}"
 
 
+def test_qc_done_does_not_make_one_sample_ready_for_warm_start(
+    client, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(ctx, "PROJECT_ROOT", tmp_path)
+    job_id = "qc-single-sample"
+    cls = "ChATe27"
+    _seed_job_pair(client, job_id, z=100, real=(55, 82), atlas=(50, 80))
+    client.post(
+        "/api/liquify-3d/class-prior/save",
+        data=json.dumps({"jobId": job_id, "class": cls}),
+        content_type="application/json",
+    )
+    client.post(
+        "/api/liquify-3d/qc-done",
+        data=json.dumps({"jobId": job_id, "className": cls, "metrics": {"NCC": 0.55}}),
+        content_type="application/json",
+    )
+
+    status = client.get(f"/api/liquify-3d/class-prior/status?class={cls}").get_json()
+    assert status["sample_count"] == 1
+    assert status["ready_for_warm_start"] is False
+
+
 def test_finalize_endpoint_missing_refined_annotation_returns_404(client):
     resp = client.post(
         "/api/liquify-3d/finalize",

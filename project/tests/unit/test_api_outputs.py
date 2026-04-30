@@ -141,7 +141,7 @@ def _make_job_with_channel_slices(
 
     job_dir = tmp_path / "jobs" / job_id
     (job_dir / "tmp_channel").mkdir(parents=True)
-    for ch_name, ch_idx in channels.items():
+    for _ch_name, ch_idx in channels.items():
         for z in range(n_slices):
             arr = (np.arange(64 * 64, dtype=np.uint16).reshape(64, 64) * (ch_idx + 1)) % 65535
             imwrite(str(job_dir / "tmp_channel" / f"ch_{ch_idx}_{z:04d}.tif"), arr)

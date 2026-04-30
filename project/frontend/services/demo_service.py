@@ -401,7 +401,7 @@ def generate_cell_chart(hier_path: Path, chart_path: Path, _project_root: Path) 
     ax_major.set_axisbelow(True)
     max_major = max(major_counts) if major_counts else 1
     ax_major.set_xlim(0, max_major * 1.15)
-    for bar, count in zip(bars, major_counts):
+    for bar, count in zip(bars, major_counts, strict=False):
         ax_major.text(
             bar.get_width() + max_major * 0.01,
             bar.get_y() + bar.get_height() / 2.0,
@@ -417,7 +417,7 @@ def generate_cell_chart(hier_path: Path, chart_path: Path, _project_root: Path) 
         f"{label}\n{count / total_major * 100:.1f}%"
         if count / total_major >= 0.04
         else ""
-        for label, count in zip(major_labels, major_counts)
+        for label, count in zip(major_labels, major_counts, strict=False)
     ]
     ax_pie.pie(
         major_counts,
@@ -446,7 +446,7 @@ def generate_cell_chart(hier_path: Path, chart_path: Path, _project_root: Path) 
     ax_top.set_axisbelow(True)
     max_top = max(top_counts) if top_counts else 1
     ax_top.set_xlim(0, max_top * 1.12)
-    for bar, count in zip(top_bars, top_counts):
+    for bar, count in zip(top_bars, top_counts, strict=False):
         ax_top.text(
             bar.get_width() + max_top * 0.01,
             bar.get_y() + bar.get_height() / 2.0,
@@ -810,11 +810,11 @@ def generate_registration_demo_panel(
         brain_crop, overlay_crop = _build_overlay_panel(brain[z], annotation[z])
         height = max(brain_crop.shape[0], overlay_crop.shape[0])
 
-        def _resize_h(arr):
+        def _resize_h(arr, target_height=height):
             img = Image.fromarray(arr)
-            scale = height / max(img.height, 1)
+            scale = target_height / max(img.height, 1)
             return np.array(
-                img.resize((max(1, int(img.width * scale)), height), Image.Resampling.LANCZOS)
+                img.resize((max(1, int(img.width * scale)), target_height), Image.Resampling.LANCZOS)
             )
 
         brain_r = _resize_h(brain_crop)

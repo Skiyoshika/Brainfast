@@ -204,6 +204,160 @@ def test_app_js_has_auto_warm_start_flow_for_empty_jobs():
     )
 
 
+def test_liquify_qc_done_uses_inline_note_input_not_prompt():
+    """Browser-hosted UI must not rely on window.prompt for QC sign-off.
+
+    The in-app browser used for release validation does not support prompt(),
+    so the QC note must be a normal page input that the click handler reads
+    before posting /api/liquify-3d/qc-done.
+    """
+    html = (_FRONTEND_DIR / "index.html").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    js = (_FRONTEND_DIR / "app.js").read_text(encoding="utf-8", errors="replace")
+
+    assert 'id="liq3dQcNote"' in html
+    qc_start = js.index("qcDoneBtn?.addEventListener('click'")
+    qc_end = js.index("// ------------- #6 Class dropdown", qc_start)
+    qc_body = js[qc_start:qc_end]
+
+    assert "prompt(" not in qc_body
+    assert "liq3dQcNote" in qc_body
+    assert "note," in qc_body
+
+
+def test_liquify_pair_count_survives_language_application():
+    """The pair-count span must not sit inside a translated parent node.
+
+    applyLang() replaces data-i18n element innerHTML, so putting
+    #liq3dPairCount inside that same translated element removes it before the
+    Liquify tab can update the count in a real browser.
+    """
+    html = (_FRONTEND_DIR / "index.html").read_text(
+        encoding="utf-8", errors="replace"
+    )
+
+    marker = 'id="liq3dPairCount"'
+    assert marker in html
+    before_marker = html[: html.index(marker)]
+    h3_start = before_marker.rfind("<h3")
+    h3_end = before_marker.rfind("</h3>")
+    assert h3_start > h3_end
+    h3_open_end = html.index(">", h3_start)
+    h3_open = html[h3_start:h3_open_end]
+
+    assert "data-i18n" not in h3_open
+    assert '<span data-i18n="liquify3d.pairsTitle">' in html[h3_start : html.index("</h3>", h3_start)]
+
+
+def test_core_ui_controls_use_design_system_styles():
+    """Guard against browser-native controls leaking into release UI."""
+    html = (_FRONTEND_DIR / "index.html").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    css = (_FRONTEND_DIR / "styles.css").read_text(
+        encoding="utf-8", errors="replace"
+    )
+
+    assert '<span class="nav-icon"><i data-lucide="folder"></i></span>' in html
+    assert '<span class="nav-icon">📁</span>' not in html
+    assert ".form-row" in css and "display: flex" in css
+    assert ".btn {" in css
+    assert 'input[type="radio"],' in css
+    assert 'input[type="checkbox"]' in css
+
+
+def test_error_panel_is_neutral_until_errors_exist():
+    """The sidebar error panel should not look active on a clean page load."""
+    css = (_FRONTEND_DIR / "styles.css").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    js = (_FRONTEND_DIR / "app.js").read_text(encoding="utf-8", errors="replace")
+
+    assert ".error-panel.has-errors" in css
+    error_panel_start = css.index(".error-panel {")
+    error_panel_end = css.index(".error-panel.has-errors", error_panel_start)
+    empty_panel_css = css[error_panel_start:error_panel_end]
+
+    assert "217, 79, 79" not in empty_panel_css
+    assert "state.frontendErrors = loadFrontendErrors()" not in js
+    assert "sessionStorage.getItem(FRONTEND_ERRORS_KEY)" not in js
+    assert "errorPanel?.classList.toggle('has-errors'" in js
+
+
+def test_active_output_dir_uses_configured_output_dir_for_run_name(tmp_path):
+    original_output_dir = ctx.OUTPUT_DIR
+    original_project_root = ctx.PROJECT_ROOT
+    original_run_state = dict(ctx.run_state)
+    resource_root = tmp_path / "_internal"
+    output_root = tmp_path / "writable" / "outputs"
+    run_dir = output_root / "run_001"
+    run_dir.mkdir(parents=True)
+    try:
+        ctx.PROJECT_ROOT = resource_root
+        ctx.OUTPUT_DIR = output_root
+        ctx.run_state.clear()
+        ctx.run_state.update({"runName": "run_001", "outputDir": ""})
+
+        assert ctx.active_output_dir() == run_dir
+    finally:
+        ctx.OUTPUT_DIR = original_output_dir
+        ctx.PROJECT_ROOT = original_project_root
+        ctx.run_state.clear()
+        ctx.run_state.update(original_run_state)
+
+
+def test_pyinstaller_spec_bundles_pkg_resources_extern():
+    spec = (_FRONTEND_DIR / "BrainfastUI.spec").read_text(
+        encoding="utf-8", errors="replace"
+    )
+
+    assert '"pkg_resources.extern"' in spec
+
+
+def test_pyinstaller_spec_bundles_scipy_root_extension():
+    spec = (_FRONTEND_DIR / "BrainfastUI.spec").read_text(
+        encoding="utf-8", errors="replace"
+    )
+
+    assert '"scipy._cyutility"' in spec
+    assert 'collect_submodules("scipy._lib.array_api_compat")' in spec
+
+
+def test_desktop_launcher_uses_bundled_resource_root_for_frozen_assets():
+    source = (_FRONTEND_DIR / "desktop_app.py").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    normalized = " ".join(source.split())
+
+    assert "def _resource_project_root()" in source
+    assert "ensure_atlas_assets(" in normalized
+    assert "_resource_project_root()" in normalized
+    assert "allow_download=not IS_FROZEN" in normalized
+    assert "ensure_atlas_assets(FRONTEND.parent" not in source
+
+
+def test_guided_tour_is_opt_in_and_targets_visible_oneclick_controls():
+    js = (_FRONTEND_DIR / "app.js").read_text(encoding="utf-8", errors="replace")
+    tour_start = js.index("// GUIDED TOUR")
+    tour_end = js.index("// ==================================================================", tour_start + 1)
+    tour_js = js[tour_start:tour_end]
+
+    assert "setTimeout(startTour, 1200)" not in tour_js
+    assert "target: '#inputDir'" not in tour_js
+    assert "target: '#atlasPath'" not in tour_js
+    for target in (
+        "target: '#oneClickSourcePath'",
+        "target: '#oneClickAtlasVersion'",
+        "target: '#oneClickRegMode'",
+        "target: '#oneClickStartBtn'",
+    ):
+        assert target in tour_js
+    assert "behavior: 'auto'" in tour_js
+    assert "_overlay.addEventListener('click', () => _endTour(false));" in tour_js
+    assert "document.addEventListener('keydown', _handleTourKeydown);" in tour_js
+
+
 def test_app_js_has_readable_manual_tiff_translations():
     js = (_FRONTEND_DIR / "app.js").read_text(encoding="utf-8", errors="replace")
 

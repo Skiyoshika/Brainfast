@@ -161,8 +161,12 @@ body {
 .error-panel {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: rgba(217, 79, 79, 0.08);
+  background: rgba(255,255,255,0.02);
   overflow: hidden;
+}
+.error-panel.has-errors {
+  border-color: rgba(217, 79, 79, 0.35);
+  background: rgba(217, 79, 79, 0.08);
 }
 .error-panel-toggle {
   width: 100%;
@@ -171,12 +175,14 @@ body {
   justify-content: space-between;
   gap: 8px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-muted);
   padding: 9px 10px;
   font-size: 12px;
   font-weight: 700;
 }
-.error-panel-toggle:hover { background: rgba(217, 79, 79, 0.08); }
+.error-panel-toggle:hover { background: var(--bg-card); color: var(--text); }
+.error-panel.has-errors .error-panel-toggle { color: var(--text); }
+.error-panel.has-errors .error-panel-toggle:hover { background: rgba(217, 79, 79, 0.08); }
 .error-badge {
   min-width: 18px;
   height: 18px;
@@ -378,6 +384,10 @@ body {
   font-weight: 500;
 }
 .field-label > span { display: flex; align-items: center; gap: 5px; }
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+}
 .required {
   font-style: normal;
   font-size: 11px;
@@ -399,6 +409,13 @@ input, select {
 }
 input:focus, select:focus { outline: none; border-color: var(--accent); }
 input[type="range"] { padding: 4px 0; cursor: pointer; }
+input[type="radio"],
+input[type="checkbox"] {
+  width: auto;
+  min-width: 14px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
 .input-browse { display: flex; gap: 6px; }
 .input-browse input { flex: 1; min-width: 0; }
 .range-row { display: flex; align-items: center; gap: 8px; }
@@ -407,6 +424,24 @@ input[type="range"] { padding: 4px 0; cursor: pointer; }
 
 /* ===== BUTTONS ===== */
 button { cursor: pointer; border: none; font-size: 13px; border-radius: var(--radius-sm); transition: background 0.15s, opacity 0.15s; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--bg-card);
+  color: var(--text);
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  transition: all var(--transition);
+}
+.btn:hover { background: var(--border); }
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 .btn-primary  { background: var(--accent); color: #fff; padding: 9px 16px; font-weight: 600; transition: all var(--transition); box-shadow: var(--shadow-sm); }
 .btn-primary:hover  { background: var(--accent-h); box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .btn-secondary { background: var(--bg-card); color: var(--text); padding: 8px 14px; border: 1px solid var(--border); transition: all var(--transition); }
@@ -1657,7 +1692,7 @@ tr:hover td { background: var(--bg-card); }
   inset: 0;
   background: rgba(0,0,0,0.55);
   z-index: 9000;
-  pointer-events: none;
+  pointer-events: auto;
 }
 .tour-highlight {
   position: fixed;

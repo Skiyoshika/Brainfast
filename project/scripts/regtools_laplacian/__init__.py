@@ -30,7 +30,6 @@ Usage:
     field = sliceToSlice3DLaplacian(fixed_arr, moving_arr, axis=0, spacing=spacing)
 """
 
-from .correspondence import sliceToSlice3DLaplacian
 from .solver import solveLaplacianFromCorrespondences
 from .utils import laplacianA3D, propagate_dirichlet_rhs
 
@@ -40,3 +39,18 @@ __all__ = [
     "laplacianA3D",
     "propagate_dirichlet_rhs",
 ]
+
+
+def __getattr__(name):
+    """Lazy-load ``sliceToSlice3DLaplacian`` so the package is importable
+    even when its heavier transitive deps (joblib, tqdm, skimage.feature)
+    aren't installed — the CI Py 3.10 lane doesn't ship them.
+    Importing the symbol via ``from regtools_laplacian import sliceToSlice3DLaplacian``
+    or attribute access still works the same way for callers; they just
+    pay the joblib import cost at first access instead of at module load.
+    """
+    if name == "sliceToSlice3DLaplacian":
+        from .correspondence import sliceToSlice3DLaplacian as _impl
+
+        return _impl
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

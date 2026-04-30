@@ -95,6 +95,7 @@ def test_solver_anisotropic_spacing_accepted():
 
 def test_slice_to_slice_laplacian_module_importable():
     """Xu Lab slice-to-slice Laplacian must be exposed from the vendored package."""
+    pytest.importorskip("joblib")  # correspondence.py imports joblib at module level
     from project.scripts.regtools_laplacian import sliceToSlice3DLaplacian
 
     assert callable(sliceToSlice3DLaplacian)
@@ -102,6 +103,8 @@ def test_slice_to_slice_laplacian_module_importable():
 
 def test_slice_to_slice_laplacian_empty_volumes_returns_zero_field():
     """Empty/blank volumes produce no correspondences; field is zero."""
+    pytest.importorskip("joblib")
+    pytest.importorskip("skimage.feature")
     from project.scripts.regtools_laplacian import sliceToSlice3DLaplacian
 
     fixed = np.zeros((4, 6, 6), dtype=np.float32)

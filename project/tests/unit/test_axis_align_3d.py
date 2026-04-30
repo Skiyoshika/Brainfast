@@ -6,12 +6,19 @@ rotation-around-centre affine) and the save/load helpers. The full
 integration test on real CCF+sample data separately (not here — needs
 tifffile-heavy inputs). The line-detection helpers (``_centre_column_bounds``,
 ``_hough_lines``, ``_average_fissure_line``, ``_collect_fissure_points``) are
-smoke-tested with a synthetic slice containing a known fissure.
+smoke-tested with a synthetic slice containing a known fissure — those
+tests skip when opencv-python isn't installed (Py 3.10 lighter-deps lane).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+
+import pytest
+
+# Per-function ``pytest.importorskip("cv2")`` is used inside the four
+# line-detection tests below.  The pure-math + save/load tests don't need
+# OpenCV and stay collected on every lane.
 
 import numpy as np
 import pytest
@@ -180,6 +187,7 @@ def test_preprocess_slice_normalises_to_uint8():
 
 
 def test_centre_column_bounds_finds_tissue_midpoint():
+    pytest.importorskip("cv2")
     raw = _make_synthetic_slice_with_fissure()
     u8 = _preprocess_slice(raw)
     bounds = _centre_column_bounds(u8, ratio=0.1)
@@ -193,11 +201,13 @@ def test_centre_column_bounds_finds_tissue_midpoint():
 
 
 def test_centre_column_bounds_on_empty_slice_returns_none():
+    pytest.importorskip("cv2")
     u8 = np.zeros((100, 100), dtype=np.uint8)
     assert _centre_column_bounds(u8, ratio=0.1) is None
 
 
 def test_hough_lines_finds_vertical_segments_on_synthetic():
+    pytest.importorskip("cv2")
     raw = _make_synthetic_slice_with_fissure()
     u8 = _preprocess_slice(raw)
     lines = _hough_lines(u8, min_thresh=50, max_thresh=150, line_thresh=10, min_line_length=20)
@@ -226,6 +236,7 @@ def test_collect_fissure_points_runs_without_error_on_empty_volume():
     Hough thresholds, centre-column ratio). Verifying that on real CCF
     + ChATe27 inputs is the integration path (not a unit test).
     """
+    pytest.importorskip("cv2")
     vol = np.zeros((10, 80, 80), dtype=np.uint8)
     pts = _collect_fissure_points(vol, slice_range=(0, 10))
     assert pts.shape == (0, 3)

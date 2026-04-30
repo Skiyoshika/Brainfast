@@ -28,6 +28,17 @@ Usage
     python -m scripts.stitching.pipeline --input_dir ... --output_dir ...
 """
 
-from . import core
-
 __all__ = ["core"]
+
+
+def __getattr__(name):
+    """Lazy-load ``core`` so the package is importable on lanes that
+    don't ship the stitching extras (cv2 / joblib / colorama). Lightweight
+    callers (``import project.scripts.stitching`` to read ``__doc__`` or
+    test the package metadata) work without the heavy deps.
+    """
+    if name == "core":
+        from . import core as _core
+
+        return _core
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

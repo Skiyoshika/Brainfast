@@ -130,14 +130,14 @@ def create_perfect_grid(nhs: int, nvs: int, lw: float, sw: float) -> np.ndarray:
     """
     xs = 20
     ys = 20
-    
+
     im = np.zeros((2 * xs + nvs * sw + lw, 2 * ys + nhs * sw + lw))
     # Generate horizontal lines
     for i in range(nhs + 1):
         cv2.line(im, (xs + i * sw, ys), (xs + i * sw, im.shape[0] - ys - int(lw / 2)), (255, 255, 255), thickness=lw)
     # Generate vertical lines
     for i in range(nvs + 1):
-        cv2.line(im, (xs, ys + i * sw), (im.shape[1] - xs - int(lw / 2), ys + i * sw), (255, 255, 255), thickness=lw) 
+        cv2.line(im, (xs, ys + i * sw), (im.shape[1] - xs - int(lw / 2), ys + i * sw), (255, 255, 255), thickness=lw)
     return im
 
 
@@ -632,7 +632,7 @@ def _process_one_tile(tile_params, avg_tiles, H, pX_, pY_, save_undistorted,
                      vignetting_correction=True, noise_thresholds=None,
                      undistorted_dir=None):
     """Process a single tile: read, correct vignetting & deformation, create Tile.
-    
+
     Extracted as a standalone function so tiles can be processed in parallel
     via ThreadPoolExecutor. All operations (cv2, numpy) release the GIL.
     """
@@ -665,8 +665,8 @@ def _process_one_tile(tile_params, avg_tiles, H, pX_, pY_, save_undistorted,
         del im  # free raw tile immediately
         tile['image'] = im_corrected
         if save_undistorted and undistorted_dir is not None:
-            undistorted_tile_path = os.path.join(undistorted_dir, 
-                                                 "ch{}".format(tile['channel'] - 1), 
+            undistorted_tile_path = os.path.join(undistorted_dir,
+                                                 "ch{}".format(tile['channel'] - 1),
                                                  os.path.split(tile['path'])[1])
             write_output(np.ascontiguousarray(im_corrected), undistorted_tile_path)
         tile['is_missing'] = False
@@ -681,8 +681,8 @@ def _process_one_tile(tile_params, avg_tiles, H, pX_, pY_, save_undistorted,
     return Tile(**tile)
 
 
-def generate_tiles(tiles: list, avg_tiles: list, 
-                   H, pX_, pY_, ch: int = None, 
+def generate_tiles(tiles: list, avg_tiles: list,
+                   H, pX_, pY_, ch: int = None,
                    save_undistorted: bool = False,
                    vignetting_correction: bool = True,
                    noise_thresholds=None,
@@ -707,7 +707,7 @@ def generate_tiles(tiles: list, avg_tiles: list,
 
     Returns:
         list: Processed Tile objects
-    """    
+    """
     # Filter to specific channel if requested
     if ch is not None:
         tiles = [t for t in tiles if t['channel'] == ch + 1]
@@ -742,7 +742,7 @@ def create_section_json(sno: int, sectionName: str, mosaic_data: list):
         _type_: Section JSON data
     """
     import re as _re
-    
+
     tyx = -3
     tyy = -43
     txx = -25
@@ -755,9 +755,9 @@ def create_section_json(sno: int, sectionName: str, mosaic_data: list):
     mcolumns = int(mosaic_data["mcolumns"])
     mrows = int(mosaic_data["mrows"])
     tiles_per_position = mrows * mcolumns
-    image_dimensions = {"row": mrows * size['row'] + 2 * startx, 
+    image_dimensions = {"row": mrows * size['row'] + 2 * startx,
                         "column": mcolumns * size['column'] + 2 * starty}
-    
+
     # Auto-detect tile indices from actual files in the section folder.
     # This handles both old format (0-based per-section indices) and new
     # format (globally cumulative indices).
@@ -770,10 +770,10 @@ def create_section_json(sno: int, sectionName: str, mosaic_data: list):
         if m:
             tile_indices.add(int(m.group(1)))
     tile_indices = sorted(tile_indices)
-    
+
     # Use the first tiles_per_position indices (layer 0).
     layer_indices = tile_indices[:tiles_per_position]
-    
+
     # Build a mapping from sequential position to actual tile index
     # Position order: column-major (ncol outer, nrow inner), matching the
     # original traversal order used by the microscope.
@@ -788,7 +788,7 @@ def create_section_json(sno: int, sectionName: str, mosaic_data: list):
                 continue
             index = layer_indices[pos]
             pos += 1
-            
+
             tile_paths = sorted(glob.glob(f'{sectionName}/*-{index}_*.tif'))
             if len(tile_paths) == 0:
                 continue
@@ -796,14 +796,14 @@ def create_section_json(sno: int, sectionName: str, mosaic_data: list):
             row = {}
             col = {}
             if ncol % 2 == 0:
-                row["start"] = starty + nrow * size["row"] + nrow * tyy + ncol * txy 
+                row["start"] = starty + nrow * size["row"] + nrow * tyy + ncol * txy
                 row["end"] = row["start"] + size["row"]
-                col["start"] = startx + ncol * size["column"] + ncol * txx + nrow * tyx 
+                col["start"] = startx + ncol * size["column"] + ncol * txx + nrow * tyx
                 col["end"] = col["start"] + size["column"]
             else:
-                row["start"] = starty + (mrows - nrow - 1) * size["row"] + (mrows - nrow - 1) * tyy + ncol * txy 
+                row["start"] = starty + (mrows - nrow - 1) * size["row"] + (mrows - nrow - 1) * tyy + ncol * txy
                 row["end"] = row["start"] + size["row"]
-                col["start"] = startx + ncol * size["column"] + ncol * txx + (mrows - nrow - 1) * tyx 
+                col["start"] = startx + ncol * size["column"] + ncol * txx + (mrows - nrow - 1) * tyx
                 col["end"] = col["start"] + size["column"]
             bounds["row"] = row
             bounds["column"] = col
@@ -832,7 +832,7 @@ def get_section_data(root_dir: str, n_threads: int, sectionNum: int = -1):
     Args:
         root_dir (str): Input directory
         n_threads (int): How many threads to run the section data generation
-        sectionNum (int, optional): Which specific section number to generate information for. 
+        sectionNum (int, optional): Which specific section number to generate information for.
                                     If set to -1, generates for all sections. Defaults to -1.
 
     Returns:
@@ -857,21 +857,21 @@ def get_section_data(root_dir: str, n_threads: int, sectionNum: int = -1):
     sectionNames = glob.glob(root_dir + mosaic_data["Sample ID"] + "*")
     # Filter to directories only (avoid matching log files or other non-directory entries)
     sectionNames = sorted([s for s in sectionNames if os.path.isdir(s)])
-    
+
     # If a specific section number is provided, generate the section data for that section only
     if sectionNum != -1:
         sectionName = os.path.join(root_dir, "{}-{:04d}".format(mosaic_data["Sample ID"], sectionNum + 1))
         section_jsons = [create_section_json(sectionNum, sectionName, mosaic_data)]
         return mosaic_data, section_jsons
-    
+
     # Otherwise, generate section data for all sections
-    section_jsons = Parallel(n_jobs=n_threads)(delayed(create_section_json)(sno, sectionName, mosaic_data) 
+    section_jsons = Parallel(n_jobs=n_threads)(delayed(create_section_json)(sno, sectionName, mosaic_data)
                                                for sno,sectionName in enumerate(sectionNames))
 
     return mosaic_data, section_jsons
 
 
-def stitch_section(data: dict, avg_tiles: list, output_dir: str, H, pX_, pY_, 
+def stitch_section(data: dict, avg_tiles: list, output_dir: str, H, pX_, pY_,
                    ch: int = None, save_undistorted: bool = False,
                    blend_mode: str = 'multiband',
                    vignetting_correction: bool = True,
@@ -893,7 +893,7 @@ def stitch_section(data: dict, avg_tiles: list, output_dir: str, H, pX_, pY_,
         vignetting_correction (bool, optional): Apply average tile vignetting correction. Defaults to True.
         noise_thresholds (list[dict] | None): Per-channel noise thresholds for flat-field correction.
     """
-    
+
     # Derive undistorted_dir from output_dir when save_undistorted is enabled
     _undistorted_dir = os.path.join(output_dir, 'undistorted') if save_undistorted else None
 
@@ -935,7 +935,7 @@ def stitch_section(data: dict, avg_tiles: list, output_dir: str, H, pX_, pY_,
         print(f"  {C_SUCCESS}Saved:{C_RESET} {C_PATH}{slice_path}{C_RESET}")
         write_output(image[:, :, ch], slice_path)
     del image; gc.collect()
-       
+
 
 def _preview_one_image(tif_path: str, dst_dir: str, scale: float):
     """Convert one stitched TIFF to a contrast-stretched 8-bit PNG preview.
@@ -1349,7 +1349,7 @@ if __name__ == '__main__':
 
     print(f"\n{C_STEP}Step 4/5:{C_RESET} {C_INFO}Stitching {C_VALUE}{len(section_jsons)}{C_RESET}{C_INFO} sections ({blend_mode} blending)...{C_RESET}")
     #Parallel(n_jobs=1, backend=joblib_backend)(delayed(stitch_section)(section_json,average_tiles, output_dir) for section_json in tqdm(section_jsons))
-    Parallel(n_jobs=n_threads, verbose=13)(delayed(stitch_section)(section_json, average_tiles, output_dir, 
+    Parallel(n_jobs=n_threads, verbose=13)(delayed(stitch_section)(section_json, average_tiles, output_dir,
                                                                    H, pX_, pY_, channel, save_undistorted,
                                                                    blend_mode,
                                                                    vignetting_correction,

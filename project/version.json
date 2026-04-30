@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0-rc1",
-  "build_date": "2026-04-15",
-  "commit": "cc3e90e",
+  "version": "1.0.0-rc2",
+  "build_date": "2026-04-30",
+  "commit": "pending",
   "repository": "https://github.com/Skiyoshika/Brainfast",
   "releases_api": "https://api.github.com/repos/Skiyoshika/Brainfast/releases/latest",
   "releases_page": "https://github.com/Skiyoshika/Brainfast/releases/latest"

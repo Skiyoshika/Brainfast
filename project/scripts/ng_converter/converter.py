@@ -21,7 +21,6 @@ import nibabel as nib
 import numpy as np
 from natsort import natsorted
 
-
 DEFAULT_SPACING_UM = (50.0, 1.25, 1.25)
 
 

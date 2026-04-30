@@ -60,10 +60,10 @@ def active_output_dir() -> Path:
             return candidate
     run_name = run_state.get("runName", "")
     if run_name:
-        candidate = PROJECT_ROOT / "outputs" / run_name
+        candidate = OUTPUT_DIR / run_name
         if candidate.exists():
             return candidate
-    base = PROJECT_ROOT / "outputs"
+    base = OUTPUT_DIR
     if base.exists():
         discovered = _discover_recent_output_dir(base)
         if discovered is not None:

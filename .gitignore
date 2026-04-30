@@ -38,3 +38,7 @@ project/cellpose_training/
 Thumbs.db
 .vscode/
 .claude/
+
+# Local EXE smoke test artifacts (release.yml smoke + manual local runs)
+project/frontend/.brainfast-release-*.pid
+project/frontend/.brainfast-release-*.json

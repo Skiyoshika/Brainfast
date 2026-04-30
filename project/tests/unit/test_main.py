@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import numpy as np
+
 from project.scripts import main
 
 
@@ -123,6 +125,103 @@ def test_run_real_input_routes_whole_brain_mode_to_3d_orchestrator(tmp_path, mon
     assert route_hit["kwargs"]["outputs_dir"].name == "outputs"
     assert route_hit["quantify_result"]["truth_source"] == "3d_registered_volume"
     assert route_hit["quantify_kwargs"]["outputs_dir"].name == "outputs"
+
+
+def test_quantify_passes_axis_alignment_matrix_to_cell_to_ccf(tmp_path, monkeypatch):
+    import nibabel as nib
+    import pandas as pd
+    import scripts.atlas_mapper as atlas_mapper
+    import scripts.cell_to_ccf as cell_to_ccf
+    from tifffile import imwrite
+
+    matrix = np.eye(4, dtype=np.float32)
+    matrix[0, 1] = 0.25
+    axis_path = tmp_path / "axisAlignA.npy"
+    np.save(axis_path, matrix)
+
+    sample_volume = tmp_path / "sample.nii.gz"
+    ccf_template = tmp_path / "template.nii.gz"
+    ccf_annotation = tmp_path / "annotation.nii.gz"
+    for path in (sample_volume, ccf_template, ccf_annotation):
+        nib.save(nib.Nifti1Image(np.zeros((2, 5, 5), dtype=np.float32), np.eye(4)), str(path))
+
+    real_slice = tmp_path / "real.tif"
+    registered_label = tmp_path / "registered_label.tif"
+    imwrite(str(real_slice), np.zeros((5, 5), dtype=np.uint8))
+    imwrite(str(registered_label), np.zeros((5, 5), dtype=np.uint16))
+
+    monkeypatch.setattr(main, "_resolve_structure_source", lambda _root: tmp_path / "structures.csv")
+    monkeypatch.setattr(
+        main,
+        "detect_cells",
+        lambda *_args, **_kwargs: pd.DataFrame({"x": [2.0], "y": [1.0], "score": [0.9]}),
+    )
+    monkeypatch.setattr(
+        main,
+        "apply_dedup_kdtree",
+        lambda mapped, **_kwargs: (mapped.copy(), {"kept": len(mapped)}),
+    )
+    monkeypatch.setattr(
+        main,
+        "aggregate_by_region",
+        lambda _df: (
+            pd.DataFrame({"region_id": [1], "count": [1]}),
+            pd.DataFrame({"region_id": [1], "count": [1]}),
+        ),
+    )
+    monkeypatch.setattr(main, "write_outputs", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(atlas_mapper, "_attach_structure_metadata", lambda df, _csv: df)
+
+    captured: dict[str, object] = {}
+
+    def fake_map_cells_via_ccf_transform(
+        cells,
+        *,
+        sample_volume_path,
+        ccf_annotation_path,
+        inverse_transforms,
+        pixel_size_um,
+        ccf_template_path,
+        axis_align_matrix,
+    ):
+        captured["axis_align_matrix"] = axis_align_matrix
+        return pd.DataFrame(
+            {
+                "cell_id": cells["cell_id"].to_numpy(),
+                "slice_id": cells["slice_id"].to_numpy(),
+                "x": cells["x"].to_numpy(),
+                "y": cells["y"].to_numpy(),
+                "region_id": [1],
+                "mapping_status": ["mapped"],
+            }
+        )
+
+    monkeypatch.setattr(cell_to_ccf, "map_cells_via_ccf_transform", fake_map_cells_via_ccf_transform)
+
+    main._quantify_against_exported_truth(
+        truth_rows=[
+            {
+                "slice_id": 0,
+                "real_slice_path": str(real_slice),
+                "registered_label_path": str(registered_label),
+                "overlay_path": "",
+            }
+        ],
+        cfg={
+            "input": {"pixel_size_um_xy": 1.0, "slice_spacing_um": 1.0},
+            "registration": {
+                "use_cell_to_ccf_mapping": True,
+                "template_path": str(ccf_template),
+                "annotation_path": str(ccf_annotation),
+            },
+            "dedup": {},
+        },
+        outputs_dir=tmp_path / "out",
+        ants_meta={"inverse_transforms": [str(tmp_path / "inv.mat")], "fixed_image": str(ccf_template)},
+        volume_meta={"volume_path": str(sample_volume), "axis_align_matrix_path": str(axis_path)},
+    )
+
+    np.testing.assert_array_equal(captured["axis_align_matrix"], matrix)
 
 
 def test_load_tuned_overlay_params_falls_back_to_shared_state(tmp_path, monkeypatch):

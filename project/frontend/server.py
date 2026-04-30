@@ -14,13 +14,26 @@ from pathlib import Path
 from flask import Flask, jsonify, request
 from werkzeug.exceptions import RequestEntityTooLarge
 
-if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-    ROOT = Path(sys._MEIPASS)
-    _proj = Path(sys.executable).resolve().parent
-    PROJECT_ROOT = _proj.parent if str(_proj).endswith("frontend") else _proj
-else:
-    ROOT = Path(__file__).resolve().parent
-    PROJECT_ROOT = ROOT.parent
+
+def _resolve_runtime_paths(
+    *,
+    frozen: bool | None = None,
+    meipass: str | Path | None = None,
+    executable: str | Path | None = None,
+    file_path: str | Path | None = None,
+) -> tuple[Path, Path, Path]:
+    is_frozen = getattr(sys, "frozen", False) if frozen is None else frozen
+    if is_frozen:
+        bundle_root = Path(meipass if meipass is not None else sys._MEIPASS).resolve()
+        exe_path = Path(executable if executable is not None else sys.executable).resolve()
+        return bundle_root, bundle_root, exe_path.parent
+
+    root = Path(file_path if file_path is not None else __file__).resolve().parent
+    project_root = root.parent
+    return root, project_root, project_root
+
+
+ROOT, PROJECT_ROOT, WRITABLE_ROOT = _resolve_runtime_paths()
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -34,7 +47,7 @@ if _repo_root not in sys.path:
 from project.frontend.app_metadata import resolve_max_content_length
 from project.scripts.paths import ensure_runtime_cache_dirs
 
-ensure_runtime_cache_dirs(PROJECT_ROOT)
+ensure_runtime_cache_dirs(WRITABLE_ROOT)
 
 # Patch context paths before any blueprint imports so helpers resolve correctly.
 import project.frontend.server_context as ctx
@@ -42,7 +55,7 @@ from project.scripts.asset_bootstrap import default_structure_source
 
 ctx.ROOT = ROOT
 ctx.PROJECT_ROOT = PROJECT_ROOT
-ctx.OUTPUT_DIR = PROJECT_ROOT / "outputs"
+ctx.OUTPUT_DIR = WRITABLE_ROOT / "outputs"
 ctx.DEFAULT_STRUCTURE_SOURCE = default_structure_source(PROJECT_ROOT) or (
     PROJECT_ROOT / "configs" / "allen_structure_tree.json"
 )

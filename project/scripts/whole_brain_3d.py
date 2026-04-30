@@ -948,6 +948,7 @@ def run_whole_brain_3d(
                 str(aligned_path),
             )
             volume_meta["axis_aligned_volume_path"] = aligned_path
+            volume_meta["axis_align_matrix_path"] = axis_align_dir / "axisAlignA.npy"
             volume_meta["volume_path"] = aligned_path  # ANTs consumes the pre-aligned volume
             print(
                 f"[axis-align] Applied fissure-based rotation (saved {aligned_path}). "

@@ -117,10 +117,7 @@ class ClassPriorStore:
 
     def sample_count(self) -> int:
         """Number of distinct samples that have contributed to this prior."""
-        if not self._sample_log.exists():
-            return 0
-        with self._sample_log.open("r", encoding="utf-8") as fh:
-            return sum(1 for _ in fh if _.strip())
+        return len(self._contributing_sample_ids())
 
     # ----- Update -----
 
@@ -149,6 +146,14 @@ class ClassPriorStore:
         # previously read ``len(list(pairs))`` AFTER the merge loop had
         # already exhausted a generator input, logging 0 instead of N.
         pair_list = list(pairs)
+        if self._has_prior_sample(sample_id):
+            self._append_sample_log(
+                sample_id=sample_id,
+                pair_count=len(pair_list),
+                metrics=metrics,
+                kind="prior_update_duplicate_ignored",
+            )
+            return
         raw_entries = self._load_raw_entries()
         for pair in pair_list:
             dy = pair.real[0] - pair.atlas[0]
@@ -177,7 +182,12 @@ class ClassPriorStore:
                 e["sum_sq_dx"] += dx * dx
                 e["n"] += 1
         self._write_raw_entries(raw_entries)
-        self._append_sample_log(sample_id=sample_id, pair_count=len(pair_list), metrics=metrics)
+        self._append_sample_log(
+            sample_id=sample_id,
+            pair_count=len(pair_list),
+            metrics=metrics,
+            kind="prior_update",
+        )
 
     # ----- Warm-start application -----
 
@@ -307,14 +317,60 @@ class ClassPriorStore:
         sample_id: str,
         pair_count: int,
         metrics: dict | None,
+        kind: str,
     ) -> None:
         rec = {
+            "kind": str(kind),
             "sample_id": str(sample_id),
             "pair_count": int(pair_count),
             "metrics": dict(metrics) if metrics else None,
         }
         with self._sample_log.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+    def _iter_sample_log_records(self):
+        if not self._sample_log.exists():
+            return
+        with self._sample_log.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(rec, dict):
+                    yield rec
+
+    @staticmethod
+    def _sample_log_kind(rec: dict) -> str:
+        kind = str(rec.get("kind") or "").strip()
+        if kind:
+            return kind
+        if "qc_done_ts" in rec or "qc_note" in rec:
+            return "qc_done"
+        return "prior_update"
+
+    def _contributing_sample_ids(self) -> set[str]:
+        sample_ids: set[str] = set()
+        for rec in self._iter_sample_log_records() or ():
+            if self._sample_log_kind(rec) != "prior_update":
+                continue
+            try:
+                pair_count = int(rec.get("pair_count") or 0)
+            except (TypeError, ValueError):
+                pair_count = 0
+            if pair_count <= 0:
+                continue
+            sample_id = str(rec.get("sample_id") or "").strip()
+            if sample_id:
+                sample_ids.add(sample_id)
+        return sample_ids
+
+    def _has_prior_sample(self, sample_id: str) -> bool:
+        sample_id = str(sample_id).strip()
+        return bool(sample_id) and sample_id in self._contributing_sample_ids()
 
 
 # ---------------------------------------------------------------------------

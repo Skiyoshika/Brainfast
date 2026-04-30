@@ -36,23 +36,37 @@ _JOBS_LOCK = threading.Lock()
 
 def _deps_available() -> tuple[bool, str | None]:
     try:
-        import cv2  # noqa: F401
         import colorama  # noqa: F401
+        import cv2  # noqa: F401
         import joblib  # noqa: F401
     except ImportError as exc:
         return False, str(exc)
     return True, None
 
 
+def _missing_module(err: str | None) -> str | None:
+    return err.split("No module named ")[-1].strip("'\"") if err else None
+
+
+def _default_bezier_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "data" / "stitching_parameters" / "bezier16x.pkl"
+
+
 @bp.get("/available")
 def stitching_available():
     ok, err = _deps_available()
-    return jsonify({
-        "ok": True,
-        "available": ok,
-        "missing": (err.split("No module named ")[-1].strip("'\"") if err else None),
-        "install": "pip install -e \".[stitching]\"",
-    })
+    default_bezier = _default_bezier_path()
+    return jsonify(
+        {
+            "ok": True,
+            "available": ok,
+            "missing": _missing_module(err),
+            "install": "pip install -e \".[stitching]\"",
+            "defaultBezierPath": str(default_bezier),
+            "defaultBezierAvailable": default_bezier.exists(),
+            "requiresBezierPath": not default_bezier.exists(),
+        }
+    )
 
 
 def _run_stitch_job(job_id: str, input_dir: str, output_dir: str, opts: dict) -> None:
@@ -92,26 +106,66 @@ def stitching_start():
     input_dir = (payload.get("inputDir") or "").strip()
     output_dir = (payload.get("outputDir") or "").strip()
     if not input_dir or not output_dir:
-        return jsonify({"ok": False, "error": "missing inputDir/outputDir",
-                        "error_code": ERR_INVALID_INPUT}), 400
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "missing inputDir/outputDir",
+                    "error_code": ERR_INVALID_INPUT,
+                }
+            ),
+            400,
+        )
 
     inp = Path(input_dir).expanduser()
     if not inp.exists() or not inp.is_dir():
-        return jsonify({"ok": False, "error": f"inputDir not found or not a directory: {inp}",
-                        "error_code": ERR_NOT_FOUND}), 404
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": f"inputDir not found or not a directory: {inp}",
+                    "error_code": ERR_NOT_FOUND,
+                }
+            ),
+            404,
+        )
 
     ok, err = _deps_available()
     if not ok:
-        return jsonify({
-            "ok": False,
-            "error": "Stitching deps missing. Install with: pip install -e \".[stitching]\"",
-            "missing_module": (err.split("No module named ")[-1].strip("'\"") if err else None),
-        }), 501
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "Stitching deps missing. Install with: pip install -e \".[stitching]\"",
+                    "missing_module": _missing_module(err),
+                }
+            ),
+            501,
+        )
+
+    raw_bezier_path = str(payload.get("bezierPath") or "").strip()
+    bezier_path = Path(raw_bezier_path).expanduser() if raw_bezier_path else _default_bezier_path()
+    if not bezier_path.exists() or not bezier_path.is_file():
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": (
+                        "Bezier calibration file not found. Provide bezierPath "
+                        f"or add the default asset at {bezier_path}"
+                    ),
+                    "error_code": ERR_INVALID_INPUT if not raw_bezier_path else ERR_NOT_FOUND,
+                    "bezierPath": str(bezier_path),
+                    "requiresBezierPath": not raw_bezier_path,
+                }
+            ),
+            400 if not raw_bezier_path else 404,
+        )
 
     opts = {
         "section_num": int(payload.get("sectionNum", -1)),
         "channel": payload.get("channel"),
-        "bezier_path": payload.get("bezierPath"),
+        "bezier_path": str(bezier_path),
         "n_threads": int(payload.get("nThreads", -3)),
         "save_undistorted": bool(payload.get("saveUndistorted", False)),
         "vignetting_correction": bool(payload.get("vignettingCorrection", True)),

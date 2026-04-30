@@ -19,8 +19,7 @@ import nibabel as nib
 import numpy as np
 from natsort import natsorted
 
-from scripts.ng_converter.points import load_points
-
+from ..ng_converter.points import load_points
 
 DEFAULT_SPACING_UM = (50.0, 1.25, 1.25)
 

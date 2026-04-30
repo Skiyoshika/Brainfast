@@ -10,12 +10,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.config_validation import (
+from scripts.config_validation import (  # noqa: E402
     collect_runtime_config_issues,
     load_config,
     validate_runtime_config,
 )
-from scripts.exceptions import (
+from scripts.exceptions import (  # noqa: E402
     AlignmentScoreError,
     AtlasError,
     BrainfastError,

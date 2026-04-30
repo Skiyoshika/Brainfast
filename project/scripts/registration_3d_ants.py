@@ -22,6 +22,12 @@ def _tissue_mask(arr: np.ndarray, threshold: float = 0.1) -> np.ndarray:
     return arr > threshold
 
 
+def _ants_image_to_numpy(img) -> np.ndarray:
+    if hasattr(img, "numpy"):
+        return np.asarray(img.numpy(), dtype=np.float32)
+    return np.asarray(img, dtype=np.float32)
+
+
 def _nmi_histogram(fixed: np.ndarray, moving: np.ndarray, bins: int = 64) -> float:
     """Normalized Mutual Information via joint histogram.
 
@@ -264,7 +270,7 @@ def run_ants_registration(
             _log.warning("Could not persist inverse transform %s: %s", tf, exc)
             saved_inv.append(str(tf))
 
-    fixed_arr = np.asarray(nib.load(str(fixed_path)).dataobj, dtype=np.float32)
+    fixed_arr = _ants_image_to_numpy(fixed_img)
     registered_arr = np.asarray(nib.load(str(registered_volume)).dataobj, dtype=np.float32)
     metrics = compute_registration_metrics(fixed_arr, registered_arr)
 

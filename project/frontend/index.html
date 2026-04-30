@@ -138,7 +138,7 @@
         <span data-i18n="nav.training">Model Training</span>
       </button>
       <button class="nav-btn" data-tab="projects">
-        <span class="nav-icon">📁</span>
+        <span class="nav-icon"><i data-lucide="folder"></i></span>
         <span data-i18n="nav.projects">Projects</span>
       </button>
     </nav>
@@ -1035,6 +1035,11 @@
             <input id="stitchOutputDir" type="text" style="width:340px;"
                    placeholder="where stitched sections will be written" />
           </label>
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span data-i18n="stitch.bezierPath">Bezier calibration file</span>
+            <input id="stitchBezierPath" type="text" style="width:340px;"
+                   placeholder="optional if default asset exists" />
+          </label>
           <button type="button" id="stitchStartBtn" class="btn btn-primary"
                   style="align-self:end;" disabled>
             <i data-lucide="layers" class="btn-icon"></i>
@@ -1533,6 +1538,10 @@
 
         <!-- QC done sign-off (#11) -->
         <div class="form-row" style="gap:12px; align-items:center; margin-top:14px; padding-top:10px; border-top:1px dashed var(--border,#333);">
+          <label style="display:flex;gap:6px;align-items:center;">
+            <span data-i18n="liquify3d.qcNote">QC note</span>
+            <input id="liq3dQcNote" type="text" placeholder="optional" style="width:180px;" />
+          </label>
           <button type="button" class="btn" id="liq3dQcDoneBtn" title="Mark this job as user-approved and persist sign-off metrics">
             <i data-lucide="badge-check" class="btn-icon"></i>
             <span data-i18n="liquify3d.qcDone">Mark QC done</span>
@@ -1574,8 +1583,8 @@
         </div>
 
         <div style="margin-top:14px;">
-          <h3 style="font-size:14px;margin:0 0 6px 0;" data-i18n="liquify3d.pairsTitle">
-            Landmark pairs (<span id="liq3dPairCount">0</span>)
+          <h3 style="font-size:14px;margin:0 0 6px 0;">
+            <span data-i18n="liquify3d.pairsTitle">Landmark pairs</span> (<span id="liq3dPairCount">0</span>)
           </h3>
           <div id="liq3dPairsWrap" style="max-height:320px; overflow:auto; border:1px solid var(--border, #333); border-radius:4px;">
             <table style="width:100%; border-collapse:collapse; font-size:12px;">

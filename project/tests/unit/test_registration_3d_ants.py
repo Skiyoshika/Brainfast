@@ -85,6 +85,21 @@ class _FakeAntsModule:
         }
 
 
+class _FakeAntsModuleWithRealResample(_FakeAntsModule):
+    def resample_image(self, img, new_spacing, use_voxels, interp_type):
+        self.resample_calls.append(
+            {
+                "input_shape": img.shape,
+                "input_spacing": img.spacing,
+                "new_spacing": tuple(float(s) for s in new_spacing),
+                "use_voxels": use_voxels,
+                "interp_type": interp_type,
+            }
+        )
+        factor = max(1, int(round(float(new_spacing[0]) / float(img.spacing[0]))))
+        return _FakeAntsImage(img.numpy()[::factor, ::factor, ::factor], new_spacing)
+
+
 def test_norm_returns_float32_and_clips_to_unit_interval():
     arr = np.array([-100.0, 0.0, 1.0, 2.0, 100.0], dtype=np.float64)
 
@@ -223,6 +238,32 @@ def test_fixed_max_dim_triggers_resample_when_shape_too_large(tmp_path, monkeypa
     # Factor = max(20, 10, 10) / 10 = 2.0; each axis spacing doubles
     call0 = fake_ants.resample_calls[0]
     assert all(abs(s - 2.0) < 1e-9 for s in call0["new_spacing"])
+
+
+def test_fixed_max_dim_metrics_use_resampled_fixed_grid(tmp_path, monkeypatch):
+    """Metrics must compare the registered output against the ANTs fixed grid.
+
+    Real ANTs resampling shrinks the fixed image when fixed_max_dim is active.
+    The registered output is written on that downsampled grid, so comparing it
+    against the original fixed NIfTI raises a broadcast error.
+    """
+    fake_ants = _FakeAntsModuleWithRealResample()
+    monkeypatch.setitem(sys.modules, "ants", fake_ants)
+    fixed_path = tmp_path / "fixed.nii.gz"
+    moving_path = tmp_path / "moving.nii.gz"
+    out_dir = tmp_path / "out"
+    fixed = np.zeros((20, 10, 10), dtype=np.float32)
+    fixed[4:16, 2:8, 2:8] = 1.0
+    moving = np.zeros((20, 10, 10), dtype=np.float32)
+    moving[5:17, 3:9, 3:9] = 1.0
+    nib.save(nib.Nifti1Image(fixed, np.eye(4)), str(fixed_path))
+    nib.save(nib.Nifti1Image(moving, np.eye(4)), str(moving_path))
+
+    result = run_ants_registration(fixed_path, moving_path, out_dir, fixed_max_dim=10)
+
+    registered_shape = nib.load(str(result["registered_volume"])).shape
+    assert registered_shape == (10, 5, 5)
+    assert Path(result["metrics_csv"]).exists()
 
 
 def test_fixed_max_dim_none_skips_resample(tmp_path, monkeypatch):

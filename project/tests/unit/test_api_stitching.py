@@ -58,6 +58,41 @@ def test_stitching_start_rejects_nonexistent_input(client, tmp_path):
     assert resp.status_code == 404
 
 
+def test_stitching_start_requires_bezier_path_when_default_asset_missing(
+    client, tmp_path, monkeypatch
+):
+    from project.frontend.blueprints import api_stitching
+
+    class _NoopThread:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            pass
+
+    input_dir = tmp_path / "tiles"
+    input_dir.mkdir()
+    monkeypatch.setattr(api_stitching, "_deps_available", lambda: (True, None))
+    monkeypatch.setattr(api_stitching.threading, "Thread", _NoopThread)
+    monkeypatch.setattr(
+        api_stitching,
+        "_default_bezier_path",
+        lambda: tmp_path / "missing" / "bezier16x.pkl",
+        raising=False,
+    )
+
+    resp = client.post(
+        "/api/stitching/start",
+        data=json.dumps({"inputDir": str(input_dir), "outputDir": str(tmp_path / "out")}),
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 400
+    body = resp.get_json()
+    assert body["ok"] is False
+    assert "bezierPath" in body["error"]
+
+
 def test_stitching_status_rejects_unknown_job(client):
     resp = client.get("/api/stitching/status?jobId=does-not-exist")
     assert resp.status_code == 404

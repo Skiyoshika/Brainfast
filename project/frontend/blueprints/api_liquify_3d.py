@@ -327,6 +327,7 @@ def liquify_3d_qc_done():
                 fh.write(
                     _json.dumps(
                         {
+                            "kind": "qc_done",
                             "sample_id": job_id,
                             "pair_count": len(_landmark_store_for(job_id).list_pairs()),
                             "metrics": metrics,

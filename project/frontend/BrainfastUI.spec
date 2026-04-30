@@ -44,7 +44,7 @@ hidden_imports = [
     # Numerics
     "numpy", "numpy.core", "numpy.lib", "numpy.random",
     "scipy", "scipy.ndimage", "scipy.spatial", "scipy.linalg",
-    "scipy.sparse",
+    "scipy.sparse", "scipy._cyutility",
     # Image processing
     "skimage", "skimage.transform", "skimage.filters", "skimage.feature",
     "skimage.measure", "skimage.metrics", "skimage.registration",
@@ -63,11 +63,14 @@ hidden_imports = [
     # Misc
     "json", "csv", "pathlib", "threading", "subprocess",
     "urllib.request",
+    # PyInstaller's pkg_resources runtime hook imports this namespace directly.
+    "pkg_resources.extern",
 ]
 
 # Pull in all skimage submodules (it uses lazy imports internally)
 hidden_imports += collect_submodules("skimage")
 hidden_imports += collect_submodules("scipy.ndimage")
+hidden_imports += collect_submodules("scipy._lib.array_api_compat")
 hidden_imports += collect_submodules("imageio")
 
 # ── Analysis ─────────────────────────────────────────────────────────────────

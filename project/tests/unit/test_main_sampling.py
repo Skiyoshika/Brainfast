@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.main import _normalize_sampling_mode, _resolve_processing_files
+from scripts.main import _normalize_sampling_mode, _resolve_processing_files  # noqa: E402
 
 
 class MainSamplingTests(unittest.TestCase):

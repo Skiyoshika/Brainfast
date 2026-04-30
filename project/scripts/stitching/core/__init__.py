@@ -1,3 +1,4 @@
+# ruff: noqa
 # Stitching core module - provides stitching algorithms and utilities
 
 from .stitcher import Stitcher

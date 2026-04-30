@@ -1,3 +1,4 @@
+# ruff: noqa
 """
 Code provided from Allen Institute
 Multi-band Laplacian pyramid blending added by Andy Thai.
@@ -48,7 +49,7 @@ class Stitcher(object):
     def __init__(self, image_dimensions, tiles, channels, blend_mode='multiband',
                  noise_floors=None, seam_correction=True,
                  zero_background=False):
-        
+
         logging.info('image_dimensions: {0}'.format(image_dimensions))
         self.image_dimensions = image_dimensions
 
@@ -76,7 +77,7 @@ class Stitcher(object):
         self._seam_params = _derive_seam_params(self.tiles)
 
         for tile in self.tiles:
-            
+
             if tile.is_missing:
 
                 missing_tiles[tile.index] = tile.get_missing_path()
@@ -125,7 +126,7 @@ class Stitcher(object):
     def stitch(self, slice_image, stitched_indicator, tile, cb=np.array):
 
         region = tile.get_image_region()
-  
+
         current_region = slice_image[region[0], region[1], region[2]]
         indicator_region = stitched_indicator[region[0], region[1], region[2]]
 
@@ -1171,7 +1172,7 @@ def _reconstruct_from_laplacian(lap_pyramid):
 
 def linear_blend(new_tile, existing_region, blend_mask):
     """Simple linear blend: result = (1 - mask) * new_tile + mask * existing.
-    
+
     This is the original blending method. Fast but can produce visible seams
     at tile boundaries.  Operates in float32 to save memory.
     """
@@ -1188,26 +1189,26 @@ def linear_blend(new_tile, existing_region, blend_mask):
 
 def multiband_blend(new_tile, existing_region, blend_mask):
     """Blend new_tile onto existing_region using multi-band Laplacian pyramid blending.
-    
+
     blend_mask: float array in [0, 1] where 1 = keep existing, 0 = use new tile.
     This matches the convention of the original make_blended_tile:
         result = (1 - blend) * new_tile + blend * existing
-    
+
     If there is no overlap (blend_mask is all zeros), just returns the new tile.
     Uses float32 throughout to halve peak memory vs float64.
     """
     overlap = blend_mask.max() > 0
     if not overlap:
         return new_tile.astype(_BLEND_DTYPE)
-    
+
     # blend_mask is the weight for existing_region; (1 - blend_mask) is weight for new_tile
     # We treat existing_region as A (mask=1) and new_tile as B (mask=0)
     mask = blend_mask.astype(_BLEND_DTYPE)
     a = existing_region.astype(_BLEND_DTYPE)
     b = new_tile.astype(_BLEND_DTYPE)
-    
+
     h, w = a.shape[:2]
-    
+
     # Need minimum size for pyramid (at least 2^levels pixels in each dimension)
     min_dim = min(h, w)
     levels = min(NUM_PYRAMID_LEVELS, max(1, int(np.log2(max(min_dim, 1))) - 1))
@@ -1222,21 +1223,21 @@ def multiband_blend(new_tile, existing_region, blend_mask):
         min_ov = min(ov_cols, ov_rows) if min(ov_cols, ov_rows) > 0 else max(ov_cols, ov_rows)
         if 0 < min_ov < min_dim:
             levels = min(levels, max(1, int(np.log2(max(min_ov, 1))) - 1))
-    
+
     if levels < 2:
         # Too small for meaningful pyramid — fall back to linear blend
         return linear_blend(new_tile, existing_region, blend_mask)
-    
+
     # Build Laplacian pyramids for both images
     lap_a = _laplacian_pyramid(a, levels)
     del a
     lap_b = _laplacian_pyramid(b, levels)
     del b
-    
+
     # Build Gaussian pyramid for the mask
     mask_gauss = _gaussian_pyramid(mask, levels)
     del mask
-    
+
     # Blend each level in-place into lap_a to avoid a third pyramid allocation
     for i, (la, lb, gm) in enumerate(zip(lap_a, lap_b, mask_gauss)):
         inv_gm = np.subtract(np.float32(1.0), gm)
@@ -1247,18 +1248,18 @@ def multiband_blend(new_tile, existing_region, blend_mask):
         lap_b[i] = None  # free immediately
         mask_gauss[i] = None
     del lap_b, mask_gauss
-    
+
     # Reconstruct from blended pyramid
     result = _reconstruct_from_laplacian(lap_a)
-    
+
     # Clip to valid range (uint16 data)
     np.clip(result, 0, 65535, out=result)
-    
+
     return result
 
 
 def get_indicator_bound_point(indicator, lg, axis):
-    '''Finds the index of first change in a binary mask 
+    '''Finds the index of first change in a binary mask
     along a specified axis in a specified direction
     '''
 
@@ -1269,20 +1270,20 @@ def get_indicator_bound_point(indicator, lg, axis):
     points = np.unique(points[axis])
     size = indicator.shape[axis]
     points = points[lg(points, size / 2.0)]
-    
+
     if len(points) > 0:
         return points[-1]
     return None
 
 
 def blend_component_from_point(point, mesh, lg):
-    '''Obtains a normalized component of the blend, which describes depth of 
+    '''Obtains a normalized component of the blend, which describes depth of
     overlap along a specified axis in a specified direction
     '''
 
-    # this has the effect that the shallowest part of the blend 
+    # this has the effect that the shallowest part of the blend
     # is always 0 - symmetric with the deepest after normalization.
-    blend = point - mesh + 1 
+    blend = point - mesh + 1
     blend[lg(blend, 0)] = 0
 
     blend = np.fabs(blend)
@@ -1327,5 +1328,3 @@ def get_blend(indicator_region, stup, cb=np.array, meshes=None):
     blend = get_overall_blend(indicator_region, meshes)
 
     return cb(np.multiply(blend, indicator_region))
-
-        

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# ruff: noqa
 """
 Code provided by Allen Institute
 """
@@ -27,9 +28,9 @@ class Tile(object):
         self.size = size
         self.margins = margins
         """
-        logging.info('tile {index} on channel {channel} starts at ({0}, {1})'.format(self.bounds['row']['start'], 
-                                                                                     self.bounds['column']['start'], 
-                                                                                     index=self.index, 
+        logging.info('tile {index} on channel {channel} starts at ({0}, {1})'.format(self.bounds['row']['start'],
+                                                                                     self.bounds['column']['start'],
+                                                                                     index=self.index,
                                                                                      channel=self.channel))
         """
 
@@ -37,11 +38,11 @@ class Tile(object):
     def trim_self(self):
         self.image = self.trim(self.image)
 
-    
+
     def trim(self, image):
         #logging.info('trimming with margins ({row}, {column})'.format(**self.margins))
 
-        return image[self.margins['row']: self.margins['row'] + self.size['row'], 
+        return image[self.margins['row']: self.margins['row'] + self.size['row'],
                      self.margins['column']: self.margins['column'] + self.size['column']]
 
 
@@ -63,18 +64,18 @@ class Tile(object):
         #logging.info('applying flatfield correction to tile with index {index} on channel {channel}'.format(**self.__dict__))
         return np.multiply(self.image, average_tile)
 
-    
+
     def apply_average_tile_to_self(self, average_tile):
         self.image = self.apply_average_tile(average_tile)
 
 
     def get_image_region(self):
-        
+
         row = self.bounds['row']
         col = self.bounds['column']
 
-        return [slice(int(row['start']), int(row['end'])), 
-                slice(int(col['start']), int(col['end'])), 
+        return [slice(int(row['start']), int(row['end'])),
+                slice(int(col['start']), int(col['end'])),
                 int(self.channel)]
 
 
@@ -82,10 +83,10 @@ class Tile(object):
 
         row = self.bounds['row']
         col = self.bounds['column']
-        
-        path = [row['start'], col['start'], 
-                row['end'], col['start'], 
-                row['end'], col['end'], 
+
+        path = [row['start'], col['start'],
+                row['end'], col['start'],
+                row['end'], col['end'],
                 row['start'], col['end']]
 
         logging.info('missing tile starts at: ({0}, {1})'.format(*path))

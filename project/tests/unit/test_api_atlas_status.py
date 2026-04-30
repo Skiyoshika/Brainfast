@@ -17,8 +17,8 @@ REPO_ROOT = PROJECT_ROOT.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import project.frontend.server_context as ctx
-from project.frontend.server import app
+import project.frontend.server_context as ctx  # noqa: E402
+from project.frontend.server import app  # noqa: E402
 
 pytestmark = pytest.mark.unit
 

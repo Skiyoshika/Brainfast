@@ -107,6 +107,28 @@ def _resolve_structure_source(project_root: Path) -> Path:
     )
 
 
+def _resolve_axis_align_matrix(volume_meta: dict | None, outputs_dir: Path) -> np.ndarray | None:
+    if not volume_meta:
+        return None
+
+    inline_matrix = volume_meta.get("axis_align_matrix")
+    if inline_matrix is not None:
+        return np.asarray(inline_matrix, dtype=np.float32)
+
+    candidate_paths = [
+        volume_meta.get("axis_align_matrix_path"),
+        volume_meta.get("axis_align_path"),
+        Path(outputs_dir) / "axis_alignment" / "axisAlignA.npy",
+    ]
+    for candidate in candidate_paths:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if path.exists():
+            return np.asarray(np.load(str(path)), dtype=np.float32)
+    return None
+
+
 def _load_tuned_overlay_params(
     outputs_dir: Path, *, project_root: Path | None = None
 ) -> tuple[dict, str, int]:
@@ -580,7 +602,7 @@ def _quantify_against_exported_truth(
                 inverse_transforms=list(ants_meta["inverse_transforms"]),
                 pixel_size_um=pixel_size_um,
                 ccf_template_path=Path(ccf_template_path),
-                axis_align_matrix=None,
+                axis_align_matrix=_resolve_axis_align_matrix(volume_meta, outputs_dir),
             )
             # Preserve score/detector/area_px columns from the original detections
             original = pd.concat(mapped_rows, ignore_index=True)

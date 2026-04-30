@@ -8,6 +8,8 @@ graceful 501 when the extras are missing).
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +34,19 @@ def test_neuroglancer_available_probe_returns_boolean(client):
     assert "available" in body
     assert isinstance(body["available"], bool)
     assert body["install"] == 'pip install -e ".[neuroglancer]"'
+
+
+def test_ng_viewer_package_importable_without_server_sys_path():
+    repo_root = Path(__file__).resolve().parents[3]
+    result = subprocess.run(
+        [sys.executable, "-c", "import project.scripts.ng_viewer"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_neuroglancer_convert_rejects_missing_fields(client):
@@ -69,7 +84,7 @@ def test_neuroglancer_stop_rejects_unknown_session(client):
 
 def test_points_roundtrip_legacy_format(tmp_path):
     """Legacy inputpoints.txt: two header lines + 'z y x' per line."""
-    from project.scripts.ng_converter.points import load_points, load_legacy_points
+    from project.scripts.ng_converter.points import load_legacy_points, load_points
 
     fp = tmp_path / "inputpoints.txt"
     fp.write_text("index\n3\n10 20 30\n11 21 31\n12 22 32\n", encoding="utf-8")

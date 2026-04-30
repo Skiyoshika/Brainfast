@@ -9,9 +9,9 @@ REPO_ROOT = PROJECT_ROOT.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import project.frontend.server_context as ctx
-from project.frontend.server import app
-from project.scripts.paths import RunPaths
+import project.frontend.server_context as ctx  # noqa: E402
+from project.frontend.server import app  # noqa: E402
+from project.scripts.paths import RunPaths  # noqa: E402
 
 
 def _minimal_cfg(input_dir: Path) -> dict:

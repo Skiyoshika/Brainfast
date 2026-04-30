@@ -549,6 +549,7 @@ const LANGS = {
     'stitch.hint': 'Stitch raw TissueCyte mosaic tiles into full sections before running the pipeline. Requires the stitching extras.',
     'stitch.inputDir': 'Tile input directory',
     'stitch.outputDir': 'Output directory',
+    'stitch.bezierPath': 'Bezier calibration file',
     'stitch.start': 'Start stitching',
     'stitch.jobId': 'Job:',
     'stitch.jobStatus': 'Status:',
@@ -571,6 +572,7 @@ const LANGS = {
     'liquify3d.realHdr': 'Real (y, x)',
     'liquify3d.finalize': 'Finalize & re-export cell counts',
     'liquify3d.qcDone': 'Mark QC done',
+    'liquify3d.qcNote': 'QC note',
     'liquify3d.classLabel': 'Class',
     'liquify3d.priorStatus': 'Prior status',
     'liquify3d.saveToPrior': 'Save job → class prior',
@@ -1124,6 +1126,7 @@ const LANGS = {
     'stitch.hint': '把 TissueCyte 原始瓦片拼成完整切片，再跑后续管线。需要装 stitching 附加依赖。',
     'stitch.inputDir': '瓦片输入目录',
     'stitch.outputDir': '输出目录',
+    'stitch.bezierPath': 'Bezier 标定文件',
     'stitch.start': '开始拼接',
     'stitch.jobId': '任务 ID：',
     'stitch.jobStatus': '状态：',
@@ -1146,6 +1149,7 @@ const LANGS = {
     'liquify3d.realHdr': '实际 (y, x)',
     'liquify3d.finalize': '完成并重新导出细胞计数',
     'liquify3d.qcDone': '标记 QC 完成',
+    'liquify3d.qcNote': 'QC 备注',
     'liquify3d.classLabel': '类别',
     'liquify3d.priorStatus': '先验状态',
     'liquify3d.saveToPrior': '把作业存入类别先验',
@@ -1257,6 +1261,7 @@ const quickExportBtn = document.getElementById('quickExportBtn');
 const quickExportFormatEl = document.getElementById('quickExportFormat');
 const methodsModalTitleEl = document.getElementById('methodsModalTitle');
 const methodsModalDescEl = document.getElementById('methodsModalDesc');
+const errorPanel = document.getElementById('errorPanel');
 const errorPanelToggle = document.getElementById('errorPanelToggle');
 const errorPanelBody = document.getElementById('errorPanelBody');
 const errorPanelList = document.getElementById('errorPanelList');
@@ -1286,7 +1291,6 @@ const overlayJobState = {
   jobId: localStorage.getItem('brainfast.overlayJobId') || '',
 };
 
-state.frontendErrors = loadFrontendErrors();
 renderErrorPanel();
 
 if (errorPanelToggle) {
@@ -1356,27 +1360,6 @@ const FIELD_INPUT_MAP = {
   atlasPath: 'atlasPath',
   structPath: 'structPath',
 };
-const FRONTEND_ERRORS_KEY = 'brainfast.frontendErrors';
-
-function loadFrontendErrors() {
-  try {
-    const raw = sessionStorage.getItem(FRONTEND_ERRORS_KEY);
-    const items = raw ? JSON.parse(raw) : [];
-    return Array.isArray(items) ? items : [];
-  } catch {
-    return [];
-  }
-}
-
-function persistFrontendErrors() {
-  try {
-    sessionStorage.setItem(
-      FRONTEND_ERRORS_KEY,
-      JSON.stringify((state.frontendErrors || []).slice(-50)),
-    );
-  } catch {}
-}
-
 function normalizeFieldKey(field) {
   const raw = String(field || '').trim();
   if (!raw) return '';
@@ -1438,6 +1421,7 @@ function renderErrorPanel() {
     errorBadge.textContent = String(merged.length);
     errorBadge.classList.toggle('hidden', merged.length <= 0);
   }
+  errorPanel?.classList.toggle('has-errors', merged.length > 0);
 }
 
 function pushPersistentError(message, opts = {}) {
@@ -1450,7 +1434,6 @@ function pushPersistentError(message, opts = {}) {
   };
   if (!item.message) return;
   state.frontendErrors = [...(state.frontendErrors || []), item].slice(-50);
-  persistFrontendErrors();
   renderErrorPanel();
   if (errorPanelBody) {
     errorPanelBody.classList.remove('hidden');
@@ -3035,14 +3018,24 @@ async function probeStitchingAvailability() {
   const section = document.getElementById('stitchingSection');
   const status = document.getElementById('stitchStatus');
   const startBtn = document.getElementById('stitchStartBtn');
+  const bezierInput = document.getElementById('stitchBezierPath');
   if (!section) return;
   try {
     const resp = await fetch('/api/stitching/available');
     const data = await resp.json();
     section.style.display = '';
+    if (bezierInput && data.defaultBezierPath) {
+      bezierInput.placeholder = data.requiresBezierPath
+        ? `Required: ${data.defaultBezierPath}`
+        : `Default: ${data.defaultBezierPath}`;
+    }
     if (data.available) {
       startBtn.disabled = false;
-      if (status) status.textContent = '';
+      if (status) {
+        status.textContent = data.requiresBezierPath
+          ? 'Bezier calibration required; provide a bezierPath before starting.'
+          : '';
+      }
     } else {
       startBtn.disabled = true;
       if (status) status.textContent = `Missing: ${data.missing || 'cv2'} — run ${data.install}`;
@@ -3081,6 +3074,7 @@ async function pollStitchingStatus(jobId) {
 async function startStitching() {
   const inputDir = document.getElementById('stitchInputDir')?.value?.trim();
   const outputDir = document.getElementById('stitchOutputDir')?.value?.trim();
+  const bezierPath = document.getElementById('stitchBezierPath')?.value?.trim();
   const startBtn = document.getElementById('stitchStartBtn');
   const status = document.getElementById('stitchStatus');
   const jobBlock = document.getElementById('stitchJobBlock');
@@ -3096,7 +3090,11 @@ async function startStitching() {
     const resp = await fetch('/api/stitching/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inputDir, outputDir }),
+      body: JSON.stringify({
+        inputDir,
+        outputDir,
+        ...(bezierPath ? { bezierPath } : {}),
+      }),
     });
     const data = await resp.json();
     if (!data.ok) {
@@ -6341,25 +6339,25 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
 
   const STEPS = [
     {
-      target: '#inputDir',
+      target: '#oneClickSourcePath',
       titleKey: 'tour.step1.title',
       bodyKey:  'tour.step1.body',
       tab: 'workflow',
     },
     {
-      target: '#atlasPath',
+      target: '#oneClickAtlasVersion',
       titleKey: 'tour.step2.title',
       bodyKey:  'tour.step2.body',
       tab: 'workflow',
     },
     {
-      target: '#confidenceThreshold',
+      target: '#oneClickRegMode',
       titleKey: 'tour.step3.title',
       bodyKey:  'tour.step3.body',
       tab: 'workflow',
     },
     {
-      target: '#runBtn',
+      target: '#oneClickStartBtn',
       titleKey: 'tour.step4.title',
       bodyKey:  'tour.step4.body',
       tab: 'workflow',
@@ -6376,6 +6374,17 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   let _highlight = null;
   let _tooltip = null;
   let _stepIdx = 0;
+
+  function _isVisibleTourTarget(el) {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const style = window.getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+  }
+
+  function _handleTourKeydown(ev) {
+    if (ev.key === 'Escape') _endTour(false);
+  }
 
   function _switchTab(tabName) {
     document.querySelectorAll('.nav-btn[data-tab]').forEach(b => b.classList.remove('active'));
@@ -6410,8 +6419,9 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
 
     const targetEl = document.querySelector(step.target);
     if (!targetEl) { _showStep(idx + 1); return; }  // skip missing elements
+    if (!_isVisibleTourTarget(targetEl)) { _showStep(idx + 1); return; }
 
-    targetEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    targetEl.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
 
     // Position highlight
     setTimeout(() => {
@@ -6449,23 +6459,22 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       _overlay.className   = 'tour-overlay';
       _highlight.className = 'tour-highlight';
       _tooltip.className   = 'tour-tooltip';
+      _overlay.addEventListener('click', () => _endTour(false));
       document.body.append(_overlay, _highlight, _tooltip);
     }
     _overlay.style.display = _highlight.style.display = _tooltip.style.display = '';
+    document.addEventListener('keydown', _handleTourKeydown);
     _showStep(0);
   }
 
   function _endTour(completed) {
     if (_overlay) { _overlay.style.display = _highlight.style.display = _tooltip.style.display = 'none'; }
+    document.removeEventListener('keydown', _handleTourKeydown);
     if (completed) localStorage.setItem(TOUR_KEY, '1');
   }
 
-  // Trigger on first visit
-  if (!localStorage.getItem(TOUR_KEY)) {
-    setTimeout(startTour, 1200);
-  }
-
-  // "?" button in sidebar
+  // Tour is opt-in via the "?" button in the sidebar. Auto-start made first-run
+  // users think the app was stuck when a target was offscreen or hidden.
   document.getElementById('startTourBtn')?.addEventListener('click', startTour);
 })();
 
@@ -7027,7 +7036,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   }
 
   qcDoneBtn?.addEventListener('click', async () => {
-    const note = prompt('Optional note for this QC sign-off (press Enter to skip):', '') || '';
+    const note = el('liq3dQcNote')?.value?.trim() || '';
     qcDoneBtn.disabled = true;
     qcStatus.textContent = 'Recording sign-off…';
     try {

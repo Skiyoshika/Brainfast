@@ -140,9 +140,7 @@ def wizard_extract_multipage_tiff():
             # extract_zstack returns the list of written paths; we surface
             # just the count for the UI.  Tolerate both ints and lists in case
             # the underlying contract changes.
-            "writtenCount": (
-                len(written) if hasattr(written, "__len__") else int(written or 0)
-            ),
+            "writtenCount": (len(written) if hasattr(written, "__len__") else int(written or 0)),
         }
     )
 

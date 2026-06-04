@@ -174,6 +174,69 @@ def test_error_log_and_status_expose_structured_progress(tmp_path: Path, monkeyp
         assert status_data["slicesTotal"] == 12
 
 
+def test_poll_without_job_prefers_visible_running_or_failed_job(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A reloaded frontend may not have local active-job state.
+
+    In that case the sidebar/error panel should still surface the active or
+    failed job instead of polling an empty default state.
+    """
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path)
+    job_id = "api_continuation_failed"
+    default_state = ctx._new_run_state()
+    failed_state = ctx._new_run_state()
+    failed_state.update(
+        {
+            "running": False,
+            "done": False,
+            "error": "channel red failed with code 1",
+            "errors": [
+                {
+                    "timestamp": "2026-05-03T11:00:00",
+                    "message": "channel red failed with code 1",
+                    "step": "truth_export",
+                    "recoverable": False,
+                    "source": "backend",
+                }
+            ],
+            "logs": ["[exit] job=api_continuation_failed channel=red code=1"],
+            "channels": ["red"],
+            "job_id": job_id,
+            "outputs_dir": str(tmp_path / "jobs" / job_id),
+            "progress": {
+                "phase": "error",
+                "stepCurrent": 5,
+                "stepTotal": 6,
+                "slicesDone": 0,
+                "slicesTotal": 646,
+                "message": "Truth export failed",
+            },
+        }
+    )
+    monkeypatch.setattr(
+        ctx,
+        "_job_states",
+        {
+            ctx.DEFAULT_JOB_ID: default_state,
+            job_id: failed_state,
+        },
+    )
+
+    with app.test_client() as client:
+        poll_resp = client.get("/api/poll")
+        assert poll_resp.status_code == 200
+        poll_data = poll_resp.get_json()
+        assert poll_data["jobId"] == job_id
+        assert poll_data["errors"][0]["step"] == "truth_export"
+
+        error_resp = client.get("/api/error-log")
+        assert error_resp.status_code == 200
+        error_data = error_resp.get_json()
+        assert error_data["jobId"] == job_id
+        assert error_data["count"] == 1
+
+
 def test_status_exposes_eta_when_pipeline_progress_file_present(tmp_path: Path, monkeypatch) -> None:
     """When pipeline_progress.json exists for a job, /api/status should
     include both the on-disk stage info and a non-null ``eta`` block.

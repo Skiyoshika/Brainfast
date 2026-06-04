@@ -31,7 +31,11 @@ try:
     )
     from project.scripts.liquify_3d import (
         LandmarkStore,
-        refine_annotation_with_landmarks,
+        LiquifyStroke,
+        LiquifyStrokeStore,
+        combined_landmark_and_stroke_pairs,
+        refine_annotation_with_pairs,
+        strokes_to_landmark_pairs,
     )
     from project.scripts.liquify_3d_finalize import finalize_liquify_to_cell_counts
     from project.scripts.liquify_progress import (
@@ -47,7 +51,14 @@ except ImportError:
         read_liquify_progress,
         write_liquify_progress,
     )
-    from scripts.liquify_3d import LandmarkStore, refine_annotation_with_landmarks
+    from scripts.liquify_3d import (
+        LandmarkStore,
+        LiquifyStroke,
+        LiquifyStrokeStore,
+        combined_landmark_and_stroke_pairs,
+        refine_annotation_with_pairs,
+        strokes_to_landmark_pairs,
+    )
     from scripts.liquify_3d_finalize import finalize_liquify_to_cell_counts
 
 
@@ -143,6 +154,7 @@ def _job_file_for(job_id: str, filename: str) -> Path:
 bp = Blueprint("api_liquify_3d", __name__, url_prefix="/api")
 
 _LANDMARKS_FILENAME = "landmarks_3d.csv"
+_STROKES_FILENAME = "liquify_strokes_3d.jsonl"
 _REFINED_ANNOTATION_FILENAME = "annotation_refined_liquify3d.nii.gz"
 
 
@@ -153,6 +165,10 @@ _REFINED_ANNOTATION_FILENAME = "annotation_refined_liquify3d.nii.gz"
 
 def _landmark_store_for(job_id: str) -> LandmarkStore:
     return LandmarkStore(_job_file_for(job_id, _LANDMARKS_FILENAME))
+
+
+def _stroke_store_for(job_id: str) -> LiquifyStrokeStore:
+    return LiquifyStrokeStore(_job_file_for(job_id, _STROKES_FILENAME))
 
 
 def _resolve_annotation_path(job_id: str) -> Path | None:
@@ -177,6 +193,52 @@ def _pair_to_dict(pair) -> dict:
     }
 
 
+def _stroke_to_dict(stroke: LiquifyStroke) -> dict:
+    return {
+        "z": int(stroke.z),
+        "points": [{"y": float(y), "x": float(x)} for y, x in stroke.points],
+        "point_count": len(stroke.points),
+        "radius": float(stroke.radius),
+        "strength": float(stroke.strength),
+        "image_dims_yx": list(stroke.image_dims_yx) if stroke.image_dims_yx else None,
+        "created_at": str(stroke.created_at),
+    }
+
+
+def _annotation_shape_for(path: Path | None) -> tuple[int, int, int] | None:
+    if path is None:
+        return None
+    try:
+        import nibabel as nib
+
+        return tuple(int(v) for v in nib.load(str(path)).shape)
+    except Exception:  # noqa: BLE001 - shape is an optimization for rescaling
+        return None
+
+
+def _liquify_control_pairs(job_id: str, annotation_path: Path | None = None) -> tuple:
+    landmark_store = _landmark_store_for(job_id)
+    stroke_store = _stroke_store_for(job_id)
+    annotation_shape = _annotation_shape_for(annotation_path)
+    explicit_pairs = landmark_store.list_pairs()
+    strokes = stroke_store.list_strokes()
+    stroke_pairs = strokes_to_landmark_pairs(
+        strokes,
+        annotation_shape=annotation_shape,
+    )
+    pairs = combined_landmark_and_stroke_pairs(
+        landmark_store.path,
+        stroke_store.path,
+        annotation_shape=annotation_shape,
+    )
+    source_control_types = []
+    if explicit_pairs:
+        source_control_types.append("landmark")
+    if stroke_pairs:
+        source_control_types.append("stroke")
+    return explicit_pairs, strokes, stroke_pairs, pairs, source_control_types
+
+
 # ---------------------------------------------------------------------------
 # GET /api/liquify-3d/state  — list current landmarks + refinement status
 # ---------------------------------------------------------------------------
@@ -187,6 +249,8 @@ def liquify_3d_state():
     job_id = ctx._query_job_id()
     store = _landmark_store_for(job_id)
     pairs = store.list_pairs()
+    stroke_store = _stroke_store_for(job_id)
+    strokes = stroke_store.list_strokes()
     refined_path = _job_file_for(job_id, _REFINED_ANNOTATION_FILENAME)
     annotation_path = _resolve_annotation_path(job_id)
     source_available = annotation_path is not None
@@ -194,15 +258,9 @@ def liquify_3d_state():
     # Expose the annotation grid shape so the frontend can show what its
     # canvas-pixel → annotation-voxel rescale factor will be (#12 — coord
     # conversion was previously silent).
-    annotation_shape = None
-    if source_available:
-        try:
-            import nibabel as _nib
-
-            annotation_shape = list(_nib.load(str(annotation_path)).shape)
-        except Exception:  # noqa: BLE001 — surface only when we can read header
-            annotation_shape = None
-
+    annotation_shape_tuple = _annotation_shape_for(annotation_path)
+    annotation_shape = list(annotation_shape_tuple) if annotation_shape_tuple else None
+    stroke_pairs = strokes_to_landmark_pairs(strokes, annotation_shape=annotation_shape_tuple)
     # Empty-state hint: if no source annotation, tell the frontend what the
     # user needs to do BEFORE liquify can run. Prevents a silent empty UI.
     if not source_available:
@@ -218,6 +276,10 @@ def liquify_3d_state():
             "jobId": job_id,
             "pair_count": len(pairs),
             "pairs": [_pair_to_dict(p) for p in pairs],
+            "strokes": [_stroke_to_dict(s) for s in strokes],
+            "stroke_count": len(strokes),
+            "derived_pair_count": len(stroke_pairs),
+            "total_control_count": len(pairs) + len(stroke_pairs),
             "refined_annotation_exists": refined_path.exists(),
             "source_annotation_available": source_available,
             "annotation_shape": annotation_shape,
@@ -446,6 +508,88 @@ def liquify_3d_add_pair():
 
 
 # ---------------------------------------------------------------------------
+# POST /api/liquify-3d/stroke
+# Body: {jobId, z, points: [{x, y}], radius, strength, image_dims_yx?}
+# ---------------------------------------------------------------------------
+
+
+@bp.post("/liquify-3d/stroke")
+def liquify_3d_add_stroke():
+    payload = request.get_json(silent=True) or {}
+    job_id = ctx._payload_job_id(payload)
+
+    try:
+        z = int(payload["z"])
+        points = payload["points"]
+        radius = float(payload.get("radius", 80.0))
+        strength = float(payload.get("strength", 0.72))
+    except (KeyError, TypeError, ValueError) as exc:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": f"invalid payload: {exc}",
+                    "error_code": ERR_INVALID_INPUT,
+                    "required": "{jobId, z:int, points:[{x,y}], radius:number, strength:number}",
+                }
+            ),
+            400,
+        )
+
+    image_dims = payload.get("image_dims_yx")
+    image_dims_yx = None
+    if isinstance(image_dims, (list, tuple)) and len(image_dims) == 2:
+        try:
+            image_dims_yx = (float(image_dims[0]), float(image_dims[1]))
+        except (TypeError, ValueError):
+            image_dims_yx = None
+
+    store = _stroke_store_for(job_id)
+    try:
+        stroke = store.add_stroke(
+            z=z,
+            points=points,
+            radius=radius,
+            strength=strength,
+            image_dims_yx=image_dims_yx,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        return jsonify({"ok": False, "error": str(exc), "error_code": ERR_INVALID_INPUT}), 400
+
+    return jsonify(
+        {
+            "ok": True,
+            "jobId": job_id,
+            "stroke": _stroke_to_dict(stroke),
+            "stroke_count": len(store.list_strokes()),
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/liquify-3d/stroke/<index>?job=<id>
+# ---------------------------------------------------------------------------
+
+
+@bp.delete("/liquify-3d/stroke/<int:index>")
+def liquify_3d_remove_stroke(index: int):
+    job_id = ctx._query_job_id()
+    store = _stroke_store_for(job_id)
+    try:
+        removed = store.remove_stroke(index)
+    except IndexError as exc:
+        return jsonify({"ok": False, "error": str(exc), "error_code": ERR_INVALID_INPUT}), 400
+    return jsonify(
+        {
+            "ok": True,
+            "jobId": job_id,
+            "removed": _stroke_to_dict(removed),
+            "stroke_count": len(store.list_strokes()),
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
 # DELETE /api/liquify-3d/pair/<index>?job=<id>
 # ---------------------------------------------------------------------------
 
@@ -488,7 +632,8 @@ def liquify_3d_clear():
     job_id = ctx._payload_job_id(payload)
     store = _landmark_store_for(job_id)
     store.clear()
-    return jsonify({"ok": True, "jobId": job_id, "pair_count": 0})
+    _stroke_store_for(job_id).clear()
+    return jsonify({"ok": True, "jobId": job_id, "pair_count": 0, "stroke_count": 0})
 
 
 # ---------------------------------------------------------------------------
@@ -498,12 +643,39 @@ def liquify_3d_clear():
 # ---------------------------------------------------------------------------
 
 
+# Track running apply threads per job_id so we can refuse to start a second
+# concurrent apply on the same job (which would race on the output file).
+_apply_threads_lock = __import__("threading").Lock()
+_apply_threads: dict[str, object] = {}
+
+
 @bp.post("/liquify-3d/apply")
 def liquify_3d_apply():
+    """BLOCKER A fix (2026-05-05): async apply with 202.
+
+    Pre-fix this endpoint blocked the HTTP connection for ~36 minutes on
+    full-resolution (646×328×272) annotations while the Laplacian solver
+    ran synchronously. Browser fetch / proxy timeouts (45 s default) made
+    the UI look hung even though compute was still progressing.
+
+    Now: return 202 Accepted immediately with a job ticket; the solver runs
+    on a background daemon thread that updates the existing ``liquify_progress``
+    file. Frontend polls ``/api/liquify-3d/progress`` to drive the UI.
+
+    Pass ``?sync=true`` (or ``{"sync": true}`` body) to opt into the legacy
+    blocking behaviour — kept so unit tests / scripts that expect the result
+    inline still work.
+    """
+    import threading as _threading
+
     payload = request.get_json(silent=True) or {}
     job_id = ctx._payload_job_id(payload)
-    store = _landmark_store_for(job_id)
-    pairs = store.list_pairs()
+    sync_mode = bool(payload.get("sync") or request.args.get("sync") in ("1", "true"))
+    annotation_path = _resolve_annotation_path(job_id)
+    _explicit_pairs, _strokes, _stroke_pairs, pairs, _control_types = _liquify_control_pairs(
+        job_id,
+        annotation_path,
+    )
     if not pairs:
         return (
             jsonify(
@@ -516,7 +688,6 @@ def liquify_3d_apply():
             400,
         )
 
-    annotation_path = _resolve_annotation_path(job_id)
     if annotation_path is None:
         return (
             jsonify(
@@ -530,23 +701,84 @@ def liquify_3d_apply():
         )
 
     out_path = _job_file_for(job_id, _REFINED_ANNOTATION_FILENAME)
-    # Reset any stale progress from a prior run so the poller starts clean.
-    clear_liquify_progress(_resolve_job_dir(job_id))
-    meta = refine_annotation_with_landmarks(
-        annotation_path=annotation_path,
-        landmarks_csv=store.path,
-        output_path=out_path,
-        rtol=float(payload.get("rtol", 1e-2)),
-        maxiter=int(payload.get("maxiter", 500)),
-        progress_cb=_progress_cb_for_job(job_id),
-    )
-    return jsonify(
-        {
-            "ok": True,
-            "jobId": job_id,
-            "source_annotation_path": str(annotation_path),
-            **meta,
-        }
+
+    rtol = float(payload.get("rtol", 1e-2))
+    maxiter = int(payload.get("maxiter", 500))
+
+    if sync_mode:
+        meta = refine_annotation_with_pairs(
+            annotation_path=annotation_path,
+            pairs=pairs,
+            output_path=out_path,
+            rtol=rtol,
+            maxiter=maxiter,
+            progress_cb=_progress_cb_for_job(job_id),
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "jobId": job_id,
+                "source_annotation_path": str(annotation_path),
+                "mode": "sync",
+                **meta,
+            }
+        )
+
+    progress_cb = _progress_cb_for_job(job_id)
+
+    def _runner():
+        try:
+            refine_annotation_with_pairs(
+                annotation_path=annotation_path,
+                pairs=pairs,
+                output_path=out_path,
+                rtol=rtol,
+                maxiter=maxiter,
+                progress_cb=progress_cb,
+            )
+        except Exception as exc:  # noqa: BLE001 — surface error via progress file
+            try:
+                progress_cb("error", 4, 4, 100, f"Apply failed: {exc}")
+            except Exception:
+                pass
+
+    t = _threading.Thread(target=_runner, daemon=True, name=f"liquify-apply-{job_id}")
+    with _apply_threads_lock:
+        existing = _apply_threads.get(job_id)
+        if existing is not None and getattr(existing, "is_alive", lambda: False)():
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "error": (
+                            f"apply already running for job '{job_id}'; "
+                            f"poll /api/liquify-3d/progress for status"
+                        ),
+                        "error_code": ERR_INVALID_INPUT,
+                    }
+                ),
+                409,
+            )
+        _apply_threads[job_id] = t
+        clear_liquify_progress(_resolve_job_dir(job_id))
+        t.start()
+
+    return (
+        jsonify(
+            {
+                "ok": True,
+                "jobId": job_id,
+                "source_annotation_path": str(annotation_path),
+                "mode": "async",
+                "pair_count": len(pairs),
+                "hint": (
+                    "Solve runs in background. Poll /api/liquify-3d/progress "
+                    "until stage='done' (percent=100) or stage='error'. "
+                    "Full-resolution volumes can take 20–40 min; that's normal."
+                ),
+            }
+        ),
+        202,
     )
 
 
@@ -610,26 +842,51 @@ def class_prior_save():
     sample_id = str(payload.get("sampleId") or job_id)
     metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else None
 
-    pairs = _landmark_store_for(job_id).list_pairs()
+    ann_path = _resolve_annotation_path(job_id)
+    strokes = _stroke_store_for(job_id).list_strokes()
+    if strokes and _annotation_shape_for(ann_path) is None:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": (
+                        "source annotation is required before brush strokes can "
+                        "contribute to class prior"
+                    ),
+                    "error_code": ERR_INVALID_INPUT,
+                }
+            ),
+            400,
+        )
+    _explicit_pairs, _strokes, _stroke_pairs, pairs, source_control_types = _liquify_control_pairs(
+        job_id,
+        ann_path,
+    )
     if not pairs:
         return (
             jsonify(
                 {
                     "ok": False,
-                    "error": "job has no landmark pairs to contribute",
+                    "error": "job has no liquify controls to contribute",
                     "error_code": ERR_INVALID_INPUT,
                 }
             ),
             400,
         )
     store = ClassPriorStore(class_name=class_name, priors_root=_class_priors_root())
-    store.update(sample_id=sample_id, pairs=pairs, metrics=metrics)
+    store.update(
+        sample_id=sample_id,
+        pairs=pairs,
+        metrics=metrics,
+        source_control_types=source_control_types,
+    )
     return jsonify(
         {
             "ok": True,
             "class": class_name,
             "sampleId": sample_id,
             "merged_pair_count": len(pairs),
+            "source_control_types": source_control_types,
             "sample_count": store.sample_count(),
             "entry_count": len(store.entries()),
             "ready_for_warm_start": store.sample_count() >= MIN_SAMPLES_FOR_APPLY,

@@ -853,6 +853,17 @@
                 <option value="farred">farred (C2)</option>
               </select>
             </label>
+            <label style="display:flex;flex-direction:column;gap:4px;">
+              <span data-i18n="newsample.registrationMode">Registration mode</span>
+              <select id="wizRegistrationMode" style="width:220px;">
+                <option value="standard" data-i18n="newsample.modeStandard">Standard · release default</option>
+                <option value="fast_qc" data-i18n="newsample.modeFastQc">Fast QC · sampled overlays</option>
+                <option value="high_accuracy" data-i18n="newsample.modeHighAccuracy">High Accuracy · finer 3D grid</option>
+              </select>
+              <span class="field-hint" data-i18n="newsample.registrationModeHint">
+                Fast QC saves time on QC overlays; High Accuracy uses a finer 3D registration grid.
+              </span>
+            </label>
           </div>
         </div>
 
@@ -1476,9 +1487,8 @@
       <section class="panel">
         <h2 data-i18n="liquify3d.title">3D Landmark Liquify</h2>
         <p class="hint-text" data-i18n="liquify3d.hint">
-          Click on the overlay: first click marks where the <strong>atlas region currently sits</strong>,
-          second click marks where the <strong>real anatomy actually is</strong>. The backend accumulates
-          these pairs across z-slices and solves a 3D Laplacian warp to snap the annotation to the tissue.
+          Brush mode: drag the atlas boundary toward the real anatomy. Landmark mode remains available
+          for precise point-pair correction.
         </p>
 
         <div class="form-row" style="gap:12px; align-items:center; flex-wrap:wrap;">
@@ -1502,7 +1512,28 @@
           </label>
         </div>
 
-        <div class="form-row" style="gap:12px; align-items:center; margin-top:10px;">
+        <div class="liq3d-tools">
+          <div class="liq3d-mode-toggle" role="group" aria-label="3D liquify tool mode">
+            <span class="liq3d-tool-label" data-i18n="liquify3d.toolLabel">Tool:</span>
+            <label><input type="radio" name="liq3dToolMode" value="brush" checked />
+              <span data-i18n="liquify3d.toolBrush">Brush</span></label>
+            <label><input type="radio" name="liq3dToolMode" value="landmark" />
+              <span data-i18n="liquify3d.toolLandmark">Landmark</span></label>
+          </div>
+          <label class="liq3d-brush-control">
+            <span data-i18n="liquify3d.brushRadius">Radius</span>
+            <input id="liq3dBrushRadius" type="range" min="8" max="260" value="80" />
+            <input id="liq3dBrushRadiusNum" type="number" min="8" max="260" value="80" />
+          </label>
+          <label class="liq3d-brush-control">
+            <span data-i18n="liquify3d.brushStrength">Strength</span>
+            <input id="liq3dBrushStrength" type="range" min="5" max="150" value="72" />
+            <span id="liq3dBrushStrengthNum" class="hint-text">0.72</span>
+          </label>
+          <span class="hint-text"><span data-i18n="liquify3d.strokeCount">Strokes</span>: <span id="liq3dStrokeCount">0</span></span>
+        </div>
+
+        <div class="form-row" id="liq3dLandmarkRow" style="gap:12px; align-items:center; margin-top:10px; display:none;">
           <span data-i18n="liquify3d.modeLabel">Next click:</span>
           <label><input type="radio" name="liq3dClickMode" value="atlas" checked />
             <span data-i18n="liquify3d.modeAtlas">Atlas (where region currently is)</span></label>
@@ -1540,10 +1571,10 @@
           </label>
         </div>
 
-        <div id="liq3dCanvasWrap" style="position:relative; margin-top:12px; max-width:100%; overflow:auto;">
+        <div id="liq3dCanvasWrap">
           <img id="liq3dImg" src="" alt="overlay" style="display:none; max-width:100%;" />
-          <img id="liq3dOverlayImg" src="" alt="overlay-2" style="display:none; position:absolute; left:0; top:0; max-width:100%; pointer-events:none; mix-blend-mode:screen;" />
-          <canvas id="liq3dCanvas" style="position:absolute; left:0; top:0; cursor:crosshair;"></canvas>
+          <img id="liq3dOverlayImg" src="" alt="overlay-2" />
+          <canvas id="liq3dCanvas"></canvas>
         </div>
         <div id="liq3dCoordBadge" class="hint-text" style="margin-top:6px; font-family:monospace;"></div>
 
@@ -1579,7 +1610,7 @@
         <div class="form-row" style="gap:12px; align-items:center; margin-top:14px; padding-top:10px; border-top:1px dashed var(--border,#333);">
           <label style="display:flex;gap:6px;align-items:center;">
             <span data-i18n="liquify3d.qcNote">QC note</span>
-            <input id="liq3dQcNote" type="text" placeholder="optional" style="width:180px;" />
+            <input id="liq3dQcNote" type="text" placeholder="optional" data-i18n-ph="liquify3d.qcNotePh" style="width:180px;" />
           </label>
           <button type="button" class="btn" id="liq3dQcDoneBtn" title="Mark this job as user-approved and persist sign-off metrics">
             <i data-lucide="badge-check" class="btn-icon"></i>
@@ -1636,6 +1667,26 @@
                 </tr>
               </thead>
               <tbody id="liq3dPairsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="liq3d-strokes-panel">
+          <h3>
+            <span data-i18n="liquify3d.strokesTitle">Brush strokes</span> (<span id="liq3dStrokeCountBottom">0</span>)
+          </h3>
+          <div class="liq3d-table-wrap">
+            <table class="liq3d-table">
+              <thead>
+                <tr>
+                  <th>#</th><th>z</th>
+                  <th data-i18n="liquify3d.strokePoints">Points</th>
+                  <th data-i18n="liquify3d.radiusHdr">Radius</th>
+                  <th data-i18n="liquify3d.strengthHdr">Strength</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="liq3dStrokesBody"></tbody>
             </table>
           </div>
         </div>

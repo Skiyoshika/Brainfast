@@ -70,7 +70,55 @@ def _detect_compute() -> dict:
 def _resolve_job_id(payload: dict | None = None) -> str:
     if isinstance(payload, dict) and payload.get("jobId"):
         return ctx._sanitize_job_id(payload.get("jobId"))
+    if not (request.args.get("job") or request.args.get("jobId")):
+        return _best_visible_job_id()
     return ctx._query_job_id()
+
+
+def _best_visible_job_id() -> str:
+    """Return the job a reloaded frontend should show when no job is bound.
+
+    Scientists often reopen the UI or start a continuation through an API call.
+    In that state localStorage has no active job, but hiding an in-memory
+    running/failed non-default job behind an idle ``default`` status makes the
+    error panel misleading.
+    """
+    try:
+        with ctx._run_state_lock:
+            items = list(getattr(ctx, "_job_states", {}).items())
+    except Exception:
+        items = list(getattr(ctx, "_job_states", {}).items())
+
+    best_id = ctx.DEFAULT_JOB_ID
+    best_key: tuple[int, float, str, int, int] | None = None
+    for index, (job_id, state) in enumerate(items):
+        if not isinstance(state, dict):
+            continue
+        running = bool(state.get("running"))
+        errors = list(state.get("errors", []) or [])
+        progress = state.get("progress", {}) or {}
+        has_error = bool(state.get("error") or errors or progress.get("phase") == "error")
+        if not (running or has_error):
+            continue
+
+        priority = 3 if running else 2
+        try:
+            start_epoch = float(state.get("startEpoch") or 0)
+        except (TypeError, ValueError):
+            start_epoch = 0.0
+        error_ts = ""
+        for item in errors:
+            if isinstance(item, dict):
+                error_ts = max(error_ts, str(item.get("timestamp", "")))
+        history = state.get("history", []) or []
+        if history and isinstance(history[-1], dict):
+            error_ts = max(error_ts, str(history[-1].get("timestamp", "")))
+        key = (priority, start_epoch, error_ts, len(state.get("logs", []) or []), index)
+        if best_key is None or key > best_key:
+            best_key = key
+            best_id = ctx._sanitize_job_id(job_id)
+
+    return best_id
 
 
 def _job_state(job_id: str | None = None) -> dict:

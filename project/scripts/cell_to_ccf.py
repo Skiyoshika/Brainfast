@@ -57,6 +57,17 @@ except ImportError:  # pragma: no cover — script-context fallback
 log = get_logger(__name__)
 
 
+def _ensure_ants_matplotlib_compat() -> None:
+    """Patch matplotlib >=3.10 compatibility before importing ANTsPy."""
+    try:
+        import matplotlib._docstring as mpl_docstring
+
+        if not hasattr(mpl_docstring, "dedent_interpd"):
+            mpl_docstring.dedent_interpd = lambda func: func
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # NIfTI affine helpers
 # ---------------------------------------------------------------------------
@@ -142,6 +153,7 @@ def _header_info_via_ants(path: Path | str) -> tuple[np.ndarray, np.ndarray, np.
     specifically pulls spacing/origin/direction from
     ``ants.image_header_info``. We do the same here.
     """
+    _ensure_ants_matplotlib_compat()
     ants = importlib.import_module("ants")
     info = ants.image_header_info(str(path))
     spacing = np.asarray(info["spacing"], dtype=np.float64)
@@ -230,6 +242,7 @@ def transform_points_sample_to_ccf(
         ``(N, 3)`` CCF voxel coordinates in (z, y, x) order. Caller should
         int-round + bounds-check before indexing annotation.
     """
+    _ensure_ants_matplotlib_compat()
     ants = importlib.import_module("ants")
     import pandas as _pd
 
@@ -308,6 +321,7 @@ def transform_volume_sample_to_ccf(
     For label volumes (discrete IDs) pass ``interpolator='genericLabel'`` or
     ``'nearestNeighbor'``; for intensity volumes use ``'linear'``.
     """
+    _ensure_ants_matplotlib_compat()
     ants = importlib.import_module("ants")
     from scipy.ndimage import affine_transform as _aff_tx
 

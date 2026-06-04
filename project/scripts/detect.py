@@ -201,6 +201,26 @@ def _masks_to_centroids(
     ]
     if masks is None or masks.size == 0 or int(np.max(masks)) <= 0:
         return pd.DataFrame(columns=_empty_cols)
+    masks_arr = np.asarray(masks)
+    if intensity_image is not None:
+        intensity_arr = np.asarray(intensity_image)
+        if tuple(masks_arr.shape[:2]) != tuple(intensity_arr.shape[:2]):
+            try:
+                from scipy.ndimage import zoom as _zoom
+
+                zoom_factors = (
+                    intensity_arr.shape[0] / max(1, masks_arr.shape[0]),
+                    intensity_arr.shape[1] / max(1, masks_arr.shape[1]),
+                )
+                masks_arr = _zoom(masks_arr, zoom_factors, order=0)
+                if tuple(masks_arr.shape[:2]) != tuple(intensity_arr.shape[:2]):
+                    fixed = np.zeros(intensity_arr.shape[:2], dtype=masks_arr.dtype)
+                    h = min(fixed.shape[0], masks_arr.shape[0])
+                    w = min(fixed.shape[1], masks_arr.shape[1])
+                    fixed[:h, :w] = masks_arr[:h, :w]
+                    masks_arr = fixed
+            except Exception:
+                intensity_image = None
 
     base_props = ["label", "centroid", "area"]
     extra_props: list[str] = []
@@ -210,7 +230,7 @@ def _masks_to_centroids(
     extra_props += ["minor_axis_length", "major_axis_length"]
 
     props = measure.regionprops_table(
-        masks.astype(np.int32, copy=False),
+        masks_arr.astype(np.int32, copy=False),
         intensity_image=intensity_image,
         properties=base_props + extra_props,
     )
@@ -424,7 +444,6 @@ def _eval_cellpose_masks(
         cellprob_threshold=float(cellprob_threshold),
         min_size=max(0, int(min_size)),
         batch_size=max(1, int(batch_size)),
-        tile=True,
         tile_overlap=float(tile_overlap),
         resample=bool(resample),
         normalize=False,
@@ -537,7 +556,6 @@ def detect_cells_cellpose(
         cellprob_threshold=float(cellprob_threshold),
         min_size=max(0, int(min_size)),
         batch_size=max(1, int(batch_size)),
-        tile=True,
         tile_overlap=float(tile_overlap),
         resample=bool(resample),
         normalize=False,
@@ -616,7 +634,7 @@ def detect_cells_cellpose(
         masks = result[0]  # works for both 3-tuple (v4) and 4-tuple (v2/v3)
     except (TypeError, RuntimeError) as exc:
         # OOM or API incompatibility — retry with conservative settings
-        _log.warning("Cellpose eval failed (%s), retrying with tile mode...", exc)
+        _log.warning("Cellpose eval failed (%s), retrying with minimal eval args...", exc)
         kwargs2: dict[str, Any] = dict(diameter=diameter_px)
         # Force tiling for retry
         retry_bsize = _safe_tile_size(imgf.shape, diameter_px, vram_gb=4.0)

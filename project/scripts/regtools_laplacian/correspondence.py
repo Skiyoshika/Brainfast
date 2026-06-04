@@ -4,8 +4,10 @@
 Original author: Atchuth Naveen, UC Irvine.
 Vendored into Brainfast on 2026-04-22 as
 project/scripts/regtools_laplacian/correspondence.py.
-Unmodified from upstream except for this header — do not edit locally; update
-by re-syncing from upstream.
+
+Brainfast local patch:
+- resolve_laplacian_n_jobs() keeps Windows desktop runs on a safe default
+  worker count, while preserving explicit config/env overrides.
 
 --- Original header ---
 Contour extraction, normal estimation, and correspondence matching.
@@ -41,6 +43,36 @@ from .utils import laplacianA3D, propagate_dirichlet_rhs
 
 def _default_log(msg, level="info"):
     print(msg)
+
+
+def resolve_laplacian_n_jobs(requested=None):
+    """Resolve a safe joblib worker count for correspondence extraction.
+
+    Windows desktop users were hitting loky TerminatedWorkerError with the
+    previous ``n_jobs=-2`` default because it spawned near-full-core process
+    pools. Keep the normal app path conservative, while still allowing explicit
+    opt-in through config or ``BRAINFAST_LAPLACIAN_N_JOBS``.
+    """
+    if requested is not None:
+        try:
+            value = int(requested)
+        except (TypeError, ValueError):
+            return 1
+        return value if value != 0 else 1
+
+    env_value = os.environ.get("BRAINFAST_LAPLACIAN_N_JOBS")
+    if env_value:
+        try:
+            value = int(env_value)
+        except ValueError:
+            value = 1
+        return value if value != 0 else 1
+
+    if os.name == "nt":
+        return 1
+
+    cpu_count = os.cpu_count() or 2
+    return max(1, min(4, cpu_count - 1))
 
 
 # ============================================================================
@@ -383,6 +415,7 @@ def sliceToSlice3DLaplacian(
     spacing=None,
     solver_dtype="float64",
     solver_method="cg",
+    n_jobs=None,
     log_fn=None,
 ):
     """
@@ -434,6 +467,9 @@ def sliceToSlice3DLaplacian(
     log_fn : callable, optional
         Logging function accepting a single string argument. If None
         (default), messages are printed to stdout via ``print()``.
+    n_jobs : int, optional
+        joblib worker count for slice correspondence extraction. None uses a
+        Brainfast-safe platform default; explicit values are passed through.
 
     Returns
     -------
@@ -487,7 +523,9 @@ def sliceToSlice3DLaplacian(
         slice_pairs.append((sno, template_slice, data_slice))
     del fdata, mdata
 
-    results = Parallel(n_jobs=-2)(
+    resolved_n_jobs = resolve_laplacian_n_jobs(n_jobs)
+    log(f"Correspondence worker count: {resolved_n_jobs}", "value")
+    results = Parallel(n_jobs=resolved_n_jobs)(
         delayed(_find_slice_correspondences)(sno, tpl, dat)
         for sno, tpl, dat in tqdm(slice_pairs, desc="Finding correspondences")
     )

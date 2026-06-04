@@ -111,6 +111,94 @@ def test_clear_empties_store(client):
     assert state["pair_count"] == 0
 
 
+def test_add_stroke_then_state_lists_strokes(client):
+    resp = client.post(
+        "/api/liquify-3d/stroke",
+        data=json.dumps(
+            {
+                "jobId": "strokeJob",
+                "z": 7,
+                "points": [
+                    {"x": 10, "y": 20},
+                    {"x": 15, "y": 24},
+                    {"x": 18, "y": 28},
+                ],
+                "radius": 55,
+                "strength": 0.9,
+                "image_dims_yx": [100, 200],
+            }
+        ),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200, resp.get_json()
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["stroke_count"] == 1
+
+    state = client.get("/api/liquify-3d/state?job=strokeJob").get_json()
+    assert state["stroke_count"] == 1
+    assert state["strokes"][0]["z"] == 7
+    assert state["strokes"][0]["point_count"] == 3
+    assert state["derived_pair_count"] >= 2
+
+
+def test_remove_stroke(client):
+    client.post(
+        "/api/liquify-3d/stroke",
+        data=json.dumps(
+            {
+                "jobId": "removeStrokeJob",
+                "z": 2,
+                "points": [{"x": 1, "y": 2}, {"x": 6, "y": 7}],
+                "radius": 20,
+                "strength": 0.5,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    resp = client.delete("/api/liquify-3d/stroke/0?job=removeStrokeJob")
+    assert resp.status_code == 200
+    assert resp.get_json()["stroke_count"] == 0
+
+    state = client.get("/api/liquify-3d/state?job=removeStrokeJob").get_json()
+    assert state["stroke_count"] == 0
+
+
+def test_clear_empties_pairs_and_strokes(client):
+    client.post(
+        "/api/liquify-3d/add-pair",
+        data=json.dumps(
+            {"jobId": "clearMixed", "z": 1, "real": [2, 3], "atlas": [4, 5]}
+        ),
+        content_type="application/json",
+    )
+    client.post(
+        "/api/liquify-3d/stroke",
+        data=json.dumps(
+            {
+                "jobId": "clearMixed",
+                "z": 1,
+                "points": [{"x": 1, "y": 2}, {"x": 4, "y": 8}],
+                "radius": 20,
+                "strength": 0.5,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    resp = client.post(
+        "/api/liquify-3d/clear",
+        data=json.dumps({"jobId": "clearMixed"}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+
+    state = client.get("/api/liquify-3d/state?job=clearMixed").get_json()
+    assert state["pair_count"] == 0
+    assert state["stroke_count"] == 0
+
+
 def test_apply_without_source_annotation_returns_404(client):
     client.post(
         "/api/liquify-3d/add-pair",
@@ -186,6 +274,78 @@ def test_class_prior_save_rejects_empty_job(client, tmp_path, monkeypatch):
         content_type="application/json",
     )
     assert resp.status_code == 400
+
+
+def test_class_prior_save_accepts_stroke_derived_pairs(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(ctx, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path / "outputs")
+
+    job_id = "stroke_prior_source"
+    job_dir = tmp_path / "outputs" / "jobs" / job_id
+    ann_dir = job_dir / "ants_registration"
+    ann_dir.mkdir(parents=True)
+    ann = np.zeros((6, 24, 24), dtype=np.int16)
+    nib.save(nib.Nifti1Image(ann, np.eye(4)), str(ann_dir / "annotation_registered.nii.gz"))
+
+    client.post(
+        "/api/liquify-3d/stroke",
+        data=json.dumps(
+            {
+                "jobId": job_id,
+                "z": 10,
+                "points": [
+                    {"x": 10, "y": 20},
+                    {"x": 20, "y": 20},
+                    {"x": 25, "y": 25},
+                ],
+                "radius": 40,
+                "strength": 0.8,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    save_resp = client.post(
+        "/api/liquify-3d/class-prior/save",
+        data=json.dumps({"jobId": job_id, "class": "ChATe27"}),
+        content_type="application/json",
+    )
+
+    assert save_resp.status_code == 200, save_resp.get_json()
+    data = save_resp.get_json()
+    assert data["merged_pair_count"] >= 2
+    assert data["source_control_types"] == ["stroke"]
+
+
+def test_class_prior_save_rejects_stroke_without_annotation_shape(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(ctx, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path / "outputs")
+
+    job_id = "stroke_prior_missing_annotation"
+    client.post(
+        "/api/liquify-3d/stroke",
+        data=json.dumps(
+            {
+                "jobId": job_id,
+                "z": 10,
+                "points": [{"x": 10, "y": 20}, {"x": 20, "y": 20}],
+                "radius": 40,
+                "strength": 0.8,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    save_resp = client.post(
+        "/api/liquify-3d/class-prior/save",
+        data=json.dumps({"jobId": job_id, "class": "ChATe27"}),
+        content_type="application/json",
+    )
+
+    assert save_resp.status_code == 400
+    data = save_resp.get_json()
+    assert data["ok"] is False
+    assert "annotation" in data["error"]
 
 
 def test_class_prior_apply_warm_start_below_threshold_returns_404(client, tmp_path, monkeypatch):
@@ -560,17 +720,208 @@ def test_apply_with_source_annotation_writes_refined_nifti(client, tmp_path):
         content_type="application/json",
     )
 
+    # Opt into legacy sync mode for this test — async mode (the new default)
+    # returns 202 immediately and writes the file from a background thread,
+    # which would race with the assertions below.
     resp = client.post(
         "/api/liquify-3d/apply",
-        data=json.dumps({"jobId": job_id, "rtol": 1e-2, "maxiter": 200}),
+        data=json.dumps({"jobId": job_id, "rtol": 1e-2, "maxiter": 200, "sync": True}),
         content_type="application/json",
     )
     assert resp.status_code == 200, resp.get_json()
     data = resp.get_json()
     assert data["ok"] is True
+    assert data["mode"] == "sync"
     assert data["pair_count"] == 1
     assert Path(data["output_path"]).exists()
 
     # state endpoint should now report refined_annotation_exists True
     state = client.get(f"/api/liquify-3d/state?job={job_id}").get_json()
     assert state["refined_annotation_exists"] is True
+
+
+def test_apply_accepts_stroke_only_controls(client, tmp_path, monkeypatch):
+    job_id = "stroke_only_apply"
+    job_dir = tmp_path / "outputs" / "jobs" / job_id
+    ann_dir = job_dir / "ants_registration"
+    ann_dir.mkdir(parents=True)
+    ann = np.zeros((6, 24, 24), dtype=np.int16)
+    ann[:, 6:18, 6:18] = 1
+    nib.save(nib.Nifti1Image(ann, np.eye(4)), str(ann_dir / "annotation_registered.nii.gz"))
+
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path / "outputs")
+
+    stroke_resp = client.post(
+        "/api/liquify-3d/stroke",
+        data=json.dumps(
+            {
+                "jobId": job_id,
+                "z": 3,
+                "points": [
+                    {"x": 10, "y": 10},
+                    {"x": 13, "y": 10},
+                    {"x": 16, "y": 11},
+                ],
+                "radius": 30,
+                "strength": 0.8,
+                "image_dims_yx": [24, 24],
+            }
+        ),
+        content_type="application/json",
+    )
+    assert stroke_resp.status_code == 200
+
+    resp = client.post(
+        "/api/liquify-3d/apply",
+        data=json.dumps({"jobId": job_id, "sync": True, "maxiter": 20}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200, resp.get_json()
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["pair_count"] >= 2
+    assert (job_dir / "annotation_refined_liquify3d.nii.gz").exists()
+
+
+def test_apply_async_returns_202_and_writes_refined_in_background(client, tmp_path):
+    """BLOCKER A fix (2026-05-05): /apply is async by default.
+
+    Pre-fix the synchronous solve held the HTTP connection ~36 min on
+    full-res volumes; this test pins the new contract:
+      - immediate 202 + mode='async'
+      - refined nifti appears once background thread completes
+    """
+    import time as _time
+
+    job_id = "test_async_apply"
+    job_dir = ctx._job_output_dir(job_id)
+    ants_dir = job_dir / "ants_registration"
+    ants_dir.mkdir(parents=True, exist_ok=True)
+    ann = np.zeros((4, 6, 6), dtype=np.int32)
+    ann[:, :, 3] = 7
+    nib.save(
+        nib.Nifti1Image(ann, np.eye(4)), str(ants_dir / "annotation_registered.nii.gz")
+    )
+
+    client.post(
+        "/api/liquify-3d/add-pair",
+        data=json.dumps(
+            {"jobId": job_id, "z": 2, "real": [3.0, 4.0], "atlas": [3.0, 3.0]}
+        ),
+        content_type="application/json",
+    )
+
+    resp = client.post(
+        "/api/liquify-3d/apply",
+        data=json.dumps({"jobId": job_id, "rtol": 1e-2, "maxiter": 200}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 202, resp.get_json()
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["mode"] == "async"
+    assert data["pair_count"] == 1
+    assert "output_path" not in data  # not done yet — that's the point
+
+    # Poll progress endpoint until done (small fixture, should be fast).
+    deadline = _time.time() + 30
+    while _time.time() < deadline:
+        prog = client.get(f"/api/liquify-3d/progress?job={job_id}").get_json()
+        if prog.get("stage") == "done" and prog.get("percent", 0) >= 100:
+            break
+        if prog.get("stage") == "error":
+            raise AssertionError(f"async apply failed: {prog.get('message')}")
+        _time.sleep(0.1)
+    else:
+        raise AssertionError(
+            f"async apply did not finish within 30s; last progress: {prog!r}"
+        )
+
+    refined = job_dir / "annotation_refined_liquify3d.nii.gz"
+    assert refined.exists(), "background thread should have written refined nifti"
+    state = client.get(f"/api/liquify-3d/state?job={job_id}").get_json()
+    assert state["refined_annotation_exists"] is True
+
+
+def test_apply_async_409_when_already_running(client, tmp_path):
+    """A second concurrent /apply on the same job should be refused (409)
+    so the two threads don't race on the output file.
+    """
+    job_id = "test_async_concurrent"
+    job_dir = ctx._job_output_dir(job_id)
+    ants_dir = job_dir / "ants_registration"
+    ants_dir.mkdir(parents=True, exist_ok=True)
+    # Larger volume so the first solve isn't trivially done before we issue #2.
+    ann = np.zeros((20, 40, 40), dtype=np.int32)
+    nib.save(
+        nib.Nifti1Image(ann, np.eye(4)), str(ants_dir / "annotation_registered.nii.gz")
+    )
+    client.post(
+        "/api/liquify-3d/add-pair",
+        data=json.dumps(
+            {"jobId": job_id, "z": 5, "real": [10.0, 10.0], "atlas": [12.0, 12.0]}
+        ),
+        content_type="application/json",
+    )
+
+    resp1 = client.post(
+        "/api/liquify-3d/apply",
+        data=json.dumps({"jobId": job_id, "rtol": 1e-3, "maxiter": 2000}),
+        content_type="application/json",
+    )
+    assert resp1.status_code == 202
+
+    # Issue a second one before the first finishes — should 409.
+    resp2 = client.post(
+        "/api/liquify-3d/apply",
+        data=json.dumps({"jobId": job_id, "rtol": 1e-3, "maxiter": 2000}),
+        content_type="application/json",
+    )
+    # If the first one finishes too fast we'd see 202 again. Either is OK
+    # as long as we never silently overwrite without a code-level race guard.
+    assert resp2.status_code in (202, 409)
+    if resp2.status_code == 409:
+        body = resp2.get_json()
+        assert body["ok"] is False
+        assert "already running" in body["error"]
+
+
+def test_apply_async_409_does_not_clear_existing_progress(client, tmp_path, monkeypatch):
+    import project.frontend.blueprints.api_liquify_3d as api_liquify
+
+    job_id = "test_async_progress_guard"
+    job_dir = ctx._job_output_dir(job_id)
+    ants_dir = job_dir / "ants_registration"
+    ants_dir.mkdir(parents=True, exist_ok=True)
+    ann = np.zeros((4, 6, 6), dtype=np.int32)
+    nib.save(
+        nib.Nifti1Image(ann, np.eye(4)), str(ants_dir / "annotation_registered.nii.gz")
+    )
+    client.post(
+        "/api/liquify-3d/add-pair",
+        data=json.dumps(
+            {"jobId": job_id, "z": 2, "real": [3.0, 4.0], "atlas": [3.0, 3.0]}
+        ),
+        content_type="application/json",
+    )
+
+    class AliveThread:
+        def is_alive(self):
+            return True
+
+    cleared = []
+    with api_liquify._apply_threads_lock:
+        api_liquify._apply_threads[job_id] = AliveThread()
+    monkeypatch.setattr(api_liquify, "clear_liquify_progress", lambda job_dir: cleared.append(job_dir))
+    try:
+        resp = client.post(
+            "/api/liquify-3d/apply",
+            data=json.dumps({"jobId": job_id}),
+            content_type="application/json",
+        )
+    finally:
+        with api_liquify._apply_threads_lock:
+            api_liquify._apply_threads.pop(job_id, None)
+
+    assert resp.status_code == 409
+    assert cleared == []

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import shutil
 import sys
 from pathlib import Path
 
@@ -36,7 +37,10 @@ def _apply_refinement_field_to_annotation_volume(
     annotation_path: Path,
     field_path: Path,
     output_path: Path,
+    *,
+    field_reference_path: Path | None = None,
 ) -> Path:
+    output_path = Path(output_path)
     annotation_img = nib.load(str(annotation_path))
     annotation = np.asarray(annotation_img.dataobj, dtype=np.float32)
     field = np.load(str(field_path)).astype(np.float32, copy=False)
@@ -46,9 +50,26 @@ def _apply_refinement_field_to_annotation_volume(
             f"refinement field must have shape ({annotation.ndim}, ...); got {tuple(field.shape)}"
         )
     if tuple(field.shape[1:]) != tuple(annotation.shape):
-        raise ValueError(
-            f"refinement field shape {tuple(field.shape[1:])} does not match annotation volume {tuple(annotation.shape)}"
-        )
+        if field_reference_path is not None:
+            resampled_path = output_path.parent / (
+                output_path.name.replace(".nii.gz", "_resampled_to_laplacian.nii.gz")
+            )
+            annotation_path = _resample_label_volume_to_reference_grid(
+                annotation_path=annotation_path,
+                reference_path=field_reference_path,
+                output_path=resampled_path,
+            )
+            annotation_img = nib.load(str(annotation_path))
+            annotation = np.asarray(annotation_img.dataobj, dtype=np.float32)
+        if tuple(field.shape[1:]) == tuple(annotation.shape):
+            print(
+                f"[laplacian] Resampled annotation to Laplacian grid for shape match: "
+                f"{tuple(annotation.shape)}"
+            )
+        else:
+            raise ValueError(
+                f"refinement field shape {tuple(field.shape[1:])} does not match annotation volume {tuple(annotation.shape)}"
+            )
 
     base_coords = np.meshgrid(
         *[np.arange(size, dtype=np.float32) for size in annotation.shape],
@@ -68,6 +89,67 @@ def _apply_refinement_field_to_annotation_volume(
         nib.Nifti1Image(refined, annotation_img.affine, annotation_img.header),
         str(output_path),
     )
+    return output_path
+
+
+def _resample_label_volume_to_reference_grid(
+    annotation_path: Path,
+    reference_path: Path,
+    output_path: Path,
+) -> Path:
+    """Nearest-neighbor resample an annotation label volume to a reference grid."""
+    annotation_path = Path(annotation_path)
+    reference_path = Path(reference_path)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    ann_img = nib.load(str(annotation_path))
+    ref_img = nib.load(str(reference_path))
+    if tuple(ann_img.shape) == tuple(ref_img.shape):
+        return annotation_path
+
+    try:
+        try:
+            import matplotlib._docstring as _mpl_ds
+
+            if not hasattr(_mpl_ds, "dedent_interpd"):
+                _mpl_ds.dedent_interpd = lambda func: func
+        except Exception:
+            pass
+        ants = importlib.import_module("ants")
+        ann_ants = ants.image_read(str(annotation_path))
+        ref_ants = ants.image_read(str(reference_path))
+        resampled = ants.resample_image_to_target(
+            ann_ants,
+            ref_ants,
+            interp_type="nearestNeighbor",
+        )
+        ants.image_write(resampled, str(output_path))
+        out_img = nib.load(str(output_path))
+        out_data = np.rint(np.asarray(out_img.dataobj)).astype(np.int32)
+        out_header = out_img.header.copy()
+        out_header.set_data_dtype(np.int32)
+        nib.save(nib.Nifti1Image(out_data, out_img.affine, out_header), str(output_path))
+        return output_path
+    except Exception as exc:  # noqa: BLE001
+        print(f"[laplacian] ANTs annotation resample failed ({exc}); using nibabel fallback")
+
+    try:
+        from nibabel.processing import resample_from_to
+
+        resampled_img = resample_from_to(
+            ann_img,
+            (tuple(int(s) for s in ref_img.shape), ref_img.affine),
+            order=0,
+        )
+        out_data = np.rint(np.asarray(resampled_img.dataobj)).astype(np.int32)
+        out_header = ref_img.header.copy()
+        out_header.set_data_dtype(np.int32)
+        nib.save(nib.Nifti1Image(out_data, ref_img.affine, out_header), str(output_path))
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            f"Failed to resample annotation {annotation_path} to reference grid {reference_path}"
+        ) from exc
     return output_path
 
 
@@ -465,6 +547,22 @@ _REUSE_REQUIRED_FILES = (
 )
 
 
+def _materialize_reused_registration_artifacts(prior_dir: Path, outputs_dir: Path) -> list[Path]:
+    """Copy the minimal reused registration artifacts into this job directory."""
+    copied: list[Path] = []
+    prior_dir = Path(prior_dir)
+    outputs_dir = Path(outputs_dir)
+    for rel in _REUSE_REQUIRED_FILES:
+        src = prior_dir / rel
+        dst = outputs_dir / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if dst.exists() and dst.stat().st_size == src.stat().st_size:
+            continue
+        shutil.copy2(src, dst)
+        copied.append(dst)
+    return copied
+
+
 def _reuse_prior_registration_and_quantify(
     prior_dir: Path,
     input_dir: Path,
@@ -515,12 +613,17 @@ def _reuse_prior_registration_and_quantify(
             "channel with the same sampling as the prior run."
         )
 
+    materialized_paths = _materialize_reused_registration_artifacts(prior_dir, outputs_dir)
+
     emit(
         "Quantification",
         6,
         10,
         f"Reusing registration artifacts from {prior_dir.name}; detecting current channel cells",
-        {"reused_from": str(prior_dir)},
+        {
+            "reused_from": str(prior_dir),
+            "materialized_artifacts": [str(p) for p in materialized_paths],
+        },
     )
 
     prior_ants_dir = prior_dir / "ants_registration"
@@ -745,6 +848,8 @@ def run_whole_brain_3d(
     random_seed = int(reg_cfg.get("random_seed", 42))
     laplacian_lambda = float(reg_cfg.get("laplacian_lambda", 0.18))
     laplacian_maxiter = int(reg_cfg.get("laplacian_maxiter", 100))
+    laplacian_n_jobs_raw = reg_cfg.get("laplacian_n_jobs")
+    laplacian_n_jobs = int(laplacian_n_jobs_raw) if laplacian_n_jobs_raw is not None else None
     skip_laplacian = bool(reg_cfg.get("skip_laplacian_refinement", False))
     if merged_slice_paths:
         volume_slice_dir = Path(merged_slice_paths[0]).parent
@@ -976,6 +1081,14 @@ def run_whole_brain_3d(
         random_seed=random_seed,
         fixed_max_dim=int(fixed_max_dim) if fixed_max_dim else None,
     )
+    # BLOCKER D fix (2026-05-05): propagate the actual fixed image + matching
+    # annotation that ANTs registered against. Without this, downstream cell→CCF
+    # mapping (main.py:quantify_cells) read spacing/origin from the BILATERAL
+    # full template (528×320×456) while ANTs transforms were calibrated against
+    # the HALF template (528×320×228), shifting every cell's ccf_x by ~228 voxels
+    # and producing 100% outside-atlas mapping on right_flipped jobs.
+    ants_meta["fixed_image"] = str(template_meta["template_path"])
+    ants_meta["ccf_annotation_path"] = str(template_meta["annotation_path"])
 
     if skip_laplacian:
         _emit(
@@ -1008,17 +1121,45 @@ def run_whole_brain_3d(
             "Applying Laplacian refinement to the registered volume",
             {"metrics_csv": str(refine_dir / "refinement_metrics.csv")},
         )
+        # When fixed_max_dim downsamples ANTs inputs, registered_volume lives on
+        # a coarser grid than the original template. Resample template to match
+        # so Laplacian fixed/moving shapes agree (rc3 blocker: shape mismatch
+        # between (528,320,228) template and (256,155,111) ants_result).
+        laplacian_fixed_path = Path(template_meta["template_path"])
+        if fixed_max_dim:
+            try:
+                import ants as _ants_local
+
+                _tpl_img = _ants_local.image_read(str(template_meta["template_path"]))
+                _ref_img = _ants_local.image_read(str(ants_meta["registered_volume"]))
+                _tpl_resampled = _ants_local.resample_image_to_target(
+                    _tpl_img, _ref_img, interp_type="linear"
+                )
+                _resampled_path = ants_dir / "template_resampled_for_laplacian.nii.gz"
+                _ants_local.image_write(_tpl_resampled, str(_resampled_path))
+                laplacian_fixed_path = _resampled_path
+                print(
+                    f"[laplacian] Resampled template to ANTs grid for shape match "
+                    f"(fixed_max_dim={fixed_max_dim}): {_tpl_resampled.shape}"
+                )
+            except Exception as _resample_err:  # noqa: BLE001
+                print(
+                    f"[laplacian] Template resample failed ({_resample_err}); "
+                    "proceeding with original template — Laplacian may raise shape mismatch."
+                )
         refine_meta = refine_registered_volume(
-            fixed_path=Path(template_meta["template_path"]),
+            fixed_path=laplacian_fixed_path,
             moving_path=Path(ants_meta["registered_volume"]),
             out_dir=refine_dir,
             iterations=laplacian_maxiter,
             lambda_=laplacian_lambda,
+            n_jobs=laplacian_n_jobs,
         )
     refined_annotation_path = _apply_refinement_field_to_annotation_volume(
         annotation_path=Path(template_meta["annotation_path"]),
         field_path=Path(refine_meta["field_path"]),
         output_path=refined_annotation_path,
+        field_reference_path=Path(refine_meta["final_registered_path"]),
     )
 
     _emit(
@@ -1069,6 +1210,34 @@ def run_whole_brain_3d(
     te_warp_params = dict(truth_cfg.get("warp_params", {}) or {})
     te_fit_mode = str(truth_cfg.get("fit_mode", "cover")).strip() or "cover"
     te_edge = int(truth_cfg.get("edge_smooth_iter", 0) or 0)
+    te_overlay_stride = max(1, int(truth_cfg.get("overlay_stride", 1) or 1))
+    te_write_overlays_raw = truth_cfg.get("write_overlays", True)
+    if isinstance(te_write_overlays_raw, str):
+        te_write_overlays = te_write_overlays_raw.strip().lower() not in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }
+    else:
+        te_write_overlays = bool(te_write_overlays_raw)
+
+    def _truth_export_progress(done: int, total: int) -> None:
+        total = max(int(total or 0), 1)
+        done = max(0, min(int(done or 0), total))
+        pct = 82 + int(round(done / total * 12))
+        _emit(
+            "Truth Export",
+            5,
+            min(94, max(82, pct)),
+            f"Exported {done}/{total} truth slice(s)",
+            {
+                "truth_dir": str(truth_dir),
+                "annotation_refined_path": str(refined_annotation_path),
+                "annotation_registered_path": str(registered_annotation_path),
+            },
+        )
+
     truth_rows = export_registered_truth_slices(
         real_slice_paths=list(merged_slice_paths),
         annotation_volume_path=annotation_registered_path,
@@ -1079,6 +1248,9 @@ def run_whole_brain_3d(
         warp_params=te_warp_params,
         fit_mode=te_fit_mode,
         edge_smooth_iter=te_edge,
+        progress_cb=_truth_export_progress,
+        write_overlays=te_write_overlays,
+        overlay_stride=te_overlay_stride,
     )
 
     quant_meta = run_quantification_from_truth(

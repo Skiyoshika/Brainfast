@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from project.scripts.whole_brain_3d import (
+    _apply_refinement_field_to_annotation_volume,
     _extrapolate_annotation_to_tissue,
     run_whole_brain_3d,
 )
@@ -140,6 +141,32 @@ def test_run_whole_brain_3d_emits_expected_stage_sequence(tmp_path, monkeypatch)
     assert result["truth_source"] == "3d_registered_volume"
 
 
+def test_refinement_annotation_is_resampled_to_field_reference_grid(tmp_path):
+    """fixed_max_dim puts Laplacian on the ANTs grid; annotation must follow."""
+    annotation_path = tmp_path / "annotation_native.nii.gz"
+    reference_path = tmp_path / "ants_result.nii.gz"
+    field_path = tmp_path / "field.npy"
+    output_path = tmp_path / "annotation_refined.nii.gz"
+
+    annotation = np.zeros((6, 4, 4), dtype=np.int16)
+    annotation[2:5, 1:3, 1:3] = 7
+    nib.save(nib.Nifti1Image(annotation, np.eye(4)), str(annotation_path))
+    nib.save(nib.Nifti1Image(np.zeros((3, 2, 2), dtype=np.float32), np.diag([2, 2, 2, 1])), str(reference_path))
+    np.save(field_path, np.zeros((3, 3, 2, 2), dtype=np.float32))
+
+    result = _apply_refinement_field_to_annotation_volume(
+        annotation_path=annotation_path,
+        field_path=field_path,
+        output_path=output_path,
+        field_reference_path=reference_path,
+    )
+
+    refined = nib.load(str(result))
+    assert refined.shape == (3, 2, 2)
+    assert np.count_nonzero(np.asarray(refined.dataobj)) > 0
+    assert (tmp_path / "annotation_refined_resampled_to_laplacian.nii.gz").exists()
+
+
 def test_run_whole_brain_3d_passes_tuned_params_to_truth_export(tmp_path, monkeypatch):
     """Task 2 — the default whole-brain path must carry learned
     ``warp_params`` / ``fit_mode`` / ``edge_smooth_iter`` through to
@@ -228,6 +255,86 @@ def test_run_whole_brain_3d_passes_tuned_params_to_truth_export(tmp_path, monkey
     assert kw.get("fit_mode") == "contain"
     assert kw.get("edge_smooth_iter") == 3
     assert kw.get("warp_params", {}).get("custom_knob") == 0.42
+    assert callable(kw.get("progress_cb"))
+
+
+def test_run_whole_brain_3d_passes_truth_export_mode_settings(tmp_path, monkeypatch):
+    input_dir = tmp_path / "input"
+    outputs_dir = tmp_path / "outputs"
+    input_dir.mkdir()
+    outputs_dir.mkdir()
+    slice_path = input_dir / "z0000.tif"
+    slice_path.write_bytes(b"")
+
+    dummy_path = outputs_dir / "dummy.nii.gz"
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d.build_volume_from_tiffs",
+        lambda **kw: {"volume_path": dummy_path, "shape": [1, 2, 2]},
+    )
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d.prepare_half_template_inputs",
+        lambda **kw: {"template_path": dummy_path, "annotation_path": dummy_path},
+    )
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d.run_ants_registration",
+        lambda **kw: {
+            "registered_volume": dummy_path,
+            "metrics_csv": outputs_dir / "registration_metrics.csv",
+            "summary_txt": outputs_dir / "registration_summary.txt",
+        },
+    )
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d.refine_registered_volume",
+        lambda **kw: {
+            "final_registered_path": dummy_path,
+            "field_path": outputs_dir / "laplacian_deformation_field.npy",
+            "metrics_csv": outputs_dir / "refinement_metrics.csv",
+        },
+    )
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d._apply_refinement_field_to_annotation_volume",
+        lambda **kw: outputs_dir / "annotation_refined.nii.gz",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d._warp_annotation_volume_to_input_space",
+        lambda **kw: outputs_dir / "annotation_registered.nii.gz",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d._extrapolate_annotation_to_tissue",
+        lambda **kw: kw.get("annotation_path", outputs_dir / "annotation_registered.nii.gz"),
+        raising=False,
+    )
+    export_calls: list[dict] = []
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d.export_registered_truth_slices",
+        lambda **kw: export_calls.append(kw) or [],
+    )
+    monkeypatch.setattr(
+        "project.scripts.whole_brain_3d.run_quantification_from_truth",
+        lambda **kw: {"leaf_csv": "ignored.csv"},
+    )
+
+    run_whole_brain_3d(
+        cfg={
+            "input": {"pixel_size_um_xy": 5.0, "slice_spacing_um": 25.0},
+            "registration": {"atlas_hemisphere": "left", "ml_flip": False},
+            "truth_export": {
+                "overlay_stride": 20,
+                "write_overlays": True,
+                "profile": "fast_qc",
+            },
+            "quantify_fn": lambda **kw: {},
+        },
+        input_dir=input_dir,
+        outputs_dir=outputs_dir,
+        merged_slice_paths=[slice_path],
+    )
+
+    assert len(export_calls) == 1
+    assert export_calls[0]["overlay_stride"] == 20
+    assert export_calls[0]["write_overlays"] is True
 
 
 def test_run_whole_brain_3d_reuses_registration_from_prior_dir(tmp_path, monkeypatch):
@@ -334,6 +441,11 @@ def test_run_whole_brain_3d_reuses_registration_from_prior_dir(tmp_path, monkeyp
     # though the annotation paths came from the prior C0 dir
     assert len(quant_calls) == 1
     assert quant_calls[0]["input_dir"] == input_dir
+    assert (outputs_dir / "ants_registration" / "annotation_registered.nii.gz").exists()
+    assert (outputs_dir / "laplacian_refinement" / "annotation_refined.nii.gz").exists()
+    assert (
+        outputs_dir / "laplacian_refinement" / "laplacian_deformation_field.npy"
+    ).exists()
     # ants_meta / refine_meta should reference prior dir paths so truth
     # export artifacts are consistent with C0's registration
     reused_ants = quant_calls[0]["ants_meta"]

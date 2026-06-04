@@ -127,6 +127,72 @@ def test_run_real_input_routes_whole_brain_mode_to_3d_orchestrator(tmp_path, mon
     assert route_hit["quantify_kwargs"]["outputs_dir"].name == "outputs"
 
 
+def test_run_real_input_preserves_truth_export_mode_settings(tmp_path, monkeypatch):
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    (input_dir / "z0000.tif").write_bytes(b"")
+
+    route_hit: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        main, "_collect_slice_files", lambda *_args, **_kwargs: [input_dir / "z0000.tif"]
+    )
+    monkeypatch.setattr(
+        main,
+        "_extract_channel_to_tmp",
+        lambda *_args, **_kwargs: [tmp_path / "tmp_channel" / "z0000.tif"],
+    )
+    monkeypatch.setattr(
+        main,
+        "merge_every_n_slices",
+        lambda *_args, **_kwargs: [tmp_path / "tmp_merged" / "z0000.tif"],
+    )
+    monkeypatch.setattr(
+        main,
+        "_load_tuned_overlay_params",
+        lambda *_args, **_kwargs: ({"from_tuned": True}, "contain", 2),
+    )
+    monkeypatch.setattr(
+        main,
+        "_snapshot_tuned_params_into_job",
+        lambda *_args, **_kwargs: None,
+    )
+
+    def fake_run_whole_brain_3d(**kwargs):
+        route_hit["truth_export"] = dict(kwargs["cfg"]["truth_export"])
+        return {"truth_source": "3d_registered_volume"}
+
+    monkeypatch.setattr(main, "run_whole_brain_3d", fake_run_whole_brain_3d, raising=False)
+
+    main.run_real_input(
+        cfg={
+            "input": {
+                "slice_glob": "*.tif",
+                "slice_interval_n": 1,
+            },
+            "registration": {
+                "scope": "whole",
+                "whole_brain_backend": "miki_3d",
+            },
+            "truth_export": {
+                "overlay_stride": 20,
+                "write_overlays": True,
+                "profile": "fast_qc",
+            },
+        },
+        input_dir=input_dir,
+        outputs_dir=tmp_path / "outputs",
+    )
+
+    truth = route_hit["truth_export"]
+    assert truth["overlay_stride"] == 20
+    assert truth["write_overlays"] is True
+    assert truth["profile"] == "fast_qc"
+    assert truth["warp_params"] == {"from_tuned": True}
+    assert truth["fit_mode"] == "contain"
+    assert truth["edge_smooth_iter"] == 2
+
+
 def test_quantify_passes_axis_alignment_matrix_to_cell_to_ccf(tmp_path, monkeypatch):
     import nibabel as nib
     import pandas as pd

@@ -127,6 +127,7 @@ class ClassPriorStore:
         pairs,
         *,
         metrics: dict | None = None,
+        source_control_types: list[str] | None = None,
     ) -> None:
         """Merge one sample's landmark pairs into the running-mean store.
 
@@ -140,6 +141,9 @@ class ClassPriorStore:
         metrics
             Optional metrics dict recorded alongside the sample log entry
             (e.g. post-registration NCC/Dice from the run).
+        source_control_types
+            Optional control source labels such as ``["landmark"]``,
+            ``["stroke"]``, or both. Stored in the sample log for auditability.
         """
         self._class_dir.mkdir(parents=True, exist_ok=True)
         # Iterator-safe: materialize once. The sample_log count at the end
@@ -152,6 +156,7 @@ class ClassPriorStore:
                 pair_count=len(pair_list),
                 metrics=metrics,
                 kind="prior_update_duplicate_ignored",
+                source_control_types=source_control_types,
             )
             return
         raw_entries = self._load_raw_entries()
@@ -187,6 +192,7 @@ class ClassPriorStore:
             pair_count=len(pair_list),
             metrics=metrics,
             kind="prior_update",
+            source_control_types=source_control_types,
         )
 
     # ----- Warm-start application -----
@@ -318,12 +324,14 @@ class ClassPriorStore:
         pair_count: int,
         metrics: dict | None,
         kind: str,
+        source_control_types: list[str] | None = None,
     ) -> None:
         rec = {
             "kind": str(kind),
             "sample_id": str(sample_id),
             "pair_count": int(pair_count),
             "metrics": dict(metrics) if metrics else None,
+            "source_control_types": list(source_control_types or ["landmark"]),
         }
         with self._sample_log.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")

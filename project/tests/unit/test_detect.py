@@ -368,6 +368,9 @@ def test_cellpose_v4_does_not_pass_channels(tiny_slice, monkeypatch):
     assert "channels" not in call_kwargs, (
         f"v4 path must NOT pass 'channels' to eval, got: {call_kwargs}"
     )
+    assert "tile" not in call_kwargs, (
+        f"current CellposeModel.eval does not accept 'tile'; got: {call_kwargs}"
+    )
 
 
 def test_cellpose_v3_passes_channels(tiny_slice, monkeypatch):
@@ -392,6 +395,20 @@ def test_cellpose_v3_passes_channels(tiny_slice, monkeypatch):
         f"v3 legacy path must pass 'channels' to eval, got: {call_kwargs}"
     )
     assert call_kwargs["channels"] == [1, 0]
+
+
+def test_masks_to_centroids_resizes_masks_to_intensity_shape():
+    """Cellpose v4 may return masks on its internal resized grid."""
+    import project.scripts.detect as dm
+
+    masks = np.array([[0, 1], [0, 1]], dtype=np.int32)
+    intensity = np.ones((4, 4), dtype=np.float32)
+
+    df = dm._masks_to_centroids(masks, "cellpose_cpsam", intensity_image=intensity)
+
+    assert len(df) == 1
+    assert float(df["x"].iloc[0]) > 1.0
+    assert float(df["mean_intensity"].iloc[0]) == 1.0
 
 
 def test_cellpose_v3_four_value_eval_return(tiny_slice, monkeypatch):

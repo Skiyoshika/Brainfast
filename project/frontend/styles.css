@@ -1185,6 +1185,114 @@ tr:hover td { background: var(--bg-card); }
 .region-tip-row { color: #b6c8eb; }
 .region-tip-row b { color: #e6efff; font-weight: 700; }
 
+/* ===== 3D LIQUIFY BRUSH ===== */
+.liq3d-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.liq3d-mode-toggle,
+.liq3d-brush-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.liq3d-mode-toggle {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+.liq3d-mode-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.liq3d-tool-label,
+.liq3d-brush-control span:first-child {
+  color: var(--text-hint);
+  font-size: 12px;
+}
+.liq3d-brush-control input[type="range"] {
+  width: 120px;
+}
+.liq3d-brush-control input[type="number"] {
+  width: 64px;
+}
+#liq3dCanvasWrap {
+  position: relative;
+  margin-top: 12px;
+  max-width: 100%;
+  overflow: auto;
+  line-height: 0;
+  background: #0d0d0f;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+#liq3dImg {
+  display: block;
+  max-width: 100%;
+}
+#liq3dOverlayImg,
+#liq3dCanvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 100%;
+}
+#liq3dOverlayImg {
+  display: none;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+#liq3dCanvas {
+  cursor: none;
+  touch-action: none;
+}
+.liq3d-strokes-panel {
+  margin-top: 14px;
+}
+.liq3d-strokes-panel h3 {
+  font-size: 14px;
+  margin: 0 0 6px 0;
+}
+.liq3d-table-wrap {
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--border, #333);
+  border-radius: 4px;
+}
+.liq3d-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.liq3d-table thead {
+  background: var(--bg-alt, #222);
+}
+.liq3d-table th,
+.liq3d-table td {
+  padding: 4px;
+}
+@media (max-width: 800px) {
+  .liq3d-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .liq3d-mode-toggle,
+  .liq3d-brush-control {
+    width: 100%;
+  }
+  .liq3d-brush-control input[type="range"] {
+    flex: 1;
+    min-width: 120px;
+  }
+}
+
 /* overlay controls row */
 .overlay-controls {
   display: flex;

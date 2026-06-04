@@ -588,8 +588,18 @@ def _quantify_against_exported_truth(
         from scripts.cell_to_ccf import map_cells_via_ccf_transform
 
         try:
-            ccf_template_path = reg_cfg.get("template_path") or ants_meta.get("fixed_image")
-            ccf_annotation_path = reg_cfg.get("annotation_path") or ""
+            # BLOCKER D fix (2026-05-05): prefer the actual fixed image + annotation
+            # ANTs registered against (typically the HALF template/annotation when
+            # atlas_hemisphere=right_flipped/left_flipped), NOT the full bilateral
+            # template/annotation in reg_cfg. Using bilateral here produces a
+            # ~228-voxel x-axis shift and 100% outside-atlas cell mapping —
+            # the half-template's spacing/origin matches the inverse transforms.
+            # The annotation must match the template's coord frame; the full
+            # bilateral annotation is rejected here for the same reason.
+            ccf_template_path = ants_meta.get("fixed_image") or reg_cfg.get("template_path")
+            ccf_annotation_path = (
+                ants_meta.get("ccf_annotation_path") or reg_cfg.get("annotation_path") or ""
+            )
             if not ccf_template_path or not Path(str(ccf_template_path)).exists():
                 raise FileNotFoundError(f"ccf template not found: {ccf_template_path!r}")
             if not ccf_annotation_path or not Path(str(ccf_annotation_path)).exists():
@@ -735,11 +745,15 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
         _snapshot_tuned_params_into_job(
             outputs_dir, project_root=project_root, resolved=(_warp_params, _fit_mode, _edge)
         )
-        cfg["truth_export"] = {
-            "warp_params": dict(_warp_params),
-            "fit_mode": _fit_mode,
-            "edge_smooth_iter": int(_edge),
-        }
+        truth_export_cfg = dict(cfg.get("truth_export", {}) or {})
+        truth_export_cfg.update(
+            {
+                "warp_params": dict(_warp_params),
+                "fit_mode": _fit_mode,
+                "edge_smooth_iter": int(_edge),
+            }
+        )
+        cfg["truth_export"] = truth_export_cfg
         return run_whole_brain_3d(
             cfg=cfg,
             input_dir=input_dir,

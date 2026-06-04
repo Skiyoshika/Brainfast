@@ -537,6 +537,11 @@ const LANGS = {
     'newsample.extractOutDir': 'Output dir',
     'newsample.extract': 'Extract slices',
     'newsample.channel': 'Channel',
+    'newsample.registrationMode': 'Registration mode',
+    'newsample.modeStandard': 'Standard · release default',
+    'newsample.modeFastQc': 'Fast QC · sampled overlays',
+    'newsample.modeHighAccuracy': 'High Accuracy · finer 3D grid',
+    'newsample.registrationModeHint': 'Fast QC saves time on QC overlays; High Accuracy uses a finer 3D registration grid.',
     'newsample.launch': 'Step 3. Generate config & start pipeline',
     'newsample.addSecondChannel': 'Add second channel',
     'newsample.secondChannelHint': 'Runs only detection (~15 min) on the 2nd channel — reuses the first channel\'s registration. Both channels become overlay-able in 3D Liquify.',
@@ -565,11 +570,21 @@ const LANGS = {
     // ----- 3D Liquify -----
     'nav.liquify3d': '3D Liquify',
     'liquify3d.title': '3D Landmark Liquify',
-    'liquify3d.hint': 'Click on the overlay: first click marks where the atlas region currently sits, second click marks where the real anatomy actually is.',
+    'liquify3d.hint': 'Brush mode: drag the atlas boundary toward the real anatomy. Landmark mode remains available for precise point-pair correction.',
     'liquify3d.jobLabel': 'Job ID',
     'liquify3d.reload': 'Reload slice list',
     'liquify3d.noSlices': 'No slices loaded',
     'liquify3d.z': 'z =',
+    'liquify3d.toolLabel': 'Tool:',
+    'liquify3d.toolBrush': 'Brush',
+    'liquify3d.toolLandmark': 'Landmark',
+    'liquify3d.brushRadius': 'Radius',
+    'liquify3d.brushStrength': 'Strength',
+    'liquify3d.strokesTitle': 'Brush strokes',
+    'liquify3d.strokePoints': 'Points',
+    'liquify3d.strokeCount': 'Strokes',
+    'liquify3d.radiusHdr': 'Radius',
+    'liquify3d.strengthHdr': 'Strength',
     'liquify3d.modeLabel': 'Next click:',
     'liquify3d.modeAtlas': 'Atlas (where region currently is)',
     'liquify3d.modeReal': 'Real (where it should be)',
@@ -582,6 +597,10 @@ const LANGS = {
     'liquify3d.finalize': 'Finalize & re-export cell counts',
     'liquify3d.qcDone': 'Mark QC done',
     'liquify3d.qcNote': 'QC note',
+    'liquify3d.qcNotePh': 'optional',
+    'liquify3d.qcStatusNotYet': 'Not yet signed off.',
+    'liquify3d.qcStatusRecording': 'Recording sign-off…',
+    'liquify3d.qcStatusDone': '✓ QC done @ {ts}',
     'liquify3d.classLabel': 'Class',
     'liquify3d.priorStatus': 'Prior status',
     'liquify3d.saveToPrior': 'Save job → class prior',
@@ -1123,6 +1142,11 @@ const LANGS = {
     'newsample.extractOutDir': '输出目录',
     'newsample.extract': '拆切片',
     'newsample.channel': '通道',
+    'newsample.registrationMode': '配准模式',
+    'newsample.modeStandard': '标准 · 发布默认',
+    'newsample.modeFastQc': '快速 QC · 抽样叠加图',
+    'newsample.modeHighAccuracy': '高精度 · 更细 3D 网格',
+    'newsample.registrationModeHint': '快速 QC 减少 QC 叠加图等待；高精度使用更细的 3D 配准网格。',
     'newsample.launch': '步骤 3。生成配置并启动管线',
     'newsample.addSecondChannel': '添加第二通道',
     'newsample.secondChannelHint': '仅对第二通道跑检测（约 15 分钟）— 复用第一通道的配准结果。两个通道都能在 3D Liquify 里叠加查看。',
@@ -1151,11 +1175,21 @@ const LANGS = {
     // ----- 3D 液化 -----
     'nav.liquify3d': '3D 液化',
     'liquify3d.title': '3D 地标液化',
-    'liquify3d.hint': '在叠图上点击：第一次标记图谱区域当前位置，第二次标记实际解剖位置。',
+    'liquify3d.hint': '画笔模式：按住并拖动，把图谱边界推到真实解剖位置。地标点模式仍可用于精确点对校正。',
     'liquify3d.jobLabel': '作业 ID',
     'liquify3d.reload': '重新加载切片列表',
     'liquify3d.noSlices': '尚未加载切片',
     'liquify3d.z': 'z =',
+    'liquify3d.toolLabel': '工具：',
+    'liquify3d.toolBrush': '画笔',
+    'liquify3d.toolLandmark': '地标点',
+    'liquify3d.brushRadius': '半径',
+    'liquify3d.brushStrength': '力度',
+    'liquify3d.strokesTitle': '画笔笔画',
+    'liquify3d.strokePoints': '点数',
+    'liquify3d.strokeCount': '笔画',
+    'liquify3d.radiusHdr': '半径',
+    'liquify3d.strengthHdr': '力度',
     'liquify3d.modeLabel': '下一次点击：',
     'liquify3d.modeAtlas': '图谱（区域当前所在）',
     'liquify3d.modeReal': '实际（应该在的位置）',
@@ -1168,6 +1202,10 @@ const LANGS = {
     'liquify3d.finalize': '完成并重新导出细胞计数',
     'liquify3d.qcDone': '标记 QC 完成',
     'liquify3d.qcNote': 'QC 备注',
+    'liquify3d.qcNotePh': '可选',
+    'liquify3d.qcStatusNotYet': '尚未签收',
+    'liquify3d.qcStatusRecording': '正在记录签收…',
+    'liquify3d.qcStatusDone': '✓ QC 已完成 @ {ts}',
     'liquify3d.classLabel': '类别',
     'liquify3d.priorStatus': '先验状态',
     'liquify3d.saveToPrior': '把作业存入类别先验',
@@ -1200,6 +1238,14 @@ function t(key, vars) {
   return str;
 }
 
+// Hooks invoked after applyLang() so dynamically-set strings (status badges,
+// JS-built texts) can re-render in the new language. Modules register via
+// registerLangHook(fn) when they boot.
+window._langHooks = window._langHooks || [];
+function registerLangHook(fn) {
+  if (typeof fn === 'function') window._langHooks.push(fn);
+}
+
 function applyLang(lang) {
   currentLang = lang || 'en';
   localStorage.setItem('brainfast.lang', currentLang);
@@ -1224,6 +1270,11 @@ function applyLang(lang) {
   });
   // Re-initialize Lucide icons after i18n innerHTML updates
   if (typeof lucide !== 'undefined') lucide.createIcons();
+  // Issue 4 fix (2026-05-05): give modules a chance to re-render dynamic strings
+  // (e.g. liquify QC status) that aren't covered by data-i18n attributes.
+  for (var i = 0; i < window._langHooks.length; i++) {
+    try { window._langHooks[i](currentLang); } catch (e) { /* ignore hook errors */ }
+  }
 }
 
 // Language toggle buttons
@@ -4632,6 +4683,7 @@ let drawStartY      = 0;
 let annotations     = [];   // stored vector annotations
 let pendingTextPos  = null;
 let liquifyBusy     = false;
+let liquifyStrokePoints = [];
 let calibLearnPollTimer = null;
 
 // Tool selection
@@ -4654,6 +4706,31 @@ function getLiquifyRadius() {
 function getLiquifyStrength() {
   const v = Number(liquifyStrengthEl?.value ?? 0.72);
   return Math.max(0.05, Math.min(1.5, Number.isFinite(v) ? v : 0.72));
+}
+
+function sampleLiquifyStrokePoint(x, y) {
+  const last = liquifyStrokePoints[liquifyStrokePoints.length - 1];
+  if (last && Math.hypot(x - last.x, y - last.y) < 3) return;
+  liquifyStrokePoints.push({ x: Number(x), y: Number(y) });
+}
+
+function buildLiquifyDragBatch(points, radius, strength) {
+  const drags = [];
+  for (let i = 1; i < points.length; i += 1) {
+    const a = points[i - 1];
+    const b = points[i];
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    if (dist < 1.5) continue;
+    drags.push({
+      x1: a.x,
+      y1: a.y,
+      x2: b.x,
+      y2: b.y,
+      radius,
+      strength,
+    });
+  }
+  return drags;
 }
 
 function buildOverlayRequestPayload(modeOverride = null) {
@@ -4915,22 +4992,16 @@ function drawPreviewStroke(x2, y2) {
   ctx.restore();
 }
 
-async function applyLiquifyDrag(x1, y1, x2, y2) {
-  if (liquifyBusy) return;
-  const dist = Math.hypot(x2 - x1, y2 - y1);
-  if (dist < 2.0) return;
+async function applyLiquifyDragBatch(drags) {
+  if (liquifyBusy || !Array.isArray(drags) || !drags.length) return;
 
   const payload = buildOverlayRequestPayload();
   if (!payload.realPath) {
     showToast(t('toast.setRealSliceFirst'), 'warning');
     return;
   }
-  payload.x1 = Number(x1);
-  payload.y1 = Number(y1);
-  payload.x2 = Number(x2);
-  payload.y2 = Number(y2);
-  payload.radius = getLiquifyRadius();
-  payload.strength = getLiquifyStrength();
+  payload.drags = drags;
+  if (!payload.drags.length) return;
   payload.jobId = getOverlayJobId();
 
   liquifyBusy = true;
@@ -4951,12 +5022,25 @@ async function applyLiquifyDrag(x1, y1, x2, y2) {
     await loadPreviewIntoCanvas();
     hoverLastPixelKey = '';
     hideRegionTooltip();
-    showToast(`Liquify applied (${dist.toFixed(1)} px).`, 'success', 1600);
+    showToast(`Liquify applied (${payload.drags.length} segment${payload.drags.length === 1 ? '' : 's'}).`, 'success', 1600);
   } catch (e) {
     showToast(`Liquify failed: ${e?.message || '?'}`, 'error');
   } finally {
     liquifyBusy = false;
   }
+}
+
+async function applyLiquifyDrag(x1, y1, x2, y2) {
+  const dist = Math.hypot(x2 - x1, y2 - y1);
+  if (dist < 2.0) return;
+  await applyLiquifyDragBatch(buildLiquifyDragBatch(
+    [
+      { x: Number(x1), y: Number(y1) },
+      { x: Number(x2), y: Number(y2) },
+    ],
+    getLiquifyRadius(),
+    getLiquifyStrength(),
+  ));
 }
 
 async function pollCalibrationLearnStatus() {
@@ -4989,9 +5073,18 @@ function canvasCoords(e) {
   return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
 }
 
-drawCanvas.addEventListener('mousedown', e => {
+drawCanvas.addEventListener('pointerdown', e => {
   if (currentTool === 'select') return;
   const { x, y } = canvasCoords(e);
+  if (currentTool === 'liquify') {
+    isDrawing = true;
+    liquifyStrokePoints = [];
+    sampleLiquifyStrokePoint(x, y);
+    drawStartX = x;
+    drawStartY = y;
+    drawCanvas.setPointerCapture?.(e.pointerId);
+    return;
+  }
   if (currentTool === 'text') {
     const txt = prompt(t('text.dialog'));
     if (txt) {
@@ -5014,10 +5107,17 @@ drawCanvas.addEventListener('mousedown', e => {
   drawStartX = x; drawStartY = y;
 });
 
-drawCanvas.addEventListener('mousemove', e => {
+drawCanvas.addEventListener('pointermove', e => {
   const { x, y } = canvasCoords(e);
   const px = Math.round(x);
   const py = Math.round(y);
+
+  if (isDrawing && currentTool === 'liquify') {
+    sampleLiquifyStrokePoint(x, y);
+    drawPreviewStroke(x, y);
+    hideRegionTooltip();
+    return;
+  }
 
   if (isDrawing) {
     drawPreviewStroke(x, y);
@@ -5048,17 +5148,23 @@ drawCanvas.addEventListener('mouseleave', () => {
   hideRegionTooltip();
 });
 
-drawCanvas.addEventListener('mouseup', e => {
+drawCanvas.addEventListener('pointerup', e => {
   if (!isDrawing) return;
-  isDrawing = false;
   const { x, y } = canvasCoords(e);
-  const dx = x - drawStartX, dy = y - drawStartY;
-  if (Math.sqrt(dx*dx + dy*dy) < 3) return; // ignore tiny clicks
   if (currentTool === 'liquify') {
-    applyLiquifyDrag(drawStartX, drawStartY, x, y);
+    sampleLiquifyStrokePoint(x, y);
+    isDrawing = false;
+    drawCanvas.releasePointerCapture?.(e.pointerId);
+    const points = liquifyStrokePoints.slice();
+    liquifyStrokePoints = [];
+    const drags = buildLiquifyDragBatch(points, getLiquifyRadius(), getLiquifyStrength());
+    applyLiquifyDragBatch(drags);
     redrawAnnotations();
     return;
   }
+  isDrawing = false;
+  const dx = x - drawStartX, dy = y - drawStartY;
+  if (Math.sqrt(dx*dx + dy*dy) < 3) return; // ignore tiny clicks
   annotations.push({ type: currentTool, x1: drawStartX, y1: drawStartY, x2: x, y2: y, color: getDrawColor(), lw: getDrawLineWidth() });
   redrawAnnotations();
 });
@@ -6513,8 +6619,13 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
     pendingAtlas: null,    // { y, x } in image-native pixel coords
     pendingReal: null,
     clickMode: 'atlas',
+    toolMode: 'brush',
     imageNaturalSize: { h: 0, w: 0 },
     pairs: [],
+    strokes: [],
+    brushStrokePoints: [],
+    isBrushDragging: false,
+    brushPreviewPoint: null,
   };
 
   // localStorage key for tab state — survives browser reloads and tab
@@ -6529,6 +6640,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
           className: el('liq3dClassName')?.value || '',
           currentZ: state.currentZ,
           clickMode: state.clickMode,
+          toolMode: state.toolMode,
         }),
       );
     } catch (_) { /* private mode etc. — ignore */ }
@@ -6545,6 +6657,13 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
         state.clickMode = s.clickMode;
         const r = document.querySelector(
           `input[name="liq3dClickMode"][value="${state.clickMode}"]`,
+        );
+        if (r) r.checked = true;
+      }
+      if (s.toolMode === 'landmark' || s.toolMode === 'brush') {
+        state.toolMode = s.toolMode;
+        const r = document.querySelector(
+          `input[name="liq3dToolMode"][value="${state.toolMode}"]`,
         );
         if (r) r.checked = true;
       }
@@ -6568,6 +6687,14 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   const applyStatus= el('liq3dApplyStatus');
   const pairsBody  = el('liq3dPairsBody');
   const pairCountEl = el('liq3dPairCount');
+  const strokeCountEl = el('liq3dStrokeCount');
+  const strokeCountBottomEl = el('liq3dStrokeCountBottom');
+  const brushRadius = el('liq3dBrushRadius');
+  const brushRadiusNum = el('liq3dBrushRadiusNum');
+  const brushStrength = el('liq3dBrushStrength');
+  const brushStrengthNum = el('liq3dBrushStrengthNum');
+  const landmarkRow = el('liq3dLandmarkRow');
+  const strokesBody = el('liq3dStrokesBody');
   const overlayRow      = el('liq3dOverlayRow');
   const overlayToggle   = el('liq3dOverlayToggle');
   const overlayChannel  = el('liq3dOverlayChannel');
@@ -6580,14 +6707,37 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
     return (jobInput.value || '').trim() || 'default';
   }
 
+  function get3dBrushRadius(rawValue = null) {
+    const v = Number(rawValue ?? brushRadius?.value ?? brushRadiusNum?.value ?? 80);
+    return Math.max(8, Math.min(260, Number.isFinite(v) ? v : 80));
+  }
+
+  function get3dBrushStrength() {
+    const pct = Number(brushStrength?.value || 72);
+    return Math.max(0.05, Math.min(1.5, Number.isFinite(pct) ? pct / 100 : 0.72));
+  }
+
+  function sample3dBrushPoint(x, y) {
+    const last = state.brushStrokePoints[state.brushStrokePoints.length - 1];
+    if (last && Math.hypot(x - last.x, y - last.y) < 3) return;
+    state.brushStrokePoints.push({ x: Number(x), y: Number(y) });
+  }
+
+  function syncToolModeUi() {
+    if (landmarkRow) landmarkRow.style.display = state.toolMode === 'landmark' ? '' : 'none';
+    if (canvas) canvas.style.cursor = state.toolMode === 'brush' ? 'none' : 'crosshair';
+  }
+
   async function refreshState() {
     try {
       const resp = await fetch(`/api/liquify-3d/state?job=${encodeURIComponent(currentJobId())}`);
       const data = await resp.json();
       if (!data.ok) throw new Error(data.error || 'state failed');
       state.pairs = data.pairs || [];
+      state.strokes = data.strokes || [];
       state.annotationShape = data.annotation_shape || null;
       renderPairsTable();
+      renderStrokeHistory();
       // Empty-state guidance: if the source annotation isn't available for
       // this job, surface an actionable message instead of a blank canvas.
       if (data.guidance) {
@@ -6657,8 +6807,9 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       pairsBody.appendChild(tr);
     });
     pairCountEl.textContent = String(state.pairs.length);
-    applyBtn.disabled = state.pairs.length === 0;
-    clearBtn.disabled = state.pairs.length === 0;
+    const actionCount = state.pairs.length + state.strokes.length;
+    applyBtn.disabled = actionCount === 0;
+    clearBtn.disabled = actionCount === 0;
     pairsBody.querySelectorAll('.liq3d-remove-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const idx = parseInt(btn.getAttribute('data-idx'), 10);
@@ -6667,6 +6818,42 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
             method: 'DELETE',
           });
           refreshState();
+          redraw();
+        } catch (e) { console.error(e); }
+      });
+    });
+  }
+
+  function renderStrokeHistory() {
+    if (strokeCountEl) strokeCountEl.textContent = String(state.strokes.length);
+    if (strokeCountBottomEl) strokeCountBottomEl.textContent = String(state.strokes.length);
+    if (!strokesBody) return;
+    strokesBody.innerHTML = '';
+    state.strokes.forEach((s, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${i + 1}</td>
+        <td>${s.z}</td>
+        <td>${s.point_count || (s.points || []).length}</td>
+        <td>${Number(s.radius || 0).toFixed(0)}</td>
+        <td>${Number(s.strength || 0).toFixed(2)}</td>
+        <td>
+          <button type="button" data-idx="${i}" class="liq3d-remove-stroke-btn"
+            style="background:transparent;color:var(--danger,#f55);border:none;cursor:pointer;">&times;</button>
+        </td>`;
+      strokesBody.appendChild(tr);
+    });
+    const actionCount = state.pairs.length + state.strokes.length;
+    applyBtn.disabled = actionCount === 0;
+    clearBtn.disabled = actionCount === 0;
+    strokesBody.querySelectorAll('.liq3d-remove-stroke-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const idx = parseInt(btn.getAttribute('data-idx'), 10);
+        try {
+          await fetch(`/api/liquify-3d/stroke/${idx}?job=${encodeURIComponent(currentJobId())}`, {
+            method: 'DELETE',
+          });
+          await refreshState();
           redraw();
         } catch (e) { console.error(e); }
       });
@@ -6814,7 +7001,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
     };
   }
 
-  canvas.addEventListener('click', async (e) => {
+  async function handleLandmarkClick(e) {
     if (!state.sliceFiles.length) return;
     const { x, y } = canvasToImageCoords(e);
     if (state.clickMode === 'atlas') {
@@ -6852,6 +7039,77 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       }
     }
     redraw();
+  }
+
+  async function postLiquify3dStroke(points) {
+    if (!Array.isArray(points) || points.length < 2) return;
+    pendingStatus.textContent = 'Saving brush stroke...';
+    try {
+      const resp = await fetch('/api/liquify-3d/stroke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: currentJobId(),
+          z: state.currentZ,
+          points,
+          radius: get3dBrushRadius(),
+          strength: get3dBrushStrength(),
+          image_dims_yx: [state.imageNaturalSize.h, state.imageNaturalSize.w],
+        }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'stroke failed');
+      pendingStatus.textContent = `Brush stroke added (${data.stroke_count} total).`;
+      await refreshState();
+      redraw();
+    } catch (err) {
+      pendingStatus.textContent = 'Stroke failed: ' + err.message;
+    }
+  }
+
+  function liq3dPointerDown(e) {
+    if (!state.sliceFiles.length || state.toolMode !== 'brush') return;
+    e.preventDefault();
+    const { x, y } = canvasToImageCoords(e);
+    state.isBrushDragging = true;
+    state.brushStrokePoints = [];
+    state.brushPreviewPoint = { x, y };
+    sample3dBrushPoint(x, y);
+    canvas.setPointerCapture?.(e.pointerId);
+    redraw();
+  }
+
+  function liq3dPointerMove(e) {
+    if (!state.sliceFiles.length || state.toolMode !== 'brush') return;
+    const { x, y } = canvasToImageCoords(e);
+    state.brushPreviewPoint = { x, y };
+    if (state.isBrushDragging) sample3dBrushPoint(x, y);
+    redraw();
+  }
+
+  function liq3dPointerUp(e) {
+    if (!state.isBrushDragging || state.toolMode !== 'brush') return;
+    e.preventDefault();
+    const { x, y } = canvasToImageCoords(e);
+    sample3dBrushPoint(x, y);
+    canvas.releasePointerCapture?.(e.pointerId);
+    state.isBrushDragging = false;
+    const points = state.brushStrokePoints.slice();
+    state.brushStrokePoints = [];
+    postLiquify3dStroke(points);
+  }
+
+  canvas.addEventListener('pointerdown', liq3dPointerDown);
+  canvas.addEventListener('pointermove', liq3dPointerMove);
+  canvas.addEventListener('pointerup', liq3dPointerUp);
+  canvas.addEventListener('pointercancel', () => {
+    state.isBrushDragging = false;
+    state.brushStrokePoints = [];
+    state.brushPreviewPoint = null;
+    redraw();
+  });
+  canvas.addEventListener('click', (e) => {
+    if (state.toolMode === 'landmark') handleLandmarkClick(e);
   });
 
   function redraw() {
@@ -6873,10 +7131,49 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(String(i + 1), (p.atlas_x + p.real_x) / 2, (p.atlas_y + p.real_y) / 2 - 10);
     });
+    state.strokes.forEach((s, i) => {
+      if (s.z !== state.currentZ || !Array.isArray(s.points) || s.points.length < 2) return;
+      ctx.strokeStyle = 'rgba(0,255,255,0.85)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      s.points.forEach((p, idx) => {
+        const x = Number(p.x);
+        const y = Number(p.y);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      const first = s.points[0];
+      ctx.fillStyle = '#00ffff';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`S${i + 1}`, Number(first.x), Number(first.y) - 8);
+    });
+    if (state.isBrushDragging && state.brushStrokePoints.length > 1) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      state.brushStrokePoints.forEach((p, idx) => {
+        if (idx === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.stroke();
+    }
     if (state.pendingAtlas) {
       ctx.fillStyle = '#ff8800'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(state.pendingAtlas.x, state.pendingAtlas.y, DOT, 0, 2 * Math.PI);
       ctx.fill(); ctx.stroke();
+    }
+    if (state.toolMode === 'brush' && state.brushPreviewPoint) {
+      const p = state.brushPreviewPoint;
+      const r = get3dBrushRadius();
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
   }
 
@@ -6901,6 +7198,34 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
     });
   });
 
+  document.querySelectorAll('input[name="liq3dToolMode"]').forEach((r) => {
+    r.addEventListener('change', (e) => {
+      state.toolMode = e.target.value === 'landmark' ? 'landmark' : 'brush';
+      state.isBrushDragging = false;
+      state.brushStrokePoints = [];
+      state.brushPreviewPoint = null;
+      syncToolModeUi();
+      _saveTabState();
+      redraw();
+    });
+  });
+
+  brushRadius?.addEventListener('input', () => {
+    const v = get3dBrushRadius(brushRadius.value);
+    if (brushRadius) brushRadius.value = String(v);
+    if (brushRadiusNum) brushRadiusNum.value = String(v);
+    redraw();
+  });
+  brushRadiusNum?.addEventListener('change', () => {
+    const v = get3dBrushRadius(brushRadiusNum.value);
+    if (brushRadius) brushRadius.value = String(v);
+    if (brushRadiusNum) brushRadiusNum.value = String(v);
+    redraw();
+  });
+  brushStrength?.addEventListener('input', () => {
+    if (brushStrengthNum) brushStrengthNum.textContent = get3dBrushStrength().toFixed(2);
+  });
+
   // Persist job/class on change so reloads / tab switches don't wipe them.
   el('liq3dJobId')?.addEventListener('change', _saveTabState);
   el('liq3dClassName')?.addEventListener('change', _saveTabState);
@@ -6913,7 +7238,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   });
 
   clearBtn.addEventListener('click', async () => {
-    if (!confirm('Clear all landmark pairs for this job?')) return;
+    if (!confirm('Clear all landmark pairs and brush strokes for this job?')) return;
     try {
       await fetch('/api/liquify-3d/clear', {
         method: 'POST',
@@ -6954,7 +7279,36 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
     }
   }
 
-  el('liq3dUndoBtn')?.addEventListener('click', undoLastPair);
+  async function undoLastStroke() {
+    if (!state.strokes.length) {
+      pendingStatus.textContent = 'No brush stroke to undo.';
+      return;
+    }
+    const lastIdx = state.strokes.length - 1;
+    try {
+      const resp = await fetch(
+        `/api/liquify-3d/stroke/${lastIdx}?job=${encodeURIComponent(currentJobId())}`,
+        { method: 'DELETE' },
+      );
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'stroke undo failed');
+      pendingStatus.textContent = `Undid brush stroke #${lastIdx + 1}.`;
+      await refreshState();
+      redraw();
+    } catch (err) {
+      pendingStatus.textContent = 'Undo failed: ' + err.message;
+    }
+  }
+
+  async function undoLiquify3d() {
+    if (state.toolMode === 'brush') {
+      await undoLastStroke();
+    } else {
+      await undoLastPair();
+    }
+  }
+
+  el('liq3dUndoBtn')?.addEventListener('click', undoLiquify3d);
 
   document.addEventListener('keydown', (e) => {
     // Only react when the 3D Liquify tab is the visible one — avoid stealing
@@ -6965,17 +7319,19 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       const tag = (document.activeElement?.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea') return;
       e.preventDefault();
-      undoLastPair();
+      undoLiquify3d();
     }
   });
 
   applyBtn.addEventListener('click', async () => {
+    // BLOCKER A fix (2026-05-05): /apply is now async-by-default.
+    // The endpoint returns 202 immediately with mode='async'; we poll
+    // /api/liquify-3d/progress until stage='done' or stage='error'.
+    // Pre-fix the synchronous fetch could block ~36 min on full-res
+    // volumes and trigger browser/proxy timeouts mid-solve.
     applyStatus.textContent = 'Starting Laplacian warp…';
     applyBtn.disabled = true;
-    const cancelPoll = startProgressPoll((p) => {
-      applyStatus.textContent =
-        `[${p.percent}%] ${p.stage || ''}: ${p.message || ''}`.trim();
-    });
+    let pollCancel = null;
     try {
       const resp = await fetch('/api/liquify-3d/apply', {
         method: 'POST',
@@ -6984,14 +7340,34 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       });
       const data = await resp.json();
       if (!data.ok) throw new Error(data.error || 'apply failed');
-      applyStatus.textContent =
-        `Done. ${data.pair_count} pairs → max displacement ${data.displacement_max_voxels.toFixed(2)} voxels. ` +
-        `Refined annotation saved at ${data.output_path}`;
+      // 202 + mode='async' → poll /progress until done/error.
+      if (data.mode === 'async') {
+        applyStatus.textContent =
+          `Solving in background (${data.pair_count} pairs). ` +
+          `Full-res volumes can take 20–40 min; you can leave this tab open.`;
+        const finalProgress = await new Promise((resolve, reject) => {
+          pollCancel = startProgressPoll((p) => {
+            applyStatus.textContent =
+              `[${p.percent || 0}%] ${p.stage || ''}: ${p.message || ''}`.trim();
+            if (p.stage === 'done' && (p.percent || 0) >= 100) resolve(p);
+            else if (p.stage === 'error') reject(new Error(p.message || 'apply failed'));
+          });
+        });
+        applyStatus.textContent =
+          `Done. ${finalProgress.message || 'Refined annotation saved'}`;
+      } else {
+        // Legacy sync mode (unit tests / scripts opting into ?sync=true).
+        const dispMax = (typeof data.displacement_max_voxels === 'number')
+          ? data.displacement_max_voxels.toFixed(2) : '?';
+        applyStatus.textContent =
+          `Done. ${data.pair_count} pairs → max displacement ${dispMax} voxels. ` +
+          `Refined annotation saved at ${data.output_path}`;
+      }
     } catch (err) {
       applyStatus.textContent = 'Apply failed: ' + err.message;
     } finally {
-      cancelPoll();
-      applyBtn.disabled = state.pairs.length === 0;
+      if (pollCancel) pollCancel();
+      applyBtn.disabled = (state.pairs.length + state.strokes.length) === 0;
     }
   });
 
@@ -7044,10 +7420,13 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
           .filter((k) => typeof m[k] === 'number')
           .map((k) => `${k}=${m[k].toFixed(3)}`)
           .join(' ');
-        qcStatus.textContent = `✓ QC done @ ${ts}${summary ? ' · ' + summary : ''}`;
+        // Issue 4 fix (2026-05-05): route through t() so QC status follows
+        // the language toggle. Pre-fix this was hardcoded English.
+        qcStatus.textContent = t('liquify3d.qcStatusDone', { ts }) +
+          (summary ? ' · ' + summary : '');
         qcStatus.style.color = 'var(--success,#4caf50)';
       } else {
-        qcStatus.textContent = 'Not yet signed off.';
+        qcStatus.textContent = t('liquify3d.qcStatusNotYet');
         qcStatus.style.color = '';
       }
     } catch (_) { /* ignore */ }
@@ -7056,7 +7435,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   qcDoneBtn?.addEventListener('click', async () => {
     const note = el('liq3dQcNote')?.value?.trim() || '';
     qcDoneBtn.disabled = true;
-    qcStatus.textContent = 'Recording sign-off…';
+    qcStatus.textContent = t('liquify3d.qcStatusRecording');
     try {
       // Best-effort: include class name + last known liquify metrics if available.
       const className = el('liq3dClassName')?.value?.trim() || null;
@@ -7277,8 +7656,8 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   saveToPriorBtn?.addEventListener('click', async () => {
     const cls = currentClassName();
     if (!cls) { priorBanner.textContent = 'Enter a class name first (e.g. ChATe27)'; return; }
-    if (state.pairs.length === 0) {
-      priorBanner.textContent = 'No landmark pairs to contribute.';
+    if (state.pairs.length === 0 && state.strokes.length === 0) {
+      priorBanner.textContent = 'No landmark pairs or brush strokes to contribute.';
       return;
     }
     try {
@@ -7326,6 +7705,9 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
     try { await run(); } catch (err) { priorBanner.textContent = 'Warm-start failed: ' + err.message; }
   });
 
+  syncToolModeUi();
+  if (brushStrengthNum) brushStrengthNum.textContent = get3dBrushStrength().toFixed(2);
+
   // Auto-load the first time the tab is shown
   document.querySelector('.nav-btn[data-tab="liquify3d"]')?.addEventListener('click', async () => {
     if (!state.sliceFiles.length) {
@@ -7343,6 +7725,14 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
     // the empty-pair check inside the helper.
     _autoWarmStartIfEmpty();
   });
+
+  // Issue 4 fix (2026-05-05): re-render the QC status (which is set
+  // programmatically via t() rather than data-i18n) when the language
+  // toggle fires. Without this hook the status stays in the old language
+  // until the user reloads the tab.
+  if (typeof registerLangHook === 'function') {
+    registerLangHook(() => { try { refreshQcStatus(); } catch (_) { /* ignore */ } });
+  }
 })();
 
 // ==========================================================================
@@ -7362,6 +7752,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   const zUm        = $('wizZUm');
   const hemi       = $('wizHemi');
   const channel    = $('wizChannel');
+  const registrationMode = $('wizRegistrationMode');
   const launchBtn  = $('wizLaunchBtn');
   const launchStatus = $('wizLaunchStatus');
   // Dual-channel controls (Phase 5)
@@ -7470,7 +7861,8 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   });
 
   inspect2Btn?.addEventListener('click', async () => {
-    const sp = (source2Input?.value || '').trim();
+    const sp = _stripQuotes(source2Input?.value);
+    if (source2Input && sp !== source2Input.value) source2Input.value = sp;
     if (!sp) {
       inspect2Status.textContent = 'Please enter the 2nd channel source path.';
       inspect2Status.style.color = 'var(--warn,#ffa726)';
@@ -7496,7 +7888,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       if (data.kind === 'multipage_tiff') {
         lines.push(`pages=${data.n_pages}`);
         if (data.needs_extraction) {
-          lines.push('⚠ needs extract_zstack first');
+          lines.push('⚠ multi-page TIFF — extract via the 1st-channel "Extract slices" flow');
         }
       } else {
         lines.push(`files=${data.n_files}`);
@@ -7517,7 +7909,11 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   });
 
   inspectBtn.addEventListener('click', async () => {
-    const sp = (sourceInput.value || '').trim();
+    // Defensive: strip wrapping quotes even on non-paste entry (typed, IME,
+    // copy-from-other-input). The paste handler already strips on paste, but
+    // any other entry path leaves quotes intact and Path() blows up server-side.
+    const sp = _stripQuotes(sourceInput.value);
+    if (sp !== sourceInput.value) sourceInput.value = sp;
     if (!sp) {
       inspectStatus.textContent = 'Please enter a source path.';
       inspectStatus.style.color = 'var(--warn,#ffa726)';
@@ -7549,7 +7945,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
       if (data.kind === 'multipage_tiff') {
         lines.push(`pages=${data.n_pages}`);
         if (data.needs_extraction) {
-          lines.push('⚠ multi-page TIFF needs extraction — run `python scripts/extract_zstack.py` first');
+          lines.push('⚠ multi-page TIFF — fill output dir + click "Extract slices" below');
         }
       } else {
         lines.push(`files=${data.n_files}`);
@@ -7595,17 +7991,22 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
   });
 
   launchBtn.addEventListener('click', async () => {
-    if (!sampleId.value || !sourceInput.value || !pixelUm.value || !zUm.value) {
+    // Defensive quote-strip on launch as well, in case the user edited the
+    // path field after Inspect or filled it programmatically.
+    const sp1 = _stripQuotes(sourceInput.value);
+    if (sp1 !== sourceInput.value) sourceInput.value = sp1;
+    if (!sampleId.value || !sp1 || !pixelUm.value || !zUm.value) {
       launchStatus.textContent = 'Fill sample id, source path, pixel + z spacing first.';
       return;
     }
     // Build channel list + per-channel input dirs
     const ch1 = channel.value;
     const channels = [ch1];
-    const inputDirs = { [ch1]: sourceInput.value.trim() };
+    const inputDirs = { [ch1]: sp1 };
     if (addSecondToggle?.checked) {
       const ch2 = channel2.value;
-      const src2 = (source2Input.value || '').trim();
+      const src2 = _stripQuotes(source2Input.value);
+      if (source2Input && src2 !== source2Input.value) source2Input.value = src2;
       if (!src2) {
         launchStatus.textContent = '2nd channel enabled but source path is empty.';
         return;
@@ -7633,6 +8034,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
         zSpacingUm: parseFloat(zUm.value),
         channels,
         atlasHemisphere: hemi.value,
+        registrationMode: registrationMode?.value || 'standard',
         antsTransform: advAntsTransform,
         axisAlignmentEnabled: advAxisAlign,
         useCellToCcfMapping: advCellToCcf,
@@ -7666,6 +8068,16 @@ document.querySelectorAll('.nav-btn').forEach(function(btn) {
         `✓ Pipeline started for jobId="${data.jobId}".${dualSuffix} ` +
         `Check the Registration Workflow tab for progress.`;
       launchStatus.style.color = 'var(--success,#4caf50)';
+
+      // Bind global active job so /api/poll, sidebar status, error log, and
+      // Registration Workflow tab all scope to this wizard-launched run
+      // instead of the default job. Without this the sidebar shows idle even
+      // when the wizard's pipeline has crashed (rc3 blocker #2).
+      try {
+        if (typeof setActiveJobId === 'function') setActiveJobId(data.jobId);
+        if (typeof _runUnifiedPoll === 'function') _runUnifiedPoll();
+        if (typeof _startUnifiedPoll === 'function') _startUnifiedPoll(true);
+      } catch {}
     } catch (err) {
       launchStatus.textContent = 'Launch failed: ' + err.message;
       launchBtn.disabled = false;

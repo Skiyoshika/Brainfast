@@ -31,6 +31,7 @@ from scipy.sparse.linalg import lgmres, cg
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
+
 try:
     from joblib import Parallel, delayed
 except ImportError:  # pragma: no cover - exercised by monkeypatched fallback tests
@@ -100,8 +101,7 @@ def _find_all_slice_correspondences(slice_pairs, resolved_n_jobs):
     if resolved_n_jobs == 1 or Parallel is None or delayed is None:
         return [_find_slice_correspondences(sno, tpl, dat) for sno, tpl, dat in iterator]
     return Parallel(n_jobs=resolved_n_jobs)(
-        delayed(_find_slice_correspondences)(sno, tpl, dat)
-        for sno, tpl, dat in iterator
+        delayed(_find_slice_correspondences)(sno, tpl, dat) for sno, tpl, dat in iterator
     )
 
 

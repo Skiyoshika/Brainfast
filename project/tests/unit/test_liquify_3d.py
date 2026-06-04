@@ -103,6 +103,23 @@ def test_stroke_store_add_list_remove_clear(tmp_path):
     assert store.list_strokes() == []
 
 
+def test_stroke_store_add_works_without_datetime_utc_alias(tmp_path, monkeypatch):
+    import project.scripts.liquify_3d as liquify_3d
+
+    monkeypatch.delattr(liquify_3d._dt, "UTC", raising=False)
+
+    store = liquify_3d.LiquifyStrokeStore(tmp_path / "strokes_3d.jsonl")
+    stroke = store.add_stroke(
+        z=1,
+        points=[{"x": 1, "y": 2}, {"x": 5, "y": 6}],
+        radius=20,
+        strength=0.5,
+        image_dims_yx=(10, 10),
+    )
+
+    assert stroke.created_at.endswith("+00:00")
+
+
 def test_strokes_to_landmark_pairs_samples_drag_segments():
     from project.scripts.liquify_3d import LiquifyStroke, strokes_to_landmark_pairs
 

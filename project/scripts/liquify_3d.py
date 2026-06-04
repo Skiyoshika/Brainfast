@@ -229,7 +229,7 @@ class LiquifyStrokeStore:
                 if image_dims_yx is not None
                 else None
             ),
-            created_at=_dt.datetime.now(_dt.UTC).isoformat(),
+            created_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
         )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with self._path.open("a", encoding="utf-8") as fh:

@@ -31,7 +31,11 @@ from scipy.sparse.linalg import lgmres, cg
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from joblib import Parallel, delayed
+try:
+    from joblib import Parallel, delayed
+except ImportError:  # pragma: no cover - exercised by monkeypatched fallback tests
+    Parallel = None
+    delayed = None
 
 import skimage
 from skimage import feature
@@ -89,6 +93,16 @@ def _find_slice_correspondences(sno, templateimage, dataimage):
     fpts = np.hstack([np.full((len(f), 1), sno), f])
     mpts = np.hstack([np.full((len(m), 1), sno), m])
     return fpts, mpts
+
+
+def _find_all_slice_correspondences(slice_pairs, resolved_n_jobs):
+    iterator = tqdm(slice_pairs, desc="Finding correspondences")
+    if resolved_n_jobs == 1 or Parallel is None or delayed is None:
+        return [_find_slice_correspondences(sno, tpl, dat) for sno, tpl, dat in iterator]
+    return Parallel(n_jobs=resolved_n_jobs)(
+        delayed(_find_slice_correspondences)(sno, tpl, dat)
+        for sno, tpl, dat in iterator
+    )
 
 
 # ============================================================================
@@ -525,10 +539,7 @@ def sliceToSlice3DLaplacian(
 
     resolved_n_jobs = resolve_laplacian_n_jobs(n_jobs)
     log(f"Correspondence worker count: {resolved_n_jobs}", "value")
-    results = Parallel(n_jobs=resolved_n_jobs)(
-        delayed(_find_slice_correspondences)(sno, tpl, dat)
-        for sno, tpl, dat in tqdm(slice_pairs, desc="Finding correspondences")
-    )
+    results = _find_all_slice_correspondences(slice_pairs, resolved_n_jobs)
     del slice_pairs
 
     # Collect valid results

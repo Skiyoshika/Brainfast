@@ -142,3 +142,21 @@ def test_laplacian_correspondence_workers_can_be_overridden(monkeypatch):
 
     assert correspondence.resolve_laplacian_n_jobs(None) == 3
     assert correspondence.resolve_laplacian_n_jobs(2) == 2
+
+
+def test_laplacian_correspondence_falls_back_to_serial_without_joblib(monkeypatch):
+    from project.scripts.regtools_laplacian import correspondence
+
+    monkeypatch.setattr(correspondence, "Parallel", None, raising=False)
+    monkeypatch.setattr(correspondence, "delayed", None, raising=False)
+
+    def fake_find(sno, _template, _data):
+        return sno
+
+    monkeypatch.setattr(correspondence, "_find_slice_correspondences", fake_find)
+    slice_pairs = [
+        (0, np.zeros((2, 2)), np.zeros((2, 2))),
+        (1, np.zeros((2, 2)), np.zeros((2, 2))),
+    ]
+
+    assert correspondence._find_all_slice_correspondences(slice_pairs, 3) == [0, 1]

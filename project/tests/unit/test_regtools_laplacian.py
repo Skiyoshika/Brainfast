@@ -118,3 +118,45 @@ def test_slice_to_slice_laplacian_empty_volumes_returns_zero_field():
     )
     assert field.shape == (3, 4, 6, 6)
     assert np.allclose(field, 0.0)
+
+
+def test_laplacian_correspondence_default_workers_are_safe_on_windows(monkeypatch):
+    """Windows desktop runs must not default to near-full-core loky workers.
+
+    A 16-logical-core laptop hit joblib TerminatedWorkerError in the full
+    pipeline when correspondence.py used Parallel(n_jobs=-2). The default must
+    be a conservative in-process path unless the user explicitly opts in.
+    """
+    from project.scripts.regtools_laplacian import correspondence
+
+    monkeypatch.setattr(correspondence.os, "name", "nt", raising=False)
+    monkeypatch.delenv("BRAINFAST_LAPLACIAN_N_JOBS", raising=False)
+
+    assert correspondence.resolve_laplacian_n_jobs(None) == 1
+
+
+def test_laplacian_correspondence_workers_can_be_overridden(monkeypatch):
+    from project.scripts.regtools_laplacian import correspondence
+
+    monkeypatch.setenv("BRAINFAST_LAPLACIAN_N_JOBS", "3")
+
+    assert correspondence.resolve_laplacian_n_jobs(None) == 3
+    assert correspondence.resolve_laplacian_n_jobs(2) == 2
+
+
+def test_laplacian_correspondence_falls_back_to_serial_without_joblib(monkeypatch):
+    from project.scripts.regtools_laplacian import correspondence
+
+    monkeypatch.setattr(correspondence, "Parallel", None, raising=False)
+    monkeypatch.setattr(correspondence, "delayed", None, raising=False)
+
+    def fake_find(sno, _template, _data):
+        return sno
+
+    monkeypatch.setattr(correspondence, "_find_slice_correspondences", fake_find)
+    slice_pairs = [
+        (0, np.zeros((2, 2)), np.zeros((2, 2))),
+        (1, np.zeros((2, 2)), np.zeros((2, 2))),
+    ]
+
+    assert correspondence._find_all_slice_correspondences(slice_pairs, 3) == [0, 1]

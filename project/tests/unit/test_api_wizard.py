@@ -288,6 +288,90 @@ def test_launch_applies_xulab_parity_overrides_to_generated_config(client, tmp_p
     assert reg["fixed_max_dim"] == 256
 
 
+@pytest.mark.parametrize(
+    ("mode", "fixed_max_dim", "overlay_stride", "laplacian_maxiter"),
+    [
+        ("fast_qc", 256, 20, 60),
+        ("standard", 256, 1, 100),
+        ("high_accuracy", 384, 1, 160),
+    ],
+)
+def test_launch_applies_registration_quality_modes(
+    client,
+    tmp_path,
+    monkeypatch,
+    mode,
+    fixed_max_dim,
+    overlay_stride,
+    laplacian_maxiter,
+):
+    src_dir = tmp_path / "slices"
+    src_dir.mkdir()
+    imwrite(str(src_dir / "z0050.tif"), np.full((4, 4), 100, dtype=np.uint16))
+
+    captured: dict = {}
+
+    def _fake_runner(config, input_dir, channels, params, *, job_id=None):
+        captured["config"] = str(config)
+
+    monkeypatch.setattr(ctx, "_runner", _fake_runner)
+
+    resp = client.post(
+        "/api/wizard/launch",
+        data=json.dumps(
+            {
+                "sampleId": f"mode_{mode}",
+                "inputDir": str(src_dir),
+                "pixelSizeUm": 5.0,
+                "zSpacingUm": 25.0,
+                "channels": ["red"],
+                "registrationMode": mode,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 200, resp.get_json()
+    cfg = json.loads(Path(captured["config"]).read_text(encoding="utf-8"))
+    reg = cfg["registration"]
+    truth = cfg["truth_export"]
+    assert reg["quality_mode"] == mode
+    assert reg["fixed_max_dim"] == fixed_max_dim
+    assert reg["laplacian_maxiter"] == laplacian_maxiter
+    assert truth["overlay_stride"] == overlay_stride
+    assert truth["write_overlays"] is True
+
+
+def test_launch_explicit_fixed_max_dim_overrides_mode_default(client, tmp_path, monkeypatch):
+    src_dir = tmp_path / "slices"
+    src_dir.mkdir()
+    imwrite(str(src_dir / "z0050.tif"), np.full((4, 4), 100, dtype=np.uint16))
+
+    captured: dict = {}
+    monkeypatch.setattr(ctx, "_runner", lambda config, *a, **kw: captured.setdefault("config", str(config)))
+
+    resp = client.post(
+        "/api/wizard/launch",
+        data=json.dumps(
+            {
+                "sampleId": "high_custom",
+                "inputDir": str(src_dir),
+                "pixelSizeUm": 5.0,
+                "zSpacingUm": 25.0,
+                "channels": ["red"],
+                "registrationMode": "high_accuracy",
+                "fixedMaxDim": 512,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 200, resp.get_json()
+    cfg = json.loads(Path(captured["config"]).read_text(encoding="utf-8"))
+    assert cfg["registration"]["quality_mode"] == "high_accuracy"
+    assert cfg["registration"]["fixed_max_dim"] == 512
+
+
 def test_launch_without_xulab_fields_keeps_safe_defaults(client, tmp_path, monkeypatch):
     """Old payloads without the new fields default to SyNRA + flags off + no fixed_max_dim."""
     src_dir = tmp_path / "slices"

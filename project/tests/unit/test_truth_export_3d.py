@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import nibabel as nib
 import numpy as np
 import pytest
@@ -58,6 +60,7 @@ def test_export_registered_truth_slices_writes_per_slice_labels_and_overlays(tmp
         return out_png, {"warp": {"method": "3d_truth_export"}}
 
     monkeypatch.setattr(truth_export_3d, "render_overlay", fake_render_overlay)
+    progress_events: list[tuple[int, int]] = []
 
     rows = truth_export_3d.export_registered_truth_slices(
         real_slice_paths=[raw0, raw1],
@@ -65,6 +68,7 @@ def test_export_registered_truth_slices_writes_per_slice_labels_and_overlays(tmp
         out_dir=out_dir,
         pixel_size_um=25.0,
         slicing_plane="coronal",
+        progress_cb=lambda done, total: progress_events.append((done, total)),
     )
 
     assert len(rows) == 2
@@ -89,6 +93,59 @@ def test_export_registered_truth_slices_writes_per_slice_labels_and_overlays(tmp
         "overlay_path": str(out_dir / "slice_0000_overlay.png"),
         "registration_method": "3d_truth_export",
     }
+    assert progress_events[-1] == (2, 2)
+
+
+def test_export_registered_truth_slices_samples_overlays_but_writes_all_labels(
+    tmp_path,
+    monkeypatch,
+):
+    annotation_volume_path = tmp_path / "annotation_registered.nii.gz"
+    out_dir = tmp_path / "registered_slices"
+    volume = np.arange(12, dtype=np.int32).reshape(3, 2, 2)
+    nib.save(nib.Nifti1Image(volume, np.eye(4)), str(annotation_volume_path))
+
+    raw_paths = []
+    for idx in range(3):
+        raw = tmp_path / f"raw_{idx:04d}.tif"
+        imwrite(str(raw), np.full((2, 2), idx, dtype=np.uint16))
+        raw_paths.append(raw)
+
+    rendered: list[Path] = []
+    label_only: list[Path] = []
+
+    def fake_render_overlay(**kwargs):
+        rendered.append(kwargs["out_png"])
+        kwargs["out_png"].write_bytes(b"png")
+        imwrite(str(kwargs["warped_label_out"]), imread(str(kwargs["label_slice_path"])))
+        return kwargs["out_png"], {"warp": {"method": "3d_truth_export"}}
+
+    def fake_write_label_only(**kwargs):
+        label_only.append(kwargs["label_path"])
+        imwrite(str(kwargs["label_path"]), kwargs["label_slice"])
+        return {"warp": {"method": "3d_truth_export_label_only"}}
+
+    monkeypatch.setattr(truth_export_3d, "render_overlay", fake_render_overlay)
+    monkeypatch.setattr(truth_export_3d, "_write_prewarped_label_only", fake_write_label_only)
+
+    rows = truth_export_3d.export_registered_truth_slices(
+        real_slice_paths=raw_paths,
+        annotation_volume_path=annotation_volume_path,
+        out_dir=out_dir,
+        pixel_size_um=25.0,
+        slicing_plane="coronal",
+        overlay_stride=2,
+    )
+
+    assert rendered == [
+        out_dir / "slice_0000_overlay.png",
+        out_dir / "slice_0002_overlay.png",
+    ]
+    assert label_only == [out_dir / "slice_0001_registered_label.tif"]
+    assert rows[0]["overlay_path"].endswith("slice_0000_overlay.png")
+    assert rows[1]["overlay_path"] == ""
+    assert rows[2]["overlay_path"].endswith("slice_0002_overlay.png")
+    assert all(Path(row["registered_label_path"]).exists() for row in rows)
 
 
 def test_export_registered_truth_slices_rejects_mismatched_slice_count(tmp_path):

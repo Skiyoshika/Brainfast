@@ -250,6 +250,88 @@ def test_liquify_pair_count_survives_language_application():
     assert '<span data-i18n="liquify3d.pairsTitle">' in html[h3_start : html.index("</h3>", h3_start)]
 
 
+def test_2d_liquify_batches_pointer_stroke_before_posting():
+    js = (_FRONTEND_DIR / "app.js").read_text(encoding="utf-8", errors="replace")
+
+    assert "liquifyStrokePoints" in js
+    assert "sampleLiquifyStrokePoint" in js
+    assert "buildLiquifyDragBatch" in js
+    assert "async function applyLiquifyDragBatch(drags)" in js
+    assert "payload.drags = drags" in js
+    assert "const drags = buildLiquifyDragBatch" in js
+    assert "drawCanvas.addEventListener('pointerdown'" in js
+    assert "drawCanvas.addEventListener('pointermove'" in js
+    assert "drawCanvas.addEventListener('pointerup'" in js
+
+
+def test_liquify3d_has_brush_mode_controls():
+    html = (_FRONTEND_DIR / "index.html").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    css = (_FRONTEND_DIR / "styles.css").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    js = (_FRONTEND_DIR / "app.js").read_text(encoding="utf-8", errors="replace")
+
+    for snippet in (
+        'name="liq3dToolMode"',
+        'id="liq3dBrushRadius"',
+        'id="liq3dBrushStrength"',
+        'id="liq3dStrokeCount"',
+        'id="liq3dStrokesBody"',
+    ):
+        assert snippet in html
+
+    for snippet in (
+        ".liq3d-tools",
+        ".liq3d-brush-control",
+        "#liq3dCanvasWrap",
+        "@media (max-width: 800px)",
+    ):
+        assert snippet in css
+
+    for snippet in (
+        "toolMode: 'brush'",
+        "postLiquify3dStroke",
+        "canvas.addEventListener('pointerdown', liq3dPointerDown)",
+        "canvas.addEventListener('pointermove', liq3dPointerMove)",
+        "canvas.addEventListener('pointerup', liq3dPointerUp)",
+        "/api/liquify-3d/stroke",
+        "renderStrokeHistory",
+    ):
+        assert snippet in js
+
+
+def test_liquify3d_undo_is_mode_aware():
+    js = (_FRONTEND_DIR / "app.js").read_text(encoding="utf-8", errors="replace")
+
+    assert "undoLastStroke" in js
+    assert "/api/liquify-3d/stroke/${lastIdx}" in js or "/api/liquify-3d/stroke/" in js
+    assert "state.toolMode === 'brush'" in js
+
+
+def test_liquify3d_radius_number_input_updates_from_its_own_value():
+    js = (_FRONTEND_DIR / "app.js").read_text(encoding="utf-8", errors="replace")
+
+    assert "function get3dBrushRadius(rawValue = null)" in js
+    assert "const v = get3dBrushRadius(brushRadiusNum.value)" in js
+    assert "brushRadius.value = String(v)" in js
+
+
+def test_liquify3d_brush_copy_is_localized():
+    js = (_FRONTEND_DIR / "app.js").read_text(encoding="utf-8", errors="replace")
+
+    for key in (
+        "liquify3d.toolBrush",
+        "liquify3d.toolLandmark",
+        "liquify3d.brushRadius",
+        "liquify3d.brushStrength",
+        "liquify3d.strokesTitle",
+    ):
+        assert js.count(key) >= 2
+    assert "Brush mode: drag the atlas boundary toward the real anatomy." in js
+
+
 def test_core_ui_controls_use_design_system_styles():
     """Guard against browser-native controls leaking into release UI."""
     html = (_FRONTEND_DIR / "index.html").read_text(

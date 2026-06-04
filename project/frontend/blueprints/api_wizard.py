@@ -42,6 +42,38 @@ _DEFAULT_HEMISPHERE = "right_flipped"
 _DEFAULT_TARGET_UM = 25.0
 
 
+_REGISTRATION_QUALITY_MODES = {
+    "fast_qc": {
+        "fixed_max_dim": 256,
+        "laplacian_maxiter": 60,
+        "truth_overlay_stride": 20,
+    },
+    "standard": {
+        "fixed_max_dim": 256,
+        "laplacian_maxiter": 100,
+        "truth_overlay_stride": 1,
+    },
+    "high_accuracy": {
+        "fixed_max_dim": 384,
+        "laplacian_maxiter": 160,
+        "truth_overlay_stride": 1,
+    },
+}
+
+
+def _normalize_registration_quality_mode(raw_mode: object) -> str | None:
+    if raw_mode in (None, ""):
+        return None
+    mode = str(raw_mode).strip().lower().replace("-", "_")
+    if mode in {"fast", "fastqc", "qc"}:
+        return "fast_qc"
+    if mode in {"accurate", "high", "highaccuracy", "high_accuracy"}:
+        return "high_accuracy"
+    if mode in {"std", "normal", "standard"}:
+        return "standard"
+    return mode if mode in _REGISTRATION_QUALITY_MODES else "standard"
+
+
 def _read_imagej_spacing(path: Path) -> tuple[float | None, float | None]:
     """Return ``(pixel_um_xy, z_spacing_um)`` parsed from a TIFF's ImageJ
     metadata, or ``(None, None)`` if either is unavailable.
@@ -281,6 +313,10 @@ def _build_run_config(payload: dict) -> dict:
     ants_transform = str(payload.get("antsTransform") or "SyNRA")
     axis_alignment_enabled = bool(payload.get("axisAlignmentEnabled", False))
     use_cell_to_ccf_mapping = bool(payload.get("useCellToCcfMapping", False))
+    quality_mode = _normalize_registration_quality_mode(payload.get("registrationMode"))
+    quality_profile = (
+        dict(_REGISTRATION_QUALITY_MODES[quality_mode]) if quality_mode is not None else {}
+    )
     fixed_max_dim_raw = payload.get("fixedMaxDim")
     try:
         fixed_max_dim = (
@@ -288,6 +324,8 @@ def _build_run_config(payload: dict) -> dict:
         )
     except (TypeError, ValueError):
         fixed_max_dim = None
+    if fixed_max_dim is None and quality_profile:
+        fixed_max_dim = int(quality_profile["fixed_max_dim"])
 
     reg_block: dict[str, object] = {
         "mode": "2d_slice_with_3d_smoothness",
@@ -313,10 +351,21 @@ def _build_run_config(payload: dict) -> dict:
         },
         "ml_flip": False,
     }
+    if quality_mode is not None:
+        reg_block["quality_mode"] = quality_mode
+        reg_block["laplacian_maxiter"] = int(quality_profile["laplacian_maxiter"])
     if fixed_max_dim is not None:
         reg_block["fixed_max_dim"] = fixed_max_dim
 
-    return {
+    truth_export_block: dict[str, object] = {}
+    if quality_mode is not None:
+        truth_export_block = {
+            "profile": quality_mode,
+            "write_overlays": True,
+            "overlay_stride": int(quality_profile["truth_overlay_stride"]),
+        }
+
+    cfg = {
         "project": {"name": sample_id, "version": "wizard-1.0"},
         "input": {
             "slice_dir": str(payload["inputDir"]),
@@ -360,6 +409,9 @@ def _build_run_config(payload: dict) -> dict:
             "qc_dir": f"outputs/{sample_id}_qc",
         },
     }
+    if truth_export_block:
+        cfg["truth_export"] = truth_export_block
+    return cfg
 
 
 @bp.post("/wizard/launch")

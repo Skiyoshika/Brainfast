@@ -125,6 +125,18 @@ def finalize_liquify_to_cell_counts(
         10,
         f"Re-exporting {len(real_slice_paths)} truth slice(s) from refined annotation",
     )
+
+    def _truth_progress(done: int, total: int) -> None:
+        total = max(int(total or 0), 1)
+        done = max(0, min(int(done or 0), total))
+        pct = 10 + int(round(done / total * 35))
+        _emit(
+            "export_truth",
+            1,
+            min(45, max(10, pct)),
+            f"Re-exported {done}/{total} truth slice(s)",
+        )
+
     truth_rows = export_registered_truth_slices(
         real_slice_paths=real_slice_paths,
         annotation_volume_path=refined_path,
@@ -135,6 +147,7 @@ def finalize_liquify_to_cell_counts(
         warp_params=dict(warp_params or {}),
         fit_mode=str(fit_mode),
         edge_smooth_iter=int(edge_smooth_iter),
+        progress_cb=_truth_progress,
     )
 
     # Build a slice_id → registered_label_path lookup so we can map each cell

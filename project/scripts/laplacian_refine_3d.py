@@ -62,6 +62,7 @@ def refine_registered_volume(
     out_dir: Path,
     iterations: int = 500,
     lambda_: float = 0.18,
+    n_jobs: int | None = None,
 ) -> dict[str, Path]:
     """Laplacian refinement via Xu Lab sliceToSlice3DLaplacian.
 
@@ -71,6 +72,7 @@ def refine_registered_volume(
         out_dir: Output directory.
         iterations: CG solver max iterations.
         lambda_: Kept for API compatibility; not used by Dirichlet BC solver.
+        n_jobs: Worker count for slice correspondence extraction.
     """
     fixed_path = Path(fixed_path)
     moving_path = Path(moving_path)
@@ -123,6 +125,7 @@ def refine_registered_volume(
         spacing=spacing,
         solver_dtype="float64",
         solver_method="cg",
+        n_jobs=n_jobs,
         log_fn=_log_adapter,
     ).astype(np.float32)
 
